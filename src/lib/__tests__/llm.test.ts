@@ -79,6 +79,9 @@ describe("prepareImage", () => {
 
     const odd = await size((await prepareImage(await png(100, 101)))!);
     expect(odd.width! * odd.height!).toBeGreaterThanOrEqual(78_400);
+
+    const banner = await size((await prepareImage(await png(2401, 392)))!);
+    expect(banner).toMatchObject({ width: 1568, height: 256 });
   });
 
   it("skips images whose shape can't fit and junk bytes", async () => {

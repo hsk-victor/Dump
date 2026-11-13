@@ -67,12 +67,17 @@ export async function prepareImage(input: Buffer): Promise<string | null> {
     const down = Math.min(1, MAX_SIDE / w, MAX_SIDE / h, Math.sqrt(MAX_PIXELS / (w * h)));
     const up = Math.max(MIN_SIDE / w, MIN_SIDE / h, Math.sqrt(MIN_PIXELS / (w * h)));
     const scale = Math.max(down, up);
-    // Round up when enlarging so rounding can't drop the result below the minimums.
-    const fit = scale > 1 ? Math.ceil : Math.floor;
-    const width = fit(w * scale);
-    const height = fit(h * scale);
-    const pixels = width * height;
-    if (Math.min(width, height) < MIN_SIDE || Math.max(width, height) > MAX_SIDE || pixels < MIN_PIXELS || pixels > MAX_PIXELS) return null;
+    const sw = w * scale;
+    const sh = h * scale;
+    // Too elongated to meet both side limits at once.
+    if (Math.min(sw, sh) < MIN_SIDE - 0.5 || Math.max(sw, sh) > MAX_SIDE + 0.5) return null;
+    // Clamp absorbs float error at the side limits; then nudge rounding so the area stays in range.
+    const side = (n: number) => Math.min(MAX_SIDE, Math.max(MIN_SIDE, n));
+    let width = side(Math.round(sw));
+    let height = side(Math.round(sh));
+    if (width * height < MIN_PIXELS) [width, height] = [side(Math.ceil(sw)), side(Math.ceil(sh))];
+    if (width * height > MAX_PIXELS) [width, height] = [side(Math.floor(sw)), side(Math.floor(sh))];
+    if (width * height < MIN_PIXELS || width * height > MAX_PIXELS) return null;
     const jpeg = await sharp(data).resize(width, height).flatten({ background: "#ffffff" }).jpeg({ quality: 85 }).toBuffer();
     return `data:image/jpeg;base64,${jpeg.toString("base64")}`;
   } catch {
