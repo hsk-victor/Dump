@@ -179,6 +179,27 @@ function Img({ dump, bits, className, alt = "" }: { dump: Dump; bits: CardBits; 
   );
 }
 
+/** Image that fades in once decoded — unless it was already cached, so revisits don't flicker. */
+function FadeImg({ dump, bits, className, alt = "" }: { dump: Dump; bits: CardBits; className?: string; alt?: string }) {
+  const [loaded, setLoaded] = useState(false);
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      ref={(el) => {
+        if (el?.complete && el.naturalWidth) setLoaded(true);
+      }}
+      className={className}
+      src={dump.imageUrl!}
+      alt={alt}
+      loading="lazy"
+      referrerPolicy="no-referrer"
+      data-loaded={loaded || undefined}
+      onLoad={() => setLoaded(true)}
+      onError={() => bits.setImgFailed(true)}
+    />
+  );
+}
+
 /* ============================ platform-native cards ============================ */
 
 /** x — an embedded tweet: avatar, name, @handle, big X, text, media, reply/repost/like/views. */
@@ -373,29 +394,66 @@ function VideoCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
   );
 }
 
-/** image-kind dumps from visual platforms — pure media + creator on a soft scrim. */
+/** Camera-roll / upload defaults ("IMG 4821", "Image", "Screenshot 2026-…") aren't titles. */
+const PLACEHOLDER_TITLE = /^(?:image|photo|picture|untitled|(?:img|dsc|dscn|dcim|pxl|mvimg|gopr|screenshot|screen shot)[\s_-]*\d[\w\s.:-]*)$/i;
+/** Stock-site boilerplate ("Download this free HD photo of … by …") isn't a description. */
+const BOILERPLATE_DEK = /^(download this (free )?(hd )?(photo|image|picture)|free download|find more|discover more)/i;
+
+function mediaText(dump: Dump, bits: CardBits) {
+  const t = bits.title?.trim() || null;
+  const title = t && !PLACEHOLDER_TITLE.test(t) ? t : null;
+  const providerLabel = providerMeta(dump.provider)?.label ?? null;
+  // Creator, else the platform; nothing for plain uploads.
+  const byline = dump.author?.trim() || providerLabel || (dump.url ? bits.site : null);
+  const d = bits.dek?.trim() || null;
+  const dek = d && d !== title && !BOILERPLATE_DEK.test(d) ? d : null;
+  return { title, byline, dek, note: dump.note?.trim() || null, hasMark: providerHasIcon(dump.provider) };
+}
+
+/** image-kind dumps from visual platforms — the image is the card: a glass byline chip at rest,
+ *  title / dek / note / meta rise in a glass panel on hover or focus (touch shows the title in the chip). */
 function MediaCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
+  const t = mediaText(dump, bits);
+  const restLabel = t.byline ?? t.title ?? t.note;
+  const touchLabel = t.title ?? t.byline ?? t.note;
   return (
-    <article {...bits.cardProps} className="d-card d-mediacard group">
+    <article {...bits.cardProps} className="d-card d-mediacard group" data-open={dump.status === "failed" || undefined}>
       {bits.actions}
-      <a href={bits.href ?? undefined} target="_blank" rel="noreferrer" className="d-media">
-        <Img dump={dump} bits={bits} className="" alt={bits.title ?? ""} />
+      <a href={bits.href ?? undefined} target="_blank" rel="noreferrer" className="d-media" aria-label={t.title ?? t.byline ?? "Open image"}>
+        <FadeImg dump={dump} bits={bits} alt={t.title ?? ""} />
         {dump.kind === "video" && <PlayBadge />}
-        <Flag dump={dump} />
       </a>
-      <div className="d-scrim">
-        {bits.processing && !bits.title ? (
+      {bits.processing ? (
+        <span className="d-mchip" aria-hidden>
+          <span className="d-mchip-sorting shimmer" />
+        </span>
+      ) : (
+        (restLabel || t.hasMark) && (
+          <span className="d-mchip" aria-hidden>
+            {t.hasMark ? <ProviderIcon provider={dump.provider} className="d-mchip-prov" /> : <span className="d-dot" />}
+            {restLabel && <span className="d-mchip-text d-mchip-rest" dir="auto">{restLabel}</span>}
+            {touchLabel && <span className="d-mchip-text d-mchip-touch" dir="auto">{touchLabel}</span>}
+          </span>
+        )
+      )}
+      <div className="d-mpanel">
+        {bits.processing && !t.title ? (
           shimmerLines()
         ) : (
           <>
-            {bits.title && (
-              <h3 className="d-overlay-title">
-                {bits.href ? <a href={bits.href} target="_blank" rel="noreferrer">{bits.title}</a> : bits.title}
+            {t.title && (
+              <h3 className="d-mpanel-title" dir="auto">
+                {bits.href ? <a href={bits.href} target="_blank" rel="noreferrer">{t.title}</a> : t.title}
               </h3>
             )}
-            {dump.author && <p className="d-overlay-sub">{dump.author}</p>}
-            {bits.dek && bits.dek !== bits.title && <p className="d-overlay-dek">{bits.dek}</p>}
-            {dump.note && <p className="d-overlay-note">{dump.note}</p>}
+            {t.byline && (
+              <p className="d-mpanel-by">
+                {t.hasMark && <ProviderIcon provider={dump.provider} className="d-mpanel-prov" />}
+                <span className="min-w-0 truncate" dir="auto">{t.byline}</span>
+              </p>
+            )}
+            {t.dek && <p className="d-mpanel-dek" dir="auto">{t.dek}</p>}
+            {t.note && <p className="d-annotation d-mpanel-note" dir="auto">{t.note}</p>}
           </>
         )}
         {bits.meta}
