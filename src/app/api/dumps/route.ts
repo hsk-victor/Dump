@@ -2,6 +2,7 @@ import { after, NextResponse, type NextRequest } from "next/server";
 import { counts, listDumps } from "@/lib/db";
 import { createFromFile, createFromText, InputError } from "@/lib/create";
 import { enrichDump } from "@/lib/enrich";
+import { aiEnabled } from "@/lib/llm";
 import { isKind, isTopic } from "@/lib/taxonomy";
 
 export const runtime = "nodejs";
@@ -26,7 +27,7 @@ export async function GET(req: NextRequest) {
     limit: limit + 1,
     offset: intParam(sp.get("offset"), 0, Number.MAX_SAFE_INTEGER),
   });
-  return NextResponse.json({ items: rows.slice(0, limit), hasMore: rows.length > limit, counts: counts() });
+  return NextResponse.json({ items: rows.slice(0, limit), hasMore: rows.length > limit, counts: counts(), ai: aiEnabled() });
 }
 
 export async function POST(req: NextRequest) {

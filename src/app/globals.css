@@ -195,6 +195,15 @@ body {
   color: var(--ink);
   background: var(--hairline);
 }
+.d-icon-btn:disabled {
+  cursor: progress;
+}
+.d-icon-btn.is-busy svg {
+  animation: d-pulse 1s ease-in-out infinite;
+}
+@keyframes d-pulse {
+  50% { opacity: 0.3; transform: scale(0.85); }
+}
 .d-icon-btn svg {
   width: 1.05rem;
   height: 1.05rem;

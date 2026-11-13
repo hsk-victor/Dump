@@ -1,5 +1,5 @@
 import { classifyHeuristic } from "./classify";
-import { db, getDump, updateDump, type Dump } from "./db";
+import { db, getDump, listResortable, updateDump, type Dump } from "./db";
 import { extractUrl } from "./extract";
 import { titleFromUrl } from "./detect";
 import { classifyWithAi } from "./llm";
@@ -26,6 +26,13 @@ function commit(id: string, patch: Partial<Dump>): Dump | null {
     const { topic, classifiedBy, ...rest } = patch;
     return updateDump(id, current.topicLocked ? rest : { ...rest, topic, classifiedBy });
   })();
+}
+
+/** Topic from Jev when configured (rules as the fallback); tags always come from the rules. */
+async function classify(input: Dump, useImage: boolean): Promise<Partial<Dump>> {
+  const ai = await classifyWithAi({ ...input, useImage });
+  const rules = classifyHeuristic(input, ai?.topic);
+  return { topic: rules.topic, tags: rules.tags, classifiedBy: ai ? "ai" : "rules" };
 }
 
 /**
@@ -58,21 +65,7 @@ export async function enrichDump(id: string): Promise<Dump | null> {
     const merged = { ...dump, ...fields };
     const forClassifying = { ...merged, title: merged.title ?? (dump.url ? titleFromUrl(dump.url) : null) };
 
-    let classification: Partial<Dump>;
-    const ai = await classifyWithAi({ ...forClassifying, useImage: merged.kind === "image" });
-    if (ai) {
-      classification = {
-        topic: ai.topic,
-        tags: ai.tags,
-        summary: ai.summary,
-        classifiedBy: "ai",
-        ...(ai.title && !dump.url && (!merged.title || merged.kind === "image") ? { title: ai.title } : {}),
-      };
-    } else {
-      const rules = classifyHeuristic(forClassifying);
-      classification = { topic: rules.topic, tags: rules.tags, classifiedBy: "rules" };
-    }
-
+    const classification = await classify(forClassifying, merged.kind === "image");
     // Couldn't reach the site at all: keep the fallback topic but mark it failed so it can be retried.
     return commit(id, { ...fields, ...classification, status: unreachable ? "failed" : "ready" });
   } catch (err) {
@@ -80,4 +73,34 @@ export async function enrichDump(id: string): Promise<Dump | null> {
     const rules = classifyHeuristic({ ...dump, title: dump.title ?? (dump.url ? titleFromUrl(dump.url) : null) });
     return commit(id, { status: "failed", topic: rules.topic, classifiedBy: "rules", tags: rules.tags });
   }
+}
+
+/** Re-files a dump from what's already stored, without fetching it again. Null if Jev couldn't answer. */
+export async function resortDump(id: string): Promise<{ before: string; after: string } | null> {
+  const dump = getDump(id);
+  if (!dump || dump.topicLocked) return null;
+  const classification = await classify({ ...dump, title: dump.title ?? (dump.url ? titleFromUrl(dump.url) : null) }, dump.kind === "image");
+  if (classification.classifiedBy !== "ai") return null;
+  const out = commit(id, classification);
+  return out ? { before: dump.topic, after: out.topic } : null;
+}
+
+/** Re-files every dump the user hasn't filed by hand. */
+export async function resortAll(concurrency = 6): Promise<{ sorted: number; moved: number; failed: number }> {
+  const ids = listResortable();
+  let next = 0;
+  const totals = { sorted: 0, moved: 0, failed: 0 };
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, ids.length) }, async () => {
+      while (next < ids.length) {
+        const result = await resortDump(ids[next++]);
+        if (!result) totals.failed++;
+        else {
+          totals.sorted++;
+          if (result.before !== result.after) totals.moved++;
+        }
+      }
+    }),
+  );
+  return totals;
 }

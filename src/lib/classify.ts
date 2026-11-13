@@ -179,7 +179,8 @@ function domainMatches(domain: string, url: string, candidates: string[]) {
  * Keyword + domain scoring classifier. Works offline and needs no API key.
  * Title words count more than description words, which count more than body text.
  */
-export function classifyHeuristic(input: ClassifyInput): Classification {
+/** Keyword/domain classifier. Pass `topic` when it was already decided elsewhere to get tags for that topic. */
+export function classifyHeuristic(input: ClassifyInput, decided?: Topic): Classification {
   const fields: Array<[string, number]> = [
     [input.title ?? "", 3],
     [input.note ?? "", 3],
@@ -221,7 +222,7 @@ export function classifyHeuristic(input: ClassifyInput): Classification {
   const secondScore = ranked[1]?.[1] ?? 0;
   const total = ranked.reduce((s, [, v]) => s + v, 0);
 
-  const topic: Topic = bestScore >= 2.5 ? (bestTopic as Topic) : "other";
+  const topic: Topic = decided ?? (bestScore >= 2.5 ? (bestTopic as Topic) : "other");
   const confidence = total > 0 ? Math.min(1, (bestScore - secondScore * 0.5) / total + bestScore / 30) : 0;
 
   return { topic, tags: extractTags(input, topic === "other" ? undefined : hits[topic]), confidence: Number(confidence.toFixed(2)) };
