@@ -82,55 +82,26 @@ export default function Composer({ onDump }: Props) {
   }
 
   return (
-    <div
-      className={`relative rounded-2xl border bg-white shadow-sm transition ${
-        dragging ? "border-stone-900 ring-4 ring-stone-900/10" : "border-stone-200 focus-within:border-stone-400"
-      }`}
-    >
-      <textarea
-        ref={inputRef}
-        autoFocus
-        rows={text.includes("\n") ? 4 : 2}
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" && !e.shiftKey) {
-            e.preventDefault();
-            submit();
-          }
-        }}
-        onPaste={(e) => {
-          const img = [...e.clipboardData.files].find((f) => f.type.startsWith("image/"));
-          if (img) {
-            e.preventDefault();
-            setFile(img);
-          }
-        }}
-        placeholder="Dump anything: paste a link, an X post, a video, an image, or just type a note…"
-        aria-label="Dump something"
-        className="block w-full resize-none rounded-2xl bg-transparent px-5 pt-4 pb-2 text-[15px] leading-relaxed outline-none placeholder:text-stone-400"
-      />
-      <div className="flex items-center gap-3 px-3 pb-3">
+    <>
+      <div className="d-dock" data-dragging={dragging || undefined}>
         {preview ? (
-          <div className="relative">
+          <div className="relative shrink-0">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={preview} alt="Image to dump" className="h-12 w-12 rounded-lg object-cover ring-1 ring-stone-200" />
+            <img src={preview} alt="Image to dump" className="h-9 w-9 rounded-lg object-cover" />
             <button
               type="button"
               onClick={() => setFile(null)}
-              className="absolute -top-1.5 -right-1.5 grid h-5 w-5 place-items-center rounded-full bg-stone-900 text-[11px] text-white"
+              className="absolute -top-1.5 -right-1.5 grid h-4.5 w-4.5 place-items-center rounded-full bg-black text-[10px] text-white"
               aria-label="Remove image"
             >
               ×
             </button>
           </div>
         ) : (
-          <button
-            type="button"
-            onClick={() => fileRef.current?.click()}
-            className="rounded-lg px-2.5 py-1.5 text-sm text-stone-500 hover:bg-stone-100 hover:text-stone-800"
-          >
-            + Image
+          <button type="button" onClick={() => fileRef.current?.click()} className="d-dock-icon" aria-label="Add image" title="Add image">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
           </button>
         )}
         <input
@@ -143,21 +114,39 @@ export default function Composer({ onDump }: Props) {
             e.target.value = "";
           }}
         />
-        <span className="hidden text-xs text-stone-400 sm:inline">Enter to dump · Shift+Enter for a new line · paste or drop images</span>
-        <button
-          type="button"
-          onClick={submit}
-          disabled={busy || (!text.trim() && !file)}
-          className="ml-auto rounded-xl bg-stone-900 px-5 py-2 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:bg-stone-300"
-        >
-          {busy ? "Dumping…" : "Dump it"}
+        <textarea
+          ref={inputRef}
+          autoFocus
+          rows={text.includes("\n") ? 3 : 1}
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              submit();
+            }
+          }}
+          onPaste={(e) => {
+            const img = [...e.clipboardData.files].find((f) => f.type.startsWith("image/"));
+            if (img) {
+              e.preventDefault();
+              setFile(img);
+            }
+          }}
+          placeholder="Dump a link, post, image or note…"
+          aria-label="Dump something"
+          className="d-dock-input"
+        />
+        <kbd className="d-dock-kbd">N</kbd>
+        <button type="button" onClick={submit} disabled={busy || (!text.trim() && !file)} className="d-dock-btn">
+          {busy ? "Dumping…" : "Dump"}
         </button>
       </div>
       {dragging && (
-        <div className="pointer-events-none absolute inset-0 grid place-items-center rounded-2xl bg-white/80 text-sm font-medium">
-          Drop to dump
+        <div className="d-drop">
+          <span>Drop to dump</span>
         </div>
       )}
-    </div>
+    </>
   );
 }

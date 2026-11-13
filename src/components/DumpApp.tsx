@@ -4,9 +4,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { Dump } from "@/lib/db";
 import { kindMeta, topicMeta } from "@/lib/taxonomy";
+import { DENSITY_KEY, MODE_KEY } from "@/lib/theme";
 import Composer from "./Composer";
 import DumpCard from "./DumpCard";
-import Sidebar, { type Counts } from "./Sidebar";
+import Logo from "./Logo";
+import SectionNav, { type Counts } from "./SectionNav";
 
 const PAGE_SIZE = 60;
 
@@ -37,6 +39,37 @@ export default function DumpApp() {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const pendingToasts = useRef(new Set<string>());
   const searchRef = useRef<HTMLInputElement>(null);
+  const bookmarklet = useRef<HTMLAnchorElement>(null);
+  const [density, setDensity] = useState(260);
+  const [dark, setDark] = useState(false);
+
+  useEffect(() => {
+    try {
+      const saved = Number(localStorage.getItem(DENSITY_KEY));
+      if (saved) setDensity(saved);
+    } catch {}
+    setDark(document.documentElement.dataset.mode === "dark");
+    // React refuses javascript: hrefs in JSX, so set it directly.
+    const code = `javascript:(()=>{window.open('${window.location.origin}/dump?url='+encodeURIComponent(location.href)+'&title='+encodeURIComponent(document.title),'dump','width=360,height=220')})()`;
+    bookmarklet.current?.setAttribute("href", code);
+  }, []);
+
+  function toggleDark() {
+    const mode = dark ? "light" : "dark";
+    setDark(!dark);
+    document.documentElement.dataset.mode = mode;
+    try {
+      localStorage.setItem(MODE_KEY, mode);
+    } catch {}
+  }
+
+  function changeDensity(px: number) {
+    setDensity(px);
+    try {
+      localStorage.setItem(DENSITY_KEY, String(px));
+    } catch {}
+    document.documentElement.style.setProperty("--col-w", `${px}px`);
+  }
 
   const toast = useCallback((text: string, tone: Toast["tone"] = "info") => {
     const id = Date.now() + Math.random();
@@ -113,7 +146,7 @@ export default function DumpApp() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement;
-      if (e.key === "/" && !el.closest("input, textarea, select")) {
+      if ((e.key === "k" && (e.metaKey || e.ctrlKey)) || (e.key === "/" && !el.closest("input, textarea, select"))) {
         e.preventDefault();
         searchRef.current?.focus();
       }
@@ -172,116 +205,109 @@ export default function DumpApp() {
   const activeLabel = topic ? topicMeta(topic).label : kind ? kindMeta(kind).label : null;
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-7xl gap-8 px-4 py-6 sm:px-6">
-      <aside className="sticky top-6 hidden h-[calc(100vh-3rem)] w-56 shrink-0 overflow-y-auto md:block">
-        <div className="mb-6 flex items-baseline gap-2 px-2.5">
-          <h1 className="text-2xl font-black tracking-tight">Dump</h1>
-          <span className="text-xs text-stone-400">save anything</span>
-        </div>
-        <Sidebar counts={counts} kind={kind} topic={topic} onSelect={setFilter} />
-      </aside>
+    <div className="d-page">
+      <header className="d-header">
+        <div className="d-header-row">
+          <button className="d-brand" onClick={() => setFilter({ q: null, kind: null, topic: null })} aria-label="Dump home">
+            <Logo />
+            <span className="d-wordmark">dump</span>
+            <span className="d-count">{counts.total}</span>
+          </button>
 
-      <main className="min-w-0 flex-1">
-        <h1 className="mb-4 text-2xl font-black tracking-tight md:hidden">Dump</h1>
-        <Composer onDump={handleDump} />
-
-        <div className="mt-6 mb-4 flex flex-wrap items-center gap-3">
-          <div className="relative min-w-60 flex-1">
+          <label className="d-search">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
+              <circle cx="11" cy="11" r="7" />
+              <path d="m20 20-3.5-3.5" />
+            </svg>
             <input
               ref={searchRef}
               type="search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search everything you've dumped…  ( / )"
+              placeholder="Search everything you've dumped"
               aria-label="Search"
-              className="w-full rounded-xl border border-stone-200 bg-white px-4 py-2 text-sm outline-none focus:border-stone-400"
             />
-          </div>
-          {(activeLabel || q) && (
-            <div className="flex items-center gap-2 text-sm text-stone-500">
-              {items.length} {items.length === 1 ? "result" : "results"}
-              {activeLabel && (
-                <button onClick={() => setFilter({ kind: null, topic: null })} className="rounded-full bg-stone-900 px-2.5 py-0.5 text-xs text-white">
-                  {activeLabel} ×
-                </button>
+            {(activeLabel || q) && (
+              <span className="d-results">
+                {items.length} {items.length === 1 ? "result" : "results"}
+              </span>
+            )}
+            <kbd>⌘K</kbd>
+          </label>
+
+          <div className="d-header-tools">
+            <span className="d-density-wrap" title="Card size">
+              <span className="d-density-icon small" aria-hidden />
+              <input
+                type="range"
+                min={200}
+                max={440}
+                step={20}
+                value={density}
+                onChange={(e) => changeDensity(Number(e.target.value))}
+                aria-label="Card size"
+                className="d-density"
+              />
+              <span className="d-density-icon" aria-hidden />
+            </span>
+            <button className="d-icon-btn" onClick={toggleDark} aria-label={dark ? "Light mode" : "Dark mode"} title={dark ? "Light mode" : "Dark mode"}>
+              {dark ? (
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                  <circle cx="12" cy="12" r="4" />
+                  <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
+                </svg>
+              ) : (
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" />
+                </svg>
               )}
-            </div>
-          )}
+            </button>
+          </div>
         </div>
+        <SectionNav counts={counts} topic={topic} kind={kind} onSelect={setFilter} />
+      </header>
 
-        <div className="mb-4 flex gap-1.5 overflow-x-auto md:hidden">
-          <select
-            value={topic ?? ""}
-            onChange={(e) => setFilter({ topic: e.target.value || null })}
-            className="rounded-lg border border-stone-200 bg-white px-2 py-1 text-sm"
-            aria-label="Topic"
-          >
-            <option value="">All topics</option>
-            {Object.keys(counts.topics).map((t) => (
-              <option key={t} value={t}>
-                {topicMeta(t).label} ({counts.topics[t]})
-              </option>
-            ))}
-          </select>
-          <select
-            value={kind ?? ""}
-            onChange={(e) => setFilter({ kind: e.target.value || null })}
-            className="rounded-lg border border-stone-200 bg-white px-2 py-1 text-sm"
-            aria-label="Type"
-          >
-            <option value="">All types</option>
-            {Object.keys(counts.kinds).map((k) => (
-              <option key={k} value={k}>
-                {kindMeta(k).label} ({counts.kinds[k]})
-              </option>
-            ))}
-          </select>
-        </div>
-
+      <main className="d-main">
         {loaded && items.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-stone-300 px-6 py-16 text-center text-stone-500">
+          <div className="d-empty">
             {q || kind || topic ? (
               <p>Nothing matches that. Try a different word.</p>
             ) : (
               <>
-                <p className="text-lg font-medium text-stone-700">Your dump is empty.</p>
-                <p className="mt-1 text-sm">Paste a link, an X post, a YouTube video, an image or a quick note above. Dump will file it for you.</p>
+                <p className="d-empty-title">Your dump is empty</p>
+                <p>Paste a link, an X post, a YouTube video, an image or a quick note below. Dump files it for you.</p>
               </>
             )}
           </div>
         ) : (
-          <div className="columns-1 gap-4 sm:columns-2 xl:columns-3">
+          <div className="d-grid">
             {items.map((d) => (
-              <DumpCard
-                key={d.id}
-                dump={d}
-                onTopic={handleTopic}
-                onDelete={handleDelete}
-                onRetry={handleRetry}
-                onTag={(t) => setSearch(t)}
-              />
+              <DumpCard key={d.id} dump={d} onTopic={handleTopic} onDelete={handleDelete} onRetry={handleRetry} />
             ))}
           </div>
         )}
         {hasMore && (
           <div className="mt-6 flex justify-center">
-            <button
-              type="button"
-              onClick={() => setPage({ key: filterKey, limit: limit + PAGE_SIZE })}
-              className="rounded-xl border border-stone-200 bg-white px-5 py-2 text-sm font-medium text-stone-700 shadow-sm hover:bg-stone-50"
-            >
+            <button type="button" onClick={() => setPage({ key: filterKey, limit: limit + PAGE_SIZE })} className="d-ghost-btn">
               Load more
             </button>
           </div>
         )}
+
+        <footer className="d-footer">
+          Dump from any page: drag{" "}
+          <a ref={bookmarklet} onClick={(e) => e.preventDefault()} className="d-bookmarklet">
+            + Dump it
+          </a>{" "}
+          to your bookmarks bar.
+        </footer>
       </main>
 
-      <div className="pointer-events-none fixed inset-x-0 bottom-6 z-50 flex flex-col items-center gap-2">
+      <Composer onDump={handleDump} />
+
+      <div className="d-toasts">
         {toasts.map((t) => (
-          <div
-            key={t.id}
-            className={`rounded-full px-4 py-2 text-sm shadow-lg ${t.tone === "error" ? "bg-red-600 text-white" : "bg-stone-900 text-white"}`}
-          >
+          <div key={t.id} className="d-toast" data-tone={t.tone}>
             {t.text}
           </div>
         ))}

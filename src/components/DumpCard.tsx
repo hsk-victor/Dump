@@ -11,120 +11,180 @@ interface Props {
   onTopic: (id: string, topic: string) => void;
   onDelete: (id: string) => void;
   onRetry: (id: string) => void;
-  onTag: (tag: string) => void;
 }
 
-export default function DumpCard({ dump, onTopic, onDelete, onRetry, onTag }: Props) {
+function postAuthor(dump: Dump) {
+  if (dump.author) return dump.author;
+  const m = dump.title?.match(/^(.+?) on X$/);
+  return m && m[1] !== "Post" ? m[1] : null;
+}
+
+function initials(name: string) {
+  return name
+    .replace(/^@/, "")
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase() ?? "")
+    .join("");
+}
+
+function XLogo() {
+  return (
+    <svg viewBox="0 0 24 24" aria-label="X" className="d-x">
+      <path
+        fill="currentColor"
+        d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"
+      />
+    </svg>
+  );
+}
+
+export default function DumpCard({ dump, onTopic, onDelete, onRetry }: Props) {
   const [imgFailed, setImgFailed] = useState(false);
+  const [iconFailed, setIconFailed] = useState(false);
   const topic = topicMeta(dump.topic);
+  const kind = dump.kind;
   const processing = dump.status === "processing";
-  const body = dump.summary ?? dump.description ?? (dump.kind === "note" ? dump.content : null);
   const title = dump.title || (dump.url ? titleFromUrl(dump.url) : null);
-  const showBody = body && body !== title;
-  const href = dump.url ?? (dump.kind === "image" ? dump.imageUrl : null);
+  const href = dump.url ?? (kind === "image" ? dump.imageUrl : null);
+  const site = dump.siteName && dump.siteName.length < 30 ? dump.siteName : dump.domain;
+  const isXPost = kind === "post" && /(^|\.)(x|twitter)\.com$/.test(dump.domain ?? "");
+  const postText = isXPost ? (dump.description ?? dump.summary) : null;
+  const author = kind === "post" ? postAuthor(dump) : null;
+  const showMedia = !!dump.imageUrl && !imgFailed;
+  const mediaOnly = kind === "image" && showMedia && !dump.note;
+  const filedBy = dump.classifiedBy === "you" ? "Filed by you" : dump.classifiedBy === "ai" ? "Filed by AI" : "Filed automatically";
+
+  const actions = (
+    <div className="d-actions">
+      <select aria-label="Move to topic" value="" onChange={(e) => e.target.value && onTopic(dump.id, e.target.value)}>
+        <option value="" disabled>
+          Move…
+        </option>
+        {TOPICS.filter((t) => t.id !== dump.topic).map((t) => (
+          <option key={t.id} value={t.id}>
+            {t.label}
+          </option>
+        ))}
+      </select>
+      <button onClick={() => onDelete(dump.id)} aria-label="Delete" title="Delete">
+        ×
+      </button>
+    </div>
+  );
+
+  const topicChip = processing ? (
+    <span className="d-sorting shimmer">Sorting…</span>
+  ) : (
+    <span className="d-topic-chip" title={filedBy}>
+      <span className="d-dot" />
+      {topic.label}
+    </span>
+  );
+
+  const meta = (
+    <div className="d-meta">
+      {dump.domain && !iconFailed && !isXPost && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          className="d-favicon"
+          src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(dump.domain)}&sz=32`}
+          alt=""
+          onError={() => setIconFailed(true)}
+        />
+      )}
+      {site && !isXPost && <span className="min-w-0 truncate">{site}</span>}
+      {site && !isXPost && <span aria-hidden>·</span>}
+      <time className="shrink-0 whitespace-nowrap" dateTime={new Date(dump.createdAt).toISOString()}>
+        {timeAgo(dump.createdAt)}
+      </time>
+      {dump.status === "failed" && (
+        <button onClick={() => onRetry(dump.id)} className="d-retry">
+          Retry
+        </button>
+      )}
+      <span className="ml-auto">{topicChip}</span>
+    </div>
+  );
+
+  if (isXPost && postText) {
+    return (
+      <article className="d-card d-post group" style={{ "--topic": topic.color } as React.CSSProperties}>
+        {actions}
+        <a href={href ?? undefined} target="_blank" rel="noreferrer" className="d-post-head">
+          <span className="d-avatar">{author ? initials(author) : <XLogo />}</span>
+          <span className="min-w-0">
+            <span className="d-author-name">{author ?? "Post"}</span>
+            <span className="d-author-site">{site ?? "X"}</span>
+          </span>
+          <XLogo />
+        </a>
+        <p className="d-post-text">{postText}</p>
+        {showMedia && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img className="d-post-media" src={dump.imageUrl!} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setImgFailed(true)} />
+        )}
+        {dump.note && <p className="d-annotation">{dump.note}</p>}
+        {meta}
+      </article>
+    );
+  }
 
   return (
-    <article className="group mb-4 break-inside-avoid overflow-hidden rounded-2xl border border-stone-200 bg-white transition hover:border-stone-300 hover:shadow-md">
-      {dump.imageUrl && !imgFailed && (
-        <a href={href ?? undefined} target="_blank" rel="noreferrer" className="block bg-stone-100">
+    <article className={`d-card group ${mediaOnly ? "d-media-only" : ""}`} data-kind={kind} style={{ "--topic": topic.color } as React.CSSProperties}>
+      {actions}
+      {showMedia && (
+        <a href={href ?? undefined} target="_blank" rel="noreferrer" className="d-media">
           {/* External thumbnails come from arbitrary domains, so next/image's allow-list doesn't fit here. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={dump.imageUrl}
-            alt=""
-            loading="lazy"
-            referrerPolicy="no-referrer"
-            onError={() => setImgFailed(true)}
-            className={`w-full object-cover ${dump.kind === "image" ? "max-h-96" : "max-h-48"}`}
-          />
+          <img src={dump.imageUrl!} alt={title ?? ""} loading="lazy" referrerPolicy="no-referrer" onError={() => setImgFailed(true)} />
+          {kind === "video" && (
+            <span className="d-play" aria-hidden>
+              <svg viewBox="0 0 24 24">
+                <path fill="currentColor" d="M8 5.5v13l11-6.5z" />
+              </svg>
+            </span>
+          )}
+          {mediaOnly && <span className="d-overlay">{topicChip}</span>}
         </a>
       )}
 
-      <div className="p-4">
-        <div className="mb-2 flex flex-wrap items-center gap-1.5 text-[11px] font-medium">
-          <span className="rounded-full bg-stone-100 px-2 py-0.5 text-stone-600">{kindMeta(dump.kind).singular}</span>
-          {processing ? (
-            <span className="shimmer rounded-full px-2 py-0.5 text-stone-500">Sorting…</span>
+      {!mediaOnly && (
+        <div className="d-body">
+          {processing && !title ? (
+            <div className="space-y-2 py-1">
+              <div className="shimmer h-4 w-3/4 rounded" />
+              <div className="shimmer h-3 w-1/2 rounded" />
+            </div>
+          ) : kind === "note" ? (
+            <p className="d-note-text">{dump.content ?? title}</p>
           ) : (
-            <span
-              className="rounded-full px-2 py-0.5"
-              style={{ backgroundColor: `${topic.color}1a`, color: topic.color }}
-              title={dump.classifiedBy === "you" ? "Filed by you" : dump.classifiedBy === "ai" ? "Filed by AI" : "Filed automatically"}
-            >
-              {topic.label}
-            </span>
+            <>
+              <h3 className="d-headline">
+                {href ? (
+                  <a href={href} target="_blank" rel="noreferrer">
+                    {title || dump.url}
+                  </a>
+                ) : (
+                  title
+                )}
+              </h3>
+              {!showMedia && (dump.summary ?? dump.description) && <p className="d-dek">{dump.summary ?? dump.description}</p>}
+            </>
           )}
-          <div className="ml-auto flex items-center gap-1 font-normal text-stone-400 opacity-0 transition group-focus-within:opacity-100 group-hover:opacity-100">
-            <select
-              aria-label="Move to topic"
-              value=""
-              onChange={(e) => e.target.value && onTopic(dump.id, e.target.value)}
-              className="max-w-24 cursor-pointer rounded-md bg-transparent px-1 py-0.5 text-xs text-stone-500 hover:bg-stone-100"
-            >
-              <option value="" disabled>
-                Move…
-              </option>
-              {TOPICS.filter((t) => t.id !== dump.topic).map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.label}
-                </option>
-              ))}
-            </select>
-            <button onClick={() => onDelete(dump.id)} className="rounded-md px-1.5 py-0.5 hover:bg-red-50 hover:text-red-600" aria-label="Delete">
-              Delete
-            </button>
-          </div>
-        </div>
-
-        {processing && !title ? (
-          <div className="space-y-2">
-            <div className="shimmer h-4 w-3/4 rounded" />
-            <div className="shimmer h-3 w-1/2 rounded" />
-          </div>
-        ) : (
-          <h3 className="text-[15px] leading-snug font-semibold text-stone-900">
-            {href ? (
-              <a href={href} target="_blank" rel="noreferrer" className="hover:underline">
-                {title || dump.url}
-              </a>
-            ) : (
-              title
-            )}
-          </h3>
-        )}
-
-        {showBody && (
-          <p className={`mt-1.5 text-sm leading-relaxed whitespace-pre-line text-stone-600 ${dump.kind === "note" ? "line-clamp-[10]" : "line-clamp-4"}`}>
-            {body}
-          </p>
-        )}
-
-        {dump.note && (
-          <p className="mt-2 rounded-lg bg-amber-50 px-2.5 py-1.5 text-sm text-amber-900">{dump.note}</p>
-        )}
-
-        {dump.tags.length > 0 && (
-          <div className="mt-3 flex flex-wrap gap-1">
-            {dump.tags.map((t) => (
-              <button key={t} onClick={() => onTag(t)} className="rounded-md px-1.5 py-0.5 text-xs text-stone-500 hover:bg-stone-100 hover:text-stone-800">
-                #{t}
-              </button>
-            ))}
-          </div>
-        )}
-
-        <div className="mt-3 flex items-center gap-2 text-xs text-stone-400">
-          {dump.domain && <span className="min-w-0 truncate">{dump.siteName && dump.siteName.length < 30 ? dump.siteName : dump.domain}</span>}
-          {dump.domain && <span>·</span>}
-          <time className="shrink-0 whitespace-nowrap" dateTime={new Date(dump.createdAt).toISOString()}>{timeAgo(dump.createdAt)}</time>
-          {dump.status === "failed" && (
-            <button onClick={() => onRetry(dump.id)} className="text-amber-600 hover:underline">
-              Couldn&apos;t fetch · retry
-            </button>
+          {dump.note && <p className="d-annotation">{dump.note}</p>}
+          {kind === "note" ? (
+            <div className="d-meta">
+              <span>{kindMeta(kind).singular}</span>
+              <span aria-hidden>·</span>
+              <time dateTime={new Date(dump.createdAt).toISOString()}>{timeAgo(dump.createdAt)}</time>
+              <span className="ml-auto">{topicChip}</span>
+            </div>
+          ) : (
+            meta
           )}
-
         </div>
-      </div>
+      )}
     </article>
   );
 }
