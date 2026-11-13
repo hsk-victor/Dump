@@ -266,6 +266,7 @@ function RedditCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
 /** hackernews: a compact item like the HN list — orange mark, headline, domain. */
 function HnCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
   const headline = bits.title ?? dump.url;
+  const showSite = headline !== "news.ycombinator.com" && headline !== dump.domain;
   const text = dump.description ?? dump.summary;
   return (
     <article {...bits.cardProps} className="d-card group">
@@ -277,7 +278,7 @@ function HnCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
           </span>
           <span className="min-w-0">
             <span className="d-hn-title">{headline}</span>
-            <span className="d-hn-site">news.ycombinator.com</span>
+            {showSite && <span className="d-hn-site">news.ycombinator.com</span>}
           </span>
         </a>
         {text && text !== headline && <p className="d-dek">{text}</p>}
