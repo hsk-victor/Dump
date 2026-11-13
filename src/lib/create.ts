@@ -16,7 +16,7 @@ const IMAGE_TYPES: Record<string, string> = {
 };
 export const MAX_UPLOAD_BYTES = 15 * 1024 * 1024;
 
-export type Created = Dump & { duplicate?: boolean };
+export type Created = Dump & { duplicate?: boolean; /** True when a duplicate learned new metadata worth re-enriching for. */ resync?: boolean };
 
 export interface CreateOptions {
   title?: string | null;
@@ -37,22 +37,34 @@ function safeImageUrl(u: string | null | undefined): string | null {
  */
 export function createFromText(raw: string, opts?: CreateOptions | string | null): Created {
   const o: CreateOptions = typeof opts === "string" || opts == null ? { title: opts } : opts;
+  const title = o.title?.trim() || null;
+  const description = o.description?.replace(/\s+/g, " ").trim().slice(0, 2000) || null;
+  const imageUrl = safeImageUrl(o.imageUrl);
   const parsed = parseInput(raw);
   if (parsed.type === "url") {
     const existing = findByUrl(parsed.url);
     if (existing) {
+      const patch: Partial<Dump> = {};
       if (parsed.note && parsed.note !== existing.note) {
-        updateDump(existing.id, { note: existing.note ? `${existing.note}\n${parsed.note}` : parsed.note });
+        patch.note = existing.note ? `${existing.note}\n${parsed.note}` : parsed.note;
       }
-      return { ...bumpDump(existing.id)!, duplicate: true };
+      // Fill in metadata the first save lacked (e.g. a link dumped bare, then re-dumped
+      // through the bookmarklet, which sends the og data a server fetch never sees).
+      if (!existing.title && title) patch.title = title;
+      if (!existing.description && description) patch.description = description;
+      if (!existing.imageUrl && imageUrl) patch.imageUrl = imageUrl;
+      const resync = !!(patch.title || patch.description || patch.imageUrl);
+      if (resync) patch.status = "processing";
+      if (Object.keys(patch).length) updateDump(existing.id, patch);
+      return { ...bumpDump(existing.id)!, duplicate: true, resync };
     }
     return createDump({
       kind: kindFromUrl(parsed.url) ?? "link",
       url: parsed.url,
       domain: domainOf(parsed.url),
-      title: o.title?.trim() || null,
-      description: o.description?.replace(/\s+/g, " ").trim().slice(0, 2000) || null,
-      imageUrl: safeImageUrl(o.imageUrl),
+      title,
+      description,
+      imageUrl,
       note: parsed.note,
     });
   }

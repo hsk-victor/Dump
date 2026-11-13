@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
       const body = await req.json().catch(() => ({}));
       dump = createFromText(String(body.text ?? ""), { title: body.title, description: body.description, imageUrl: body.imageUrl });
     }
-    if (!("duplicate" in dump && dump.duplicate)) after(() => enrichDump(dump.id));
+    if (!("duplicate" in dump && dump.duplicate) || ("resync" in dump && dump.resync)) after(() => enrichDump(dump.id));
     return NextResponse.json(dump, { status: 201 });
   } catch (err) {
     if (err instanceof InputError) return NextResponse.json({ error: err.message }, { status: 400 });

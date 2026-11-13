@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
   const text = [sp.get("url"), sp.get("text")].filter(Boolean).join(" ");
   try {
     const dump = createFromText(text, { title: sp.get("title"), description: sp.get("desc"), imageUrl: sp.get("img") });
-    if (!("duplicate" in dump && dump.duplicate)) after(() => enrichDump(dump.id));
+    if (!("duplicate" in dump && dump.duplicate) || dump.resync) after(() => enrichDump(dump.id));
     return page(`<h2 style="margin:0 0 4px">Dumped.</h2><p style="color:#78716c;margin:0">Filing it for you…</p>`);
   } catch (err) {
     if (err instanceof InputError) return page(`<h2>Nothing to dump</h2>`, 400);
