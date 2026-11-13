@@ -71,16 +71,6 @@ button {
 :is(.d-icon-btn, .d-dock-icon, .d-actions button, .d-ghost-btn, .d-retry, .d-bookmarklet, .d-brand, .d-topic, .d-dock-btn):active {
   scale: 0.97;
 }
-@media (pointer: coarse) {
-  /* 16px minimum keeps iOS from auto-zooming the page on input focus. */
-  .d-search input,
-  .d-dock-input,
-  .d-actions select,
-  .d-kind-select {
-    font-size: 16px;
-  }
-}
-
 /* ── Header ── */
 
 .d-header {
@@ -939,6 +929,17 @@ button {
   background: linear-gradient(90deg, var(--hairline) 0%, color-mix(in srgb, var(--ink) 10%, transparent) 50%, var(--hairline) 100%);
   background-size: 800px 100%;
   animation: shimmer 1.4s linear infinite;
+}
+
+/* Last so it beats every base input rule below: 16px minimum on touch
+   keeps iOS from auto-zooming the page on input focus. */
+@media (pointer: coarse) {
+  .d-search input,
+  .d-dock-input,
+  .d-actions select,
+  .d-kind-select {
+    font-size: 16px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
