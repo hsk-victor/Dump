@@ -74,4 +74,12 @@ describe("enrichDump", () => {
     extractUrl.mockResolvedValueOnce(page({ title: "Garlic Noodles in 10 Minutes" }));
     expect(await enrichDump(d.id)).toMatchObject({ title: "Garlic Noodles in 10 Minutes" });
   });
+
+  it("keeps URL-derived title words searchable when the page has text but no title", async () => {
+    const d = db.createDump({ kind: "link", url: "https://example.com/smoky-chipotle-tacos", domain: "example.com" });
+    extractUrl.mockResolvedValueOnce(page({ title: null, content: "Some body text about dinner ideas for the week" }));
+    await enrichDump(d.id);
+    expect(db.listDumps({ q: "chipotle tacos" }).map((x) => x.id)).toContain(d.id);
+    expect(db.listDumps({ q: "dinner ideas" }).map((x) => x.id)).toContain(d.id);
+  });
 });

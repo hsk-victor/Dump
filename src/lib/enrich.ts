@@ -49,7 +49,7 @@ export async function enrichDump(id: string): Promise<Dump | null> {
         kind: ex.kind,
         title,
         description: truncate(ex.description, 1000),
-        content: ex.content ?? (title ? null : titleFromUrl(dump.url)),
+        content: title ? ex.content : [titleFromUrl(dump.url), ex.content].filter(Boolean).join("\n") || null,
         imageUrl: ex.imageUrl,
         siteName: ex.siteName,
         author: ex.author,
