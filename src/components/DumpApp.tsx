@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { Toaster, toast as sonnerToast } from "sonner";
 import type { Dump } from "@/lib/db";
-import { kindMeta, topicMeta } from "@/lib/taxonomy";
+import { KINDS, kindMeta, topicMeta } from "@/lib/taxonomy";
 import { DENSITY_KEY, MODE_KEY } from "@/lib/theme";
 import Composer from "./Composer";
 import DumpCard from "./DumpCard";
@@ -11,12 +12,6 @@ import Logo from "./Logo";
 import SectionNav, { type Counts } from "./SectionNav";
 
 const PAGE_SIZE = 60;
-
-interface Toast {
-  id: number;
-  text: string;
-  tone: "info" | "error";
-}
 
 export default function DumpApp() {
   const router = useRouter();
@@ -31,12 +26,13 @@ export default function DumpApp() {
   const [loaded, setLoaded] = useState(false);
   const [search, setSearch] = useState(q);
   const [hasMore, setHasMore] = useState(false);
+  const [freshId, setFreshId] = useState<string | null>(null);
+  const [removingIds, setRemovingIds] = useState<Set<string>>(new Set());
   // How many items to show; resets to one page whenever the filters change.
   const filterKey = `${q}|${kind}|${topic}`;
   const [page, setPage] = useState({ key: filterKey, limit: PAGE_SIZE });
   const limit = page.key === filterKey ? page.limit : PAGE_SIZE;
   const lastSyncedQ = useRef(q);
-  const [toasts, setToasts] = useState<Toast[]>([]);
   const [aiOn, setAiOn] = useState(false);
   const [resorting, setResorting] = useState(false);
   const pendingToasts = useRef(new Set<string>());
@@ -44,6 +40,8 @@ export default function DumpApp() {
   const bookmarklet = useRef<HTMLAnchorElement>(null);
   const [density, setDensity] = useState(260);
   const [dark, setDark] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const settingsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     try {
@@ -56,6 +54,22 @@ export default function DumpApp() {
     const code = `javascript:(()=>{const m=n=>{const e=document.querySelector('meta[property="'+n+'"],meta[name="'+n+'"]');return e?e.content:''};const u=v=>{try{return v?new URL(v,location.href).href:''}catch(x){return''}};window.open('${window.location.origin}/dump?url='+encodeURIComponent(location.href)+'&title='+encodeURIComponent(document.title)+'&desc='+encodeURIComponent(m('og:description')||m('twitter:description')||m('description'))+'&img='+encodeURIComponent(u(m('og:image')||m('twitter:image'))),'dump','width=360,height=220')})()`;
     bookmarklet.current?.setAttribute("href", code);
   }, []);
+
+  useEffect(() => {
+    if (!settingsOpen) return;
+    const close = (e: MouseEvent) => {
+      if (!settingsRef.current?.contains(e.target as Node)) setSettingsOpen(false);
+    };
+    const esc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSettingsOpen(false);
+    };
+    document.addEventListener("mousedown", close);
+    document.addEventListener("keydown", esc);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      document.removeEventListener("keydown", esc);
+    };
+  }, [settingsOpen]);
 
   function toggleDark() {
     const mode = dark ? "light" : "dark";
@@ -74,10 +88,9 @@ export default function DumpApp() {
     document.documentElement.style.setProperty("--col-w", `${px}px`);
   }
 
-  const toast = useCallback((text: string, tone: Toast["tone"] = "info") => {
-    const id = Date.now() + Math.random();
-    setToasts((t) => [...t, { id, text, tone }]);
-    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 3500);
+  const toast = useCallback((text: string, tone: "info" | "error" = "info") => {
+    if (tone === "error") sonnerToast.error(text);
+    else sonnerToast(text);
   }, []);
 
   const setFilter = useCallback(
@@ -112,7 +125,9 @@ export default function DumpApp() {
     for (const d of data.items) {
       if (pendingToasts.current.has(d.id) && d.status !== "processing") {
         pendingToasts.current.delete(d.id);
-        toast(`Filed under ${topicMeta(d.topic).label} · ${kindMeta(d.kind).singular}`);
+        if (d.status === "failed")
+          toast("Couldn't fetch that link. Saved it anyway.", "error");
+        else toast(`Filed under ${topicMeta(d.topic).label} · ${kindMeta(d.kind).singular}`);
       }
     }
   }, [q, kind, topic, limit, toast]);
@@ -177,6 +192,8 @@ export default function DumpApp() {
     const dump = (await res.json()) as Dump & { duplicate?: boolean };
     if (dump.duplicate) toast(`Already in your dump (${topicMeta(dump.topic).label}). Moved it to the top`);
     else pendingToasts.current.add(dump.id);
+    setFreshId(dump.id);
+    setTimeout(() => setFreshId(null), 2500);
     // Show it immediately; clear filters so the new dump is visible.
     if (q || kind || topic) {
       setSearch("");
@@ -195,9 +212,17 @@ export default function DumpApp() {
   }
 
   async function handleDelete(id: string) {
-    setItems((prev) => prev.filter((d) => d.id !== id));
-    await fetch(`/api/dumps/${id}`, { method: "DELETE" });
-    load();
+    setRemovingIds((prev) => new Set(prev).add(id));
+    setTimeout(async () => {
+      setItems((prev) => prev.filter((d) => d.id !== id));
+      setRemovingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+      await fetch(`/api/dumps/${id}`, { method: "DELETE" });
+      load();
+    }, 180);
   }
 
   async function handleRetry(id: string) {
@@ -231,10 +256,10 @@ export default function DumpApp() {
       <header className="d-header">
         <div className="d-header-row">
           <button className="d-brand" onClick={() => setFilter({ q: null, kind: null, topic: null })} aria-label="Dump home">
-            <Logo />
             <span className="d-wordmark">dump</span>
             <span className="d-count">{counts.total}</span>
           </button>
+          <SectionNav counts={counts} topic={topic} onSelect={setFilter} />
 
           <label className="d-search">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
@@ -258,58 +283,79 @@ export default function DumpApp() {
           </label>
 
           <div className="d-header-tools">
-            <button className="d-icon-btn" onClick={toggleDark} aria-label={dark ? "Light mode" : "Dark mode"} title={dark ? "Light mode" : "Dark mode"}>
-              {dark ? (
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-                  <circle cx="12" cy="12" r="4" />
-                  <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
-                </svg>
-              ) : (
+            <div className="d-settings" ref={settingsRef}>
+              <button
+                className="d-icon-btn"
+                onClick={() => setSettingsOpen((o) => !o)}
+                aria-label="Settings"
+                title="Settings"
+                aria-expanded={settingsOpen}
+              >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" />
+                  <path d="M4 7h10M18 7h2M4 17h4M12 17h8" />
+                  <circle cx="16" cy="7" r="2.2" />
+                  <circle cx="10" cy="17" r="2.2" />
                 </svg>
+              </button>
+              {settingsOpen && (
+                <div className="d-settings-pop">
+                  <div className="d-settings-row">
+                    <span className="d-settings-label">Type</span>
+                    <select
+                      className="d-kind-select"
+                      value={kind ?? ""}
+                      onChange={(e) => setFilter({ kind: e.target.value || null })}
+                      aria-label="Type"
+                    >
+                      <option value="">All types</option>
+                      {KINDS.filter((k) => counts.kinds[k.id]).map((k) => (
+                        <option key={k.id} value={k.id}>
+                          {k.label} ({counts.kinds[k.id]})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  {aiOn && (
+                    <div className="d-settings-row">
+                      <span className="d-settings-label">Topics</span>
+                      <button className="d-ghost-btn" onClick={handleResort} disabled={resorting}>
+                        {resorting ? "Re-sorting…" : "Re-sort with AI"}
+                      </button>
+                    </div>
+                  )}
+                  <div className="d-settings-row">
+                    <span className="d-settings-label">Theme</span>
+                    <div className="d-seg">
+                      <button className="d-seg-btn" aria-pressed={!dark} onClick={() => !dark || toggleDark()}>
+                        Light
+                      </button>
+                      <button className="d-seg-btn" aria-pressed={dark} onClick={() => dark || toggleDark()}>
+                        Dark
+                      </button>
+                    </div>
+                  </div>
+                  <div className="d-settings-row">
+                    <span className="d-settings-label">Card size</span>
+                    <span className="d-density-wrap">
+                      <span className="d-density-icon small" aria-hidden />
+                      <input
+                        type="range"
+                        min={200}
+                        max={440}
+                        step={20}
+                        value={density}
+                        onChange={(e) => changeDensity(Number(e.target.value))}
+                        aria-label="Card size"
+                        className="d-density"
+                      />
+                      <span className="d-density-icon" aria-hidden />
+                    </span>
+                  </div>
+                </div>
               )}
-            </button>
+            </div>
           </div>
         </div>
-        <SectionNav
-          counts={counts}
-          topic={topic}
-          kind={kind}
-          onSelect={setFilter}
-          trailing={
-            <>
-              {aiOn && (
-                <button
-                  className={`d-icon-btn${resorting ? " is-busy" : ""}`}
-                  onClick={handleResort}
-                  disabled={resorting}
-                  aria-label="Re-sort with AI"
-                  title={resorting ? "Re-sorting…" : "Re-sort with AI (topics you picked stay put)"}
-                >
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z" />
-                    <path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z" />
-                  </svg>
-                </button>
-              )}
-              <span className="d-density-wrap" title="Card size">
-                <span className="d-density-icon small" aria-hidden />
-                <input
-                  type="range"
-                  min={200}
-                  max={440}
-                  step={20}
-                  value={density}
-                  onChange={(e) => changeDensity(Number(e.target.value))}
-                  aria-label="Card size"
-                  className="d-density"
-                />
-                <span className="d-density-icon" aria-hidden />
-              </span>
-            </>
-          }
-        />
       </header>
 
       <main className="d-main">
@@ -350,7 +396,15 @@ export default function DumpApp() {
         ) : (
           <div className="d-grid">
             {items.map((d) => (
-              <DumpCard key={d.id} dump={d} onTopic={handleTopic} onDelete={handleDelete} onRetry={handleRetry} />
+              <DumpCard
+                key={d.id}
+                dump={d}
+                fresh={d.id === freshId}
+                removing={removingIds.has(d.id)}
+                onTopic={handleTopic}
+                onDelete={handleDelete}
+                onRetry={handleRetry}
+              />
             ))}
           </div>
         )}
@@ -373,13 +427,13 @@ export default function DumpApp() {
 
       <Composer onDump={handleDump} />
 
-      <div className="d-toasts">
-        {toasts.map((t) => (
-          <div key={t.id} className="d-toast" data-tone={t.tone}>
-            {t.text}
-          </div>
-        ))}
-      </div>
+      <Toaster
+        position="bottom-center"
+        theme={dark ? "dark" : "light"}
+        offset="5.5rem"
+        mobileOffset="5.5rem"
+        toastOptions={{ style: { borderRadius: "999px" } }}
+      />
     </div>
   );
 }

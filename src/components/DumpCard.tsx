@@ -8,6 +8,8 @@ import { titleFromUrl } from "@/lib/detect";
 
 interface Props {
   dump: Dump;
+  fresh?: boolean;
+  removing?: boolean;
   onTopic: (id: string, topic: string) => void;
   onDelete: (id: string) => void;
   onRetry: (id: string) => void;
@@ -19,12 +21,14 @@ function postAuthor(dump: Dump) {
   return m && m[1] !== "Post" ? m[1] : null;
 }
 
+// Grapheme-cluster first character: w[0] would split an emoji surrogate pair.
 function initials(name: string) {
+  const segmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
   return name
     .replace(/^@/, "")
     .split(/\s+/)
     .slice(0, 2)
-    .map((w) => w[0]?.toUpperCase() ?? "")
+    .map((w) => segmenter.segment(w)[Symbol.iterator]().next().value?.segment.toUpperCase() ?? "")
     .join("");
 }
 
@@ -39,9 +43,8 @@ function XLogo() {
   );
 }
 
-export default function DumpCard({ dump, onTopic, onDelete, onRetry }: Props) {
+export default function DumpCard({ dump, fresh, removing, onTopic, onDelete, onRetry }: Props) {
   const [imgFailed, setImgFailed] = useState(false);
-  const [iconFailed, setIconFailed] = useState(false);
   const topic = topicMeta(dump.topic);
   const kind = dump.kind;
   const processing = dump.status === "processing";
@@ -55,10 +58,7 @@ export default function DumpCard({ dump, onTopic, onDelete, onRetry }: Props) {
   const postText = isXPost ? (dump.description ?? dump.summary) : null;
   const author = kind === "post" ? postAuthor(dump) : null;
   const showMedia = !!dump.imageUrl && !imgFailed;
-  // Image/video cards render media-only; their caption stays in a hover overlay.
-  const mediaOnly = showMedia && (kind === "image" || kind === "video");
-  // The identified description (summary) shows as the dek even under media; other deks stay text-only.
-  const dek = dump.summary ?? (!showMedia ? dump.description : null);
+  const dek = dump.summary ?? dump.description;
   const filedBy = dump.classifiedBy === "you" ? "Filed by you" : dump.classifiedBy === "ai" ? "Filed by AI" : "Filed automatically";
 
   const actions = (
@@ -90,32 +90,27 @@ export default function DumpCard({ dump, onTopic, onDelete, onRetry }: Props) {
 
   const meta = (
     <div className="d-meta">
-      {dump.domain && !iconFailed && !isXPost && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          className="d-favicon"
-          src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(dump.domain)}&sz=32`}
-          alt=""
-          onError={() => setIconFailed(true)}
-        />
-      )}
-      {site && !isXPost && <span className="min-w-0 truncate">{site}</span>}
-      {site && !isXPost && <span aria-hidden>·</span>}
-      <time className="shrink-0 whitespace-nowrap" dateTime={new Date(dump.createdAt).toISOString()}>
-        {timeAgo(dump.createdAt)}
-      </time>
+      {topicChip}
+      <span className="min-w-0 truncate">{site ?? kindMeta(kind).singular}</span>
       {dump.status === "failed" && (
         <button onClick={() => onRetry(dump.id)} className="d-retry">
           Retry
         </button>
       )}
-      <span className="ml-auto">{topicChip}</span>
+      <time className="ml-auto shrink-0 whitespace-nowrap" dateTime={new Date(dump.createdAt).toISOString()}>
+        {timeAgo(dump.createdAt)}
+      </time>
     </div>
   );
 
   if (isXPost && postText) {
     return (
-      <article className="d-card d-post group" style={{ "--topic": topic.color } as React.CSSProperties}>
+      <article
+        className="d-card d-post group"
+        data-fresh={fresh || undefined}
+        data-removing={removing || undefined}
+        style={{ "--topic": topic.color } as React.CSSProperties}
+      >
         {actions}
         <a href={href ?? undefined} target="_blank" rel="noreferrer" className="d-post-head">
           <span className="d-avatar">{author ? initials(author) : <XLogo />}</span>
@@ -137,7 +132,13 @@ export default function DumpCard({ dump, onTopic, onDelete, onRetry }: Props) {
   }
 
   return (
-    <article className={`d-card group ${mediaOnly ? "d-media-only" : ""}`} data-kind={kind} style={{ "--topic": topic.color } as React.CSSProperties}>
+    <article
+      className="d-card group"
+      data-kind={kind}
+      data-fresh={fresh || undefined}
+      data-removing={removing || undefined}
+      style={{ "--topic": topic.color } as React.CSSProperties}
+    >
       {actions}
       {showMedia && (
         <a href={href ?? undefined} target="_blank" rel="noreferrer" className="d-media">
@@ -151,90 +152,37 @@ export default function DumpCard({ dump, onTopic, onDelete, onRetry }: Props) {
               </svg>
             </span>
           )}
-          {mediaOnly && dump.domain && !iconFailed && (
-            <span className="d-src" aria-hidden>
-              {isX ? (
-                <XLogo />
-              ) : (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(dump.domain)}&sz=32`}
-                  alt=""
-                  onError={() => setIconFailed(true)}
-                />
-              )}
-            </span>
-          )}
-          {mediaOnly && (
-            <span className="d-overlay">
-              {(title || dek || dump.note || dump.description) && (
-                <span className="d-overlay-caption">
-                  {title && <span className="d-overlay-title">{title}</span>}
-                  {(dump.note ?? dek ?? dump.description) && (
-                    <span className="d-overlay-sub">{dump.note ?? dek ?? dump.description}</span>
-                  )}
-                </span>
-              )}
-              <span className="d-overlay-meta">
-                {site && <span className="min-w-0 truncate">{site}</span>}
-                {site && <span aria-hidden>·</span>}
-                <time className="shrink-0 whitespace-nowrap" dateTime={new Date(dump.createdAt).toISOString()}>
-                  {timeAgo(dump.createdAt)}
-                </time>
-                {dump.status === "failed" && (
-                  <button
-                    onClick={(e) => {
-                      e.preventDefault();
-                      onRetry(dump.id);
-                    }}
-                    className="d-retry"
-                  >
-                    Retry
-                  </button>
-                )}
-                <span className="ml-auto">{topicChip}</span>
-              </span>
-            </span>
-          )}
+          {kind !== "image" && <span className="d-kind-flag">{kindMeta(kind).singular}</span>}
         </a>
       )}
 
-      {!mediaOnly && (
-        <div className="d-body">
-          {processing && !title ? (
-            <div className="space-y-2 py-1">
-              <div className="shimmer h-4 w-3/4 rounded" />
-              <div className="shimmer h-3 w-1/2 rounded" />
-            </div>
-          ) : kind === "note" ? (
-            <p className="d-note-text">{dump.content ?? title}</p>
-          ) : (
-            <>
+      <div className="d-body">
+        {processing && !title ? (
+          <div className="space-y-2 py-1">
+            <div className="shimmer h-4 w-3/4 rounded" />
+            <div className="shimmer h-3 w-1/2 rounded" />
+          </div>
+        ) : kind === "note" ? (
+          <p className="d-note-text">{dump.content ?? title}</p>
+        ) : (
+          <>
+            {(title || site || dump.url) && (
               <h3 className="d-headline">
                 {href ? (
                   <a href={href} target="_blank" rel="noreferrer">
-                    {title || dump.url}
+                    {title ?? site ?? dump.url}
                   </a>
                 ) : (
-                  title
+                  title ?? site ?? dump.url
                 )}
               </h3>
-              {dek && <p className="d-dek">{dek}</p>}
-            </>
-          )}
-          {dump.note && <p className="d-annotation">{dump.note}</p>}
-          {kind === "note" ? (
-            <div className="d-meta">
-              <span>{kindMeta(kind).singular}</span>
-              <span aria-hidden>·</span>
-              <time dateTime={new Date(dump.createdAt).toISOString()}>{timeAgo(dump.createdAt)}</time>
-              <span className="ml-auto">{topicChip}</span>
-            </div>
-          ) : (
-            meta
-          )}
-        </div>
-      )}
+            )}
+            {dek && <p className="d-dek">{dek}</p>}
+          </>
+        )}
+        {dump.note && <p className="d-annotation">{dump.note}</p>}
+        {meta}
+      </div>
     </article>
   );
 }
