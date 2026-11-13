@@ -63,22 +63,22 @@ body {
   flex-shrink: 0;
 }
 .d-logo {
-  display: grid;
-  place-items: center;
-  width: 1.85rem;
-  height: 1.85rem;
-  border-radius: 9px;
-  background: var(--ink);
-  color: var(--bg);
-  font-weight: 800;
-  font-size: 1.05rem;
-  line-height: 1;
-  padding-bottom: 0.1rem;
+  flex-shrink: 0;
+  transition: transform 0.25s ease;
+}
+.d-brand:hover .d-logo {
+  transform: rotate(-6deg) scale(1.06);
+}
+.d-logo-front {
+  fill: var(--ink);
+}
+.d-logo-line {
+  fill: var(--surface);
 }
 .d-wordmark {
-  font-weight: 700;
-  font-size: 1.05rem;
-  letter-spacing: -0.02em;
+  font-weight: 800;
+  font-size: 1.15rem;
+  letter-spacing: -0.045em;
 }
 .d-count {
   font-size: 0.72rem;

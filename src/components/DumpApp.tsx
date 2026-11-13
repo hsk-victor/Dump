@@ -7,6 +7,7 @@ import { kindMeta, topicMeta } from "@/lib/taxonomy";
 import { DENSITY_KEY, MODE_KEY } from "@/lib/theme";
 import Composer from "./Composer";
 import DumpCard from "./DumpCard";
+import Logo from "./Logo";
 import SectionNav, { type Counts } from "./SectionNav";
 
 const PAGE_SIZE = 60;
@@ -202,8 +203,8 @@ export default function DumpApp() {
       <header className="d-header">
         <div className="d-header-row">
           <button className="d-brand" onClick={() => setFilter({ q: null, kind: null, topic: null })} aria-label="Dump home">
-            <span className="d-logo">d</span>
-            <span className="d-wordmark">Dump</span>
+            <Logo />
+            <span className="d-wordmark">dump</span>
             <span className="d-count">{counts.total}</span>
           </button>
 
