@@ -555,21 +555,91 @@ button {
   text-transform: uppercase;
   color: var(--muted);
 }
-.d-article-row {
-  display: flex;
-  gap: 0.7rem;
-  align-items: flex-start;
-}
-.d-thumb-link {
-  flex-shrink: 0;
-  line-height: 0;
-}
 .d-thumb {
   width: 4.5rem;
   height: 4.5rem;
   object-fit: cover;
   border-radius: 10px;
   background: var(--hairline);
+}
+
+/* Article card: the thumb floats so the headline sits beside it and a long dek
+   runs full-width once it clears. Clamped blocks narrow beside a float rather than wrap under it. */
+.d-article {
+  container-type: inline-size;
+}
+.d-article-body {
+  display: flow-root;
+}
+.d-article .d-article-thumb {
+  float: inline-end;
+  margin-inline-start: 0.75rem;
+  margin-top: 0.1rem;
+  margin-bottom: 0.35rem;
+  border-radius: 8px;
+  /* Keeps white-edged og:images from bleeding into the card. */
+  outline: 1px solid var(--hairline);
+  outline-offset: -1px;
+}
+/* Narrow columns (phones, smallest card size): a side thumb would squeeze the headline
+   to a word per line, so the image stacks above it instead. */
+@container (max-width: 230px) {
+  .d-article .d-article-thumb {
+    float: none;
+    display: block;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 16 / 9;
+    margin: 0 0 0.55rem;
+  }
+}
+.d-article .d-article-title {
+  -webkit-line-clamp: 3;
+  overflow-wrap: break-word;
+  text-wrap: pretty;
+}
+.d-article .d-article-dek {
+  margin-top: 0.4rem;
+  -webkit-line-clamp: 3;
+  overflow-wrap: break-word;
+  text-wrap: pretty;
+}
+.d-article .d-annotation,
+.d-article .d-meta {
+  clear: both;
+}
+.d-article .d-annotation {
+  overflow-wrap: break-word;
+}
+/* The headline link covers the whole card; hover actions (z-index 2) and Retry stay on top. */
+.d-article .d-headline a::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+.d-article .d-retry {
+  position: relative;
+  z-index: 1;
+}
+.d-article .d-headline a {
+  text-decoration-line: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  text-decoration-color: transparent;
+  transition: text-decoration-color 0.15s var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .d-article:hover .d-headline a {
+    text-decoration-color: color-mix(in srgb, currentColor 25%, transparent);
+  }
+}
+.d-article .d-headline a:focus-visible {
+  outline: none;
+}
+.d-article:has(.d-headline a:focus-visible) {
+  outline: 2px solid color-mix(in srgb, var(--ink) 55%, transparent);
+  outline-offset: 2px;
 }
 
 /* Platform-native chrome */

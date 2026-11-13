@@ -151,6 +151,8 @@ function githubDek(dump: Dump, repo: string | null): string | null {
 interface CardBits {
   actions: ReactNode;
   meta: ReactNode;
+  /** The meta row without the site label, for cards whose kicker already names the site. */
+  bareMeta: ReactNode;
   href: string | null;
   title: string | null;
   dek: string | null;
@@ -466,41 +468,57 @@ function MusicCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
   );
 }
 
-/** article — site-name kicker (brand mark for publications) + headline + dek + small thumb. */
+const squash = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
+
+/** Publication the article came from: brand label for known services, else site name, else domain. */
+function articleSource(dump: Dump, site: string | null) {
+  const provider = providerMeta(dump.provider);
+  return (providerHasIcon(dump.provider) ? provider?.label : null) ?? site ?? dump.domain;
+}
+
+/** "A Complete Guide to useEffect — overreacted" -> "A Complete Guide to useEffect": the kicker already names the site. */
+function articleHeadline(title: string, dump: Dump, source: string | null) {
+  const m = title.match(/^(.+?)\s+[-–—|·:]\s+([^-–—|·:]{2,60})$/u);
+  if (!m) return title;
+  const tail = squash(m[2]);
+  const names = [source, dump.siteName, providerMeta(dump.provider)?.label, dump.domain, dump.domain?.split(".").slice(-2, -1)[0]];
+  return names.some((n) => n && squash(n) === tail) ? m[1] : title;
+}
+
+/** article — site-name kicker (brand mark for publications) + headline and dek wrapping a small floated thumb.
+ *  The headline link stretches over the whole card, so the card reads (and clicks) as one object. */
 function ArticleCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
+  const source = articleSource(dump, bits.site);
+  const rawTitle = bits.title ?? bits.site ?? dump.url;
+  const headline = rawTitle ? articleHeadline(rawTitle, dump, source) : null;
+  const dek = bits.dek && squash(bits.dek) !== squash(rawTitle ?? "") && squash(bits.dek) !== squash(headline ?? "") ? bits.dek : null;
+  // No real title yet, only the URL-derived domain: don't print the site name twice.
+  const echoesSource = !!headline && !!source && squash(headline) === squash(source);
   return (
-    <article {...bits.cardProps} className="d-card group">
+    <article {...bits.cardProps} className="d-card d-article group">
       {bits.actions}
-      <div className="d-body">
-        {(bits.site || dump.domain || providerHasIcon(dump.provider)) && (
-          <div className="d-kicker">
+      <div className="d-body d-article-body">
+        {source && !(echoesSource && !bits.processing) && (
+          <div className="d-kicker" dir="auto">
             <SiteMark dump={dump} />
-            <span className="min-w-0 truncate">{bits.site ?? providerMeta(dump.provider)?.label ?? dump.domain}</span>
+            <span className="min-w-0 truncate">{source}</span>
           </div>
         )}
-        <div className="d-article-row">
-          <div className="min-w-0 flex-1">
-            {bits.processing && !bits.title ? (
-              shimmerLines()
-            ) : (
-              <>
-                {(bits.title || bits.site || dump.url) && (
-                  <h3 className="d-headline">
-                    {bits.href ? <a href={bits.href} target="_blank" rel="noreferrer">{bits.title ?? bits.site ?? dump.url}</a> : bits.title ?? bits.site ?? dump.url}
-                  </h3>
-                )}
-                {bits.dek && <p className="d-dek">{bits.dek}</p>}
-              </>
+        {bits.processing && (!bits.title || echoesSource) ? (
+          shimmerLines()
+        ) : (
+          <>
+            {bits.showMedia && <Img dump={dump} bits={bits} className="d-thumb d-article-thumb" />}
+            {headline && (
+              <h3 className="d-headline d-article-title" dir="auto">
+                {bits.href ? <a href={bits.href} target="_blank" rel="noreferrer">{headline}</a> : headline}
+              </h3>
             )}
-          </div>
-          {bits.showMedia && (
-            <a href={bits.href ?? undefined} target="_blank" rel="noreferrer" className="d-thumb-link">
-              <Img dump={dump} bits={bits} className="d-thumb" />
-            </a>
-          )}
-        </div>
-        {dump.note && <p className="d-annotation">{dump.note}</p>}
-        {bits.meta}
+            {dek && <p className="d-dek d-article-dek" dir="auto">{dek}</p>}
+          </>
+        )}
+        {dump.note && <p className="d-annotation" dir="auto">{dump.note}</p>}
+        {bits.bareMeta}
       </div>
     </article>
   );
@@ -581,10 +599,10 @@ export default function DumpCard({ dump, fresh, removing, onTopic, onDelete, onR
     </span>
   );
 
-  const meta = (
+  const metaRow = (siteLabel: string | null) => (
     <div className="d-meta">
       {topicChip}
-      <span className="min-w-0 truncate">{site ?? provider?.label ?? kindMeta(kind).singular}</span>
+      {siteLabel && <span className="min-w-0 truncate">{siteLabel}</span>}
       {dump.status === "failed" && (
         <button onClick={() => onRetry(dump.id)} className="d-retry">Retry</button>
       )}
@@ -593,10 +611,12 @@ export default function DumpCard({ dump, fresh, removing, onTopic, onDelete, onR
       </time>
     </div>
   );
+  const meta = metaRow(site ?? provider?.label ?? kindMeta(kind).singular);
 
   const bits: CardBits = {
     actions,
     meta,
+    bareMeta: metaRow(null),
     href,
     title,
     dek,
