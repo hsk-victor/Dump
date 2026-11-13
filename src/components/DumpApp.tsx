@@ -107,7 +107,9 @@ export default function DumpApp() {
     for (const d of data.items) {
       if (pendingToasts.current.has(d.id) && d.status !== "processing") {
         pendingToasts.current.delete(d.id);
-        toast(`Filed under ${topicMeta(d.topic).label} · ${kindMeta(d.kind).singular}`);
+        if (d.status === "failed")
+          toast("Couldn't fetch that link. Saved it anyway.", "error");
+        else toast(`Filed under ${topicMeta(d.topic).label} · ${kindMeta(d.kind).singular}`);
       }
     }
   }, [q, kind, topic, limit, toast]);
