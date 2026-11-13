@@ -48,7 +48,8 @@ export default function DumpCard({ dump, onTopic, onDelete, onRetry }: Props) {
   const title = dump.title || (dump.url ? titleFromUrl(dump.url) : null);
   const href = dump.url ?? (kind === "image" ? dump.imageUrl : null);
   const site = dump.siteName && dump.siteName.length < 30 ? dump.siteName : dump.domain;
-  const postText = kind === "post" ? (dump.description ?? dump.summary) : null;
+  const isXPost = kind === "post" && /(^|\.)(x|twitter)\.com$/.test(dump.domain ?? "");
+  const postText = isXPost ? (dump.description ?? dump.summary) : null;
   const author = kind === "post" ? postAuthor(dump) : null;
   const showMedia = !!dump.imageUrl && !imgFailed;
   const mediaOnly = kind === "image" && showMedia && !dump.note;
@@ -83,7 +84,7 @@ export default function DumpCard({ dump, onTopic, onDelete, onRetry }: Props) {
 
   const meta = (
     <div className="d-meta">
-      {dump.domain && !iconFailed && kind !== "post" && (
+      {dump.domain && !iconFailed && !isXPost && (
         // eslint-disable-next-line @next/next/no-img-element
         <img
           className="d-favicon"
@@ -92,8 +93,8 @@ export default function DumpCard({ dump, onTopic, onDelete, onRetry }: Props) {
           onError={() => setIconFailed(true)}
         />
       )}
-      {site && kind !== "post" && <span className="min-w-0 truncate">{site}</span>}
-      {site && kind !== "post" && <span aria-hidden>·</span>}
+      {site && !isXPost && <span className="min-w-0 truncate">{site}</span>}
+      {site && !isXPost && <span aria-hidden>·</span>}
       <time className="shrink-0 whitespace-nowrap" dateTime={new Date(dump.createdAt).toISOString()}>
         {timeAgo(dump.createdAt)}
       </time>
@@ -106,7 +107,7 @@ export default function DumpCard({ dump, onTopic, onDelete, onRetry }: Props) {
     </div>
   );
 
-  if (kind === "post" && postText) {
+  if (isXPost && postText) {
     return (
       <article className="d-card d-post group" style={{ "--topic": topic.color } as React.CSSProperties}>
         {actions}
