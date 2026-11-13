@@ -13,10 +13,11 @@ interface Props {
   topic: string | null;
   kind: string | null;
   onSelect: (filter: { topic?: string | null; kind?: string | null }) => void;
+  trailing?: React.ReactNode;
 }
 
 /** Topic tabs plus a type picker, under the header. */
-export default function SectionNav({ counts, topic, kind, onSelect }: Props) {
+export default function SectionNav({ counts, topic, kind, onSelect, trailing }: Props) {
   const topics = TOPICS.filter((t) => counts.topics[t.id]).sort(
     (a, b) => Number(a.id === "other") - Number(b.id === "other") || (counts.topics[b.id] ?? 0) - (counts.topics[a.id] ?? 0),
   );
@@ -41,14 +42,17 @@ export default function SectionNav({ counts, topic, kind, onSelect }: Props) {
           </button>
         ))}
       </nav>
-      <select className="d-kind-select" value={kind ?? ""} onChange={(e) => onSelect({ kind: e.target.value || null })} aria-label="Type">
-        <option value="">All types</option>
-        {kinds.map((k) => (
-          <option key={k.id} value={k.id}>
-            {k.label} ({counts.kinds[k.id]})
-          </option>
-        ))}
-      </select>
+      <div className="d-subnav-tools">
+        <select className="d-kind-select" value={kind ?? ""} onChange={(e) => onSelect({ kind: e.target.value || null })} aria-label="Type">
+          <option value="">All types</option>
+          {kinds.map((k) => (
+            <option key={k.id} value={k.id}>
+              {k.label} ({counts.kinds[k.id]})
+            </option>
+          ))}
+        </select>
+        {trailing}
+      </div>
     </div>
   );
 }

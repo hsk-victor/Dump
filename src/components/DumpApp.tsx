@@ -258,34 +258,6 @@ export default function DumpApp() {
           </label>
 
           <div className="d-header-tools">
-            {aiOn && (
-              <button
-                className={`d-icon-btn${resorting ? " is-busy" : ""}`}
-                onClick={handleResort}
-                disabled={resorting}
-                aria-label="Re-sort with AI"
-                title={resorting ? "Re-sorting…" : "Re-sort with AI (topics you picked stay put)"}
-              >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z" />
-                  <path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z" />
-                </svg>
-              </button>
-            )}
-            <span className="d-density-wrap" title="Card size">
-              <span className="d-density-icon small" aria-hidden />
-              <input
-                type="range"
-                min={200}
-                max={440}
-                step={20}
-                value={density}
-                onChange={(e) => changeDensity(Number(e.target.value))}
-                aria-label="Card size"
-                className="d-density"
-              />
-              <span className="d-density-icon" aria-hidden />
-            </span>
             <button className="d-icon-btn" onClick={toggleDark} aria-label={dark ? "Light mode" : "Dark mode"} title={dark ? "Light mode" : "Dark mode"}>
               {dark ? (
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
@@ -300,7 +272,44 @@ export default function DumpApp() {
             </button>
           </div>
         </div>
-        <SectionNav counts={counts} topic={topic} kind={kind} onSelect={setFilter} />
+        <SectionNav
+          counts={counts}
+          topic={topic}
+          kind={kind}
+          onSelect={setFilter}
+          trailing={
+            <>
+              {aiOn && (
+                <button
+                  className={`d-icon-btn${resorting ? " is-busy" : ""}`}
+                  onClick={handleResort}
+                  disabled={resorting}
+                  aria-label="Re-sort with AI"
+                  title={resorting ? "Re-sorting…" : "Re-sort with AI (topics you picked stay put)"}
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z" />
+                    <path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z" />
+                  </svg>
+                </button>
+              )}
+              <span className="d-density-wrap" title="Card size">
+                <span className="d-density-icon small" aria-hidden />
+                <input
+                  type="range"
+                  min={200}
+                  max={440}
+                  step={20}
+                  value={density}
+                  onChange={(e) => changeDensity(Number(e.target.value))}
+                  aria-label="Card size"
+                  className="d-density"
+                />
+                <span className="d-density-icon" aria-hidden />
+              </span>
+            </>
+          }
+        />
       </header>
 
       <main className="d-main">
@@ -310,6 +319,29 @@ export default function DumpApp() {
               <p>Nothing matches that. Try a different word.</p>
             ) : (
               <>
+                <div className="d-empty-art" aria-hidden>
+                  <span className="d-empty-card a">
+                    <span className="d-empty-img" />
+                  </span>
+                  <span className="d-empty-card b">
+                    <span className="d-empty-avatar" />
+                    <span className="d-empty-lines">
+                      <i />
+                      <i />
+                      <i />
+                    </span>
+                  </span>
+                  <span className="d-empty-card c">
+                    <span className="d-empty-img alt" />
+                    <span className="d-empty-lines">
+                      <i />
+                      <i />
+                    </span>
+                  </span>
+                  <span className="d-empty-bin">
+                    <Logo size={64} />
+                  </span>
+                </div>
                 <p className="d-empty-title">Your dump is empty</p>
                 <p>Paste a link, an X post, a YouTube video, an image or a quick note below. Dump files it for you.</p>
               </>
