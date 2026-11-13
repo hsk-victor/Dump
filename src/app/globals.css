@@ -64,11 +64,10 @@ button {
 .d-actions button,
 .d-ghost-btn,
 .d-retry,
-.d-bookmarklet,
-.d-brand {
+.d-bookmarklet {
   transition: scale 0.16s var(--ease-out);
 }
-:is(.d-icon-btn, .d-dock-icon, .d-actions button, .d-ghost-btn, .d-retry, .d-bookmarklet, .d-brand, .d-topic, .d-dock-btn):active {
+:is(.d-icon-btn, .d-dock-icon, .d-actions button, .d-ghost-btn, .d-retry, .d-bookmarklet, .d-topic, .d-dock-btn):active {
   scale: 0.97;
 }
 /* ── Header ── */
@@ -83,51 +82,13 @@ button {
 .d-header-row {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  padding: 0.85rem 1.25rem 0.5rem;
-}
-.d-brand {
-  display: flex;
-  align-items: center;
-  gap: 0.55rem;
-  cursor: pointer;
-  flex-shrink: 0;
-}
-.d-logo {
-  flex-shrink: 0;
-  transition: transform 0.25s var(--ease-out);
-}
-@media (hover: hover) and (pointer: fine) {
-  .d-brand:hover .d-logo {
-    transform: rotate(-6deg) scale(1.06);
-  }
-}
-.d-logo-front {
-  fill: var(--ink);
-}
-.d-logo-line {
-  fill: var(--bg);
-}
-.d-logo-handle {
-  stroke: var(--ink);
-}
-.d-wordmark {
-  font-weight: 800;
-  font-size: 1.15rem;
-  letter-spacing: -0.045em;
-}
-.d-count {
-  font-size: 0.72rem;
-  color: var(--muted);
-  font-variant-numeric: tabular-nums;
-  padding: 0.1rem 0.45rem;
-  border-radius: 999px;
-  background: var(--hairline);
+  flex-wrap: wrap;
+  gap: 0.75rem 1rem;
+  padding: 0.7rem 1.25rem;
 }
 .d-search {
-  flex: 1;
-  max-width: 34rem;
-  margin: 0 auto;
+  flex: 0 1 15rem;
+  margin-left: auto;
   display: flex;
   align-items: center;
   gap: 0.55rem;
@@ -245,13 +206,15 @@ button {
 }
 
 .d-subnav {
+  flex: 1;
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 1rem;
-  padding: 0.25rem 1.25rem 0.7rem;
 }
 .d-topics {
   flex: 1;
+  min-width: 0;
   display: flex;
   gap: 0.3rem;
   overflow-x: auto;
@@ -443,6 +406,31 @@ button {
   font-weight: 500;
   color: var(--muted);
   min-width: 0;
+}
+/* Wall treatment: meta hidden until the card is hovered (or focused);
+   always visible on touch where hover doesn't exist. */
+@media (hover: hover) and (pointer: fine) {
+  .d-meta {
+    opacity: 0;
+    max-height: 0;
+    margin-top: 0;
+    padding-top: 0;
+    border-top-width: 0;
+    overflow: hidden;
+    transition:
+      opacity 0.18s var(--ease-out),
+      max-height 0.22s var(--ease-out),
+      margin-top 0.22s var(--ease-out),
+      padding-top 0.22s var(--ease-out);
+  }
+  .d-card:hover .d-meta,
+  .d-card:focus-within .d-meta {
+    opacity: 1;
+    max-height: 2.5rem;
+    margin-top: 0.6rem;
+    padding-top: 0.55rem;
+    border-top-width: 1px;
+  }
 }
 .d-favicon {
   width: 14px;
@@ -831,15 +819,16 @@ button {
 
 @media (max-width: 720px) {
   .d-density-wrap,
-  .d-wordmark,
-  .d-count,
   .d-search kbd {
     display: none;
   }
   .d-header-row,
-  .d-subnav,
   .d-main {
     padding-inline: 0.75rem;
+  }
+  .d-search {
+    flex: 1 1 100%;
+    order: 10;
   }
   .d-grid {
     column-width: 160px;
@@ -893,7 +882,17 @@ button {
   .d-meta {
     transition: opacity 0.15s;
   }
-  :is(.d-icon-btn, .d-dock-icon, .d-actions button, .d-ghost-btn, .d-retry, .d-bookmarklet, .d-brand, .d-topic, .d-dock-btn):active {
+  /* Collapsing the meta is movement: keep it always visible under reduced motion. */
+  @media (hover: hover) and (pointer: fine) {
+    .d-meta {
+      opacity: 1;
+      max-height: none;
+      margin-top: 0.6rem;
+      padding-top: 0.55rem;
+      border-top-width: 1px;
+    }
+  }
+  :is(.d-icon-btn, .d-dock-icon, .d-actions button, .d-ghost-btn, .d-retry, .d-bookmarklet, .d-topic, .d-dock-btn):active {
     scale: none;
   }
   .d-icon-btn.is-busy svg {

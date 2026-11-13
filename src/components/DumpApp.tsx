@@ -237,11 +237,44 @@ export default function DumpApp() {
     <div className="d-page">
       <header className="d-header">
         <div className="d-header-row">
-          <button className="d-brand" onClick={() => setFilter({ q: null, kind: null, topic: null })} aria-label="Dump home">
-            <Logo />
-            <span className="d-wordmark">dump</span>
-            <span className="d-count">{counts.total}</span>
-          </button>
+          <SectionNav
+            counts={counts}
+            topic={topic}
+            kind={kind}
+            onSelect={setFilter}
+            trailing={
+              <>
+                {aiOn && (
+                  <button
+                    className={`d-icon-btn${resorting ? " is-busy" : ""}`}
+                    onClick={handleResort}
+                    disabled={resorting}
+                    aria-label="Re-sort with AI"
+                    title={resorting ? "Re-sorting…" : "Re-sort with AI (topics you picked stay put)"}
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z" />
+                      <path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z" />
+                    </svg>
+                  </button>
+                )}
+                <span className="d-density-wrap" title="Card size">
+                  <span className="d-density-icon small" aria-hidden />
+                  <input
+                    type="range"
+                    min={200}
+                    max={440}
+                    step={20}
+                    value={density}
+                    onChange={(e) => changeDensity(Number(e.target.value))}
+                    aria-label="Card size"
+                    className="d-density"
+                  />
+                  <span className="d-density-icon" aria-hidden />
+                </span>
+              </>
+            }
+          />
 
           <label className="d-search">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
@@ -279,44 +312,6 @@ export default function DumpApp() {
             </button>
           </div>
         </div>
-        <SectionNav
-          counts={counts}
-          topic={topic}
-          kind={kind}
-          onSelect={setFilter}
-          trailing={
-            <>
-              {aiOn && (
-                <button
-                  className={`d-icon-btn${resorting ? " is-busy" : ""}`}
-                  onClick={handleResort}
-                  disabled={resorting}
-                  aria-label="Re-sort with AI"
-                  title={resorting ? "Re-sorting…" : "Re-sort with AI (topics you picked stay put)"}
-                >
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z" />
-                    <path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z" />
-                  </svg>
-                </button>
-              )}
-              <span className="d-density-wrap" title="Card size">
-                <span className="d-density-icon small" aria-hidden />
-                <input
-                  type="range"
-                  min={200}
-                  max={440}
-                  step={20}
-                  value={density}
-                  onChange={(e) => changeDensity(Number(e.target.value))}
-                  aria-label="Card size"
-                  className="d-density"
-                />
-                <span className="d-density-icon" aria-hidden />
-              </span>
-            </>
-          }
-        />
       </header>
 
       <main className="d-main">
