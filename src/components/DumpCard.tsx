@@ -41,6 +41,26 @@ function initials(name: string) {
     .join("");
 }
 
+/** Provider with a brand icon — drives whether a card gets brand chrome or favicon fallback. */
+function providerHasIcon(provider: string | null | undefined) {
+  const meta = providerMeta(provider);
+  return !!(meta && "icon" in meta && meta.icon);
+}
+
+/** Social sources that get the post layout even when the URL sniff didn't mark them "post". */
+const SOCIAL_PROVIDERS = new Set(["x", "threads", "bluesky", "mastodon", "linkedin", "facebook", "instagram"]);
+
+/** reddit.com/r/<sub>/… -> "r/<sub>" */
+function redditSub(url: string | null) {
+  const m = url?.match(/reddit\.com\/(r\/[\w-]+)/i);
+  return m ? m[1] : "Reddit";
+}
+
+function redditAuthor(author: string | null) {
+  if (!author) return null;
+  return `u/${author.replace(/^u\//, "")}`;
+}
+
 function ProviderIcon({ provider, className = "d-prov" }: { provider: string | null | undefined; className?: string }) {
   const meta = providerMeta(provider);
   if (!meta || !("icon" in meta) || !meta.icon) return null;
@@ -65,6 +85,12 @@ function Favicon({ domain }: { domain: string | null }) {
       onError={() => setBad(true)}
     />
   );
+}
+
+/** Favicon or, for known providers, the brand mark — the kicker's site identity. */
+function SiteMark({ dump }: { dump: Dump }) {
+  if (providerHasIcon(dump.provider)) return <ProviderIcon provider={dump.provider} className="d-prov d-kicker-prov" />;
+  return <Favicon domain={dump.domain} />;
 }
 
 /** Brand chip top corner of a media surface; falls back to the kind label like before. */
@@ -156,6 +182,8 @@ function MediaCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
                 )}
               </h3>
             )}
+            {/* Channel/author rides under the title — YouTube channel, Vimeo creator, Unsplash photographer. */}
+            {dump.author && <p className="d-overlay-sub">{dump.author}</p>}
             {bits.dek && bits.dek !== bits.title && <p className="d-overlay-dek">{bits.dek}</p>}
             {dump.note && <p className="d-overlay-note">{dump.note}</p>}
           </>
@@ -197,6 +225,65 @@ function PostCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
       )}
       {dump.note && <p className="d-annotation">{dump.note}</p>}
       {bits.meta}
+    </article>
+  );
+}
+
+/** reddit: the subreddit is the identity — r/sub headline row, then the post title + text. */
+function RedditCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
+  const sub = redditSub(dump.url);
+  const author = redditAuthor(dump.author);
+  const headline = bits.title ?? bits.site;
+  const text = dump.description ?? dump.summary;
+  return (
+    <article {...bits.cardProps} className="d-card d-post group">
+      {bits.actions}
+      <a href={bits.href ?? undefined} target="_blank" rel="noreferrer" className="d-rd-head">
+        <span className="d-rd-mark">
+          <ProviderIcon provider="reddit" />
+        </span>
+        <span className="d-rd-sub min-w-0">{sub}</span>
+        {author && <span className="d-rd-by">{author}</span>}
+      </a>
+      {bits.processing && !headline && !text ? (
+        shimmerLines()
+      ) : (
+        <>
+          {headline && <p className="d-post-headline">{headline}</p>}
+          {text && text !== headline && <p className="d-post-text">{text}</p>}
+        </>
+      )}
+      {bits.showMedia && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img className="d-post-media" src={dump.imageUrl!} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => bits.setImgFailed(true)} />
+      )}
+      {dump.note && <p className="d-annotation">{dump.note}</p>}
+      {bits.meta}
+    </article>
+  );
+}
+
+/** hackernews: a compact item like the HN list — orange mark, headline, domain. */
+function HnCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
+  const headline = bits.title ?? dump.url;
+  const text = dump.description ?? dump.summary;
+  return (
+    <article {...bits.cardProps} className="d-card group">
+      {bits.actions}
+      <div className="d-body">
+        <a href={bits.href ?? undefined} target="_blank" rel="noreferrer" className="d-hn">
+          <span className="d-hn-mark">
+            <ProviderIcon provider="hackernews" />
+          </span>
+          <span className="min-w-0">
+            <span className="d-hn-title">{headline}</span>
+            <span className="d-hn-site">news.ycombinator.com</span>
+          </span>
+        </a>
+        {text && text !== headline && <p className="d-dek">{text}</p>}
+        {dump.note && <p className="d-annotation">{dump.note}</p>}
+        {bits.meta}
+      </div>
     </article>
   );
 }
@@ -266,10 +353,10 @@ function ArticleCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
     <article {...bits.cardProps} className="d-card group">
       {bits.actions}
       <div className="d-body">
-        {(bits.site || dump.domain) && (
+        {(bits.site || dump.domain || providerHasIcon(dump.provider)) && (
           <div className="d-kicker">
-            <Favicon domain={dump.domain} />
-            <span className="min-w-0 truncate">{bits.site ?? dump.domain}</span>
+            <SiteMark dump={dump} />
+            <span className="min-w-0 truncate">{bits.site ?? providerMeta(dump.provider)?.label ?? dump.domain}</span>
           </div>
         )}
         <div className="d-article-row">
@@ -321,10 +408,10 @@ function LinkCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
         </a>
       )}
       <div className="d-body">
-        {(bits.site || dump.domain) && (
+        {(bits.site || dump.domain || providerHasIcon(dump.provider)) && (
           <div className="d-kicker">
-            <Favicon domain={dump.domain} />
-            <span className="min-w-0 truncate">{bits.site ?? dump.domain}</span>
+            <SiteMark dump={dump} />
+            <span className="min-w-0 truncate">{bits.site ?? providerMeta(dump.provider)?.label ?? dump.domain}</span>
           </div>
         )}
         {bits.processing && !bits.title ? (
@@ -442,7 +529,9 @@ export default function DumpCard({ dump, fresh, removing, onTopic, onDelete, onR
       </article>
     );
   }
-  if (kind === "post") return <PostCard dump={dump} bits={bits} />;
+  if (dump.provider === "reddit") return <RedditCard dump={dump} bits={bits} />;
+  if (dump.provider === "hackernews") return <HnCard dump={dump} bits={bits} />;
+  if (kind === "post" || SOCIAL_PROVIDERS.has(dump.provider ?? "")) return <PostCard dump={dump} bits={bits} />;
   if (dump.provider === "github") return <GithubCard dump={dump} bits={bits} />;
   if (kind === "audio") return <AudioCard dump={dump} bits={bits} />;
   if (kind === "article") return <ArticleCard dump={dump} bits={bits} />;

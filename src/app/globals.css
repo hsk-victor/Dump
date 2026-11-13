@@ -412,7 +412,8 @@ button {
   height: 2.75rem;
   border-radius: 999px;
   color: #fff;
-  background: rgb(0 0 0 / 0.45);
+  /* brand-tinted play (YouTube red, Twitch purple…); plain dark when the provider has no color */
+  background: color-mix(in srgb, var(--provider, transparent) 70%, rgb(0 0 0 / 0.45));
   backdrop-filter: blur(6px);
 }
 .d-play svg {
@@ -444,7 +445,7 @@ button {
   width: 1.65rem;
   height: 1.65rem;
   border-radius: 999px;
-  color: #fff;
+  color: var(--provider, #fff);
   background: rgb(0 0 0 / 0.5);
   backdrop-filter: blur(6px);
 }
@@ -487,6 +488,12 @@ button {
     text-underline-offset: 2px;
   }
 }
+.d-overlay-sub {
+  margin-top: 0.15rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: rgb(255 255 255 / 0.75);
+}
 .d-overlay-dek {
   margin-top: 0.3rem;
   font-size: 0.76rem;
@@ -524,11 +531,16 @@ button {
   padding: 0.8rem 0.9rem 0.8rem;
 }
 
-/* Brand icon inside post/audio rows (sized by context rules) */
+/* Brand icon inside post/audio/kicker rows — carries the provider's brand color */
 .d-prov {
   width: 1rem;
   height: 1rem;
   flex-shrink: 0;
+}
+.d-kicker-prov {
+  width: 0.85rem;
+  height: 0.85rem;
+  color: var(--provider, var(--muted));
 }
 
 /* Small site kicker: favicon + site name — the article card's news feel */
@@ -558,6 +570,93 @@ button {
   object-fit: cover;
   border-radius: 10px;
   background: var(--hairline);
+}
+
+/* Reddit card: the subreddit is the identity */
+.d-rd-head {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-bottom: 0.45rem;
+  color: inherit;
+  text-decoration: none;
+}
+.d-rd-mark {
+  display: grid;
+  place-items: center;
+  width: 1.7rem;
+  height: 1.7rem;
+  border-radius: 999px;
+  flex-shrink: 0;
+  color: #fff;
+  background: var(--provider, var(--ink));
+}
+.d-rd-mark .d-prov {
+  width: 1rem;
+  height: 1rem;
+}
+.d-rd-sub {
+  font-size: 0.84rem;
+  font-weight: 650;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.d-rd-by {
+  font-size: 0.72rem;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+@media (hover: hover) and (pointer: fine) {
+  .d-rd-head:hover .d-rd-sub {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+}
+
+/* Hacker News card: compact item like the HN list */
+.d-hn {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  color: inherit;
+  text-decoration: none;
+}
+.d-hn-mark {
+  display: grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 5px;
+  flex-shrink: 0;
+  color: #fff;
+  background: var(--provider, var(--ink));
+}
+.d-hn-mark .d-prov {
+  width: 1rem;
+  height: 1rem;
+}
+.d-hn-title {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 0.9rem;
+  font-weight: 650;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+}
+.d-hn-site {
+  display: block;
+  margin-top: 0.1rem;
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+@media (hover: hover) and (pointer: fine) {
+  .d-hn:hover .d-hn-title {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
 }
 
 /* Audio card: square artwork (or a brand-tinted waveform) + title + artist */
@@ -630,7 +729,7 @@ button {
   margin-left: auto;
   width: 1rem;
   height: 1rem;
-  color: var(--ink-2);
+  color: var(--provider, var(--ink-2));
 }
 .d-audio + .d-meta,
 .d-audio ~ .d-annotation {
@@ -799,7 +898,7 @@ button {
   margin-left: auto;
   width: 0.95rem;
   height: 0.95rem;
-  color: var(--ink);
+  color: var(--provider, var(--ink));
   flex-shrink: 0;
 }
 .d-avatar .d-prov {
