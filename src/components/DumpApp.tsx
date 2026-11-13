@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Toaster, toast as sonnerToast } from "sonner";
 import type { Dump } from "@/lib/db";
-import { kindMeta, topicMeta } from "@/lib/taxonomy";
+import { KINDS, kindMeta, topicMeta } from "@/lib/taxonomy";
 import { DENSITY_KEY, MODE_KEY } from "@/lib/theme";
 import Composer from "./Composer";
 import DumpCard from "./DumpCard";
@@ -259,30 +259,7 @@ export default function DumpApp() {
             <span className="d-wordmark">dump</span>
             <span className="d-count">{counts.total}</span>
           </button>
-          <SectionNav
-            counts={counts}
-            topic={topic}
-            kind={kind}
-            onSelect={setFilter}
-            trailing={
-              <>
-                {aiOn && (
-                  <button
-                    className={`d-icon-btn${resorting ? " is-busy" : ""}`}
-                    onClick={handleResort}
-                    disabled={resorting}
-                    aria-label="Re-sort with AI"
-                    title={resorting ? "Re-sorting…" : "Re-sort with AI (topics you picked stay put)"}
-                  >
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z" />
-                      <path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z" />
-                    </svg>
-                  </button>
-                )}
-              </>
-            }
-          />
+          <SectionNav counts={counts} topic={topic} onSelect={setFilter} />
 
           <label className="d-search">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
@@ -322,6 +299,30 @@ export default function DumpApp() {
               </button>
               {settingsOpen && (
                 <div className="d-settings-pop">
+                  <div className="d-settings-row">
+                    <span className="d-settings-label">Type</span>
+                    <select
+                      className="d-kind-select"
+                      value={kind ?? ""}
+                      onChange={(e) => setFilter({ kind: e.target.value || null })}
+                      aria-label="Type"
+                    >
+                      <option value="">All types</option>
+                      {KINDS.filter((k) => counts.kinds[k.id]).map((k) => (
+                        <option key={k.id} value={k.id}>
+                          {k.label} ({counts.kinds[k.id]})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  {aiOn && (
+                    <div className="d-settings-row">
+                      <span className="d-settings-label">Topics</span>
+                      <button className="d-ghost-btn" onClick={handleResort} disabled={resorting}>
+                        {resorting ? "Re-sorting…" : "Re-sort with AI"}
+                      </button>
+                    </div>
+                  )}
                   <div className="d-settings-row">
                     <span className="d-settings-label">Theme</span>
                     <div className="d-seg">
