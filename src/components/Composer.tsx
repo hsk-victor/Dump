@@ -82,15 +82,15 @@ export default function Composer({ onDump }: Props) {
   }
 
   return (
-    <div
-      className={`relative rounded-2xl border bg-white shadow-sm transition ${
-        dragging ? "border-stone-900 ring-4 ring-stone-900/10" : "border-stone-200 focus-within:border-stone-400"
-      }`}
-    >
+    <div className="d-composer" data-dragging={dragging || undefined}>
+      <label className="d-composer-label" htmlFor="dump-input">
+        Dump something
+      </label>
       <textarea
+        id="dump-input"
         ref={inputRef}
         autoFocus
-        rows={text.includes("\n") ? 4 : 2}
+        rows={text.includes("\n") ? 4 : 1}
         value={text}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => {
@@ -106,30 +106,25 @@ export default function Composer({ onDump }: Props) {
             setFile(img);
           }
         }}
-        placeholder="Dump anything: paste a link, an X post, a video, an image, or just type a note…"
-        aria-label="Dump something"
-        className="block w-full resize-none rounded-2xl bg-transparent px-5 pt-4 pb-2 text-[15px] leading-relaxed outline-none placeholder:text-stone-400"
+        placeholder="Paste a link, an X post, a video, an image, or just type a note…"
+        className="d-composer-input"
       />
-      <div className="flex items-center gap-3 px-3 pb-3">
+      <div className="d-composer-bar">
         {preview ? (
           <div className="relative">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={preview} alt="Image to dump" className="h-12 w-12 rounded-lg object-cover ring-1 ring-stone-200" />
+            <img src={preview} alt="Image to dump" className="h-10 w-10 rounded object-cover" />
             <button
               type="button"
               onClick={() => setFile(null)}
-              className="absolute -top-1.5 -right-1.5 grid h-5 w-5 place-items-center rounded-full bg-stone-900 text-[11px] text-white"
+              className="absolute -top-1.5 -right-1.5 grid h-5 w-5 place-items-center rounded-full bg-black text-[11px] text-white"
               aria-label="Remove image"
             >
               ×
             </button>
           </div>
         ) : (
-          <button
-            type="button"
-            onClick={() => fileRef.current?.click()}
-            className="rounded-lg px-2.5 py-1.5 text-sm text-stone-500 hover:bg-stone-100 hover:text-stone-800"
-          >
+          <button type="button" onClick={() => fileRef.current?.click()} className="d-ghost-btn">
             + Image
           </button>
         )}
@@ -143,21 +138,12 @@ export default function Composer({ onDump }: Props) {
             e.target.value = "";
           }}
         />
-        <span className="hidden text-xs text-stone-400 sm:inline">Enter to dump · Shift+Enter for a new line · paste or drop images</span>
-        <button
-          type="button"
-          onClick={submit}
-          disabled={busy || (!text.trim() && !file)}
-          className="ml-auto rounded-xl bg-stone-900 px-5 py-2 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:bg-stone-300"
-        >
+        <span className="d-hint hidden sm:inline">Enter to dump · Shift+Enter for a new line · paste or drop images</span>
+        <button type="button" onClick={submit} disabled={busy || (!text.trim() && !file)} className="d-primary-btn ml-auto">
           {busy ? "Dumping…" : "Dump it"}
         </button>
       </div>
-      {dragging && (
-        <div className="pointer-events-none absolute inset-0 grid place-items-center rounded-2xl bg-white/80 text-sm font-medium">
-          Drop to dump
-        </div>
-      )}
+      {dragging && <div className="d-drop">Drop to dump</div>}
     </div>
   );
 }

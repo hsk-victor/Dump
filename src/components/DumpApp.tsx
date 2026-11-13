@@ -3,10 +3,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { Dump } from "@/lib/db";
-import { kindMeta, topicMeta } from "@/lib/taxonomy";
+import { KINDS, kindMeta, topicMeta } from "@/lib/taxonomy";
+import { DENSITY_KEY } from "@/lib/theme";
 import Composer from "./Composer";
 import DumpCard from "./DumpCard";
-import Sidebar, { type Counts } from "./Sidebar";
+import Masthead from "./Masthead";
+import SectionNav, { type Counts } from "./SectionNav";
+import ThemeSwitcher from "./ThemeSwitcher";
 
 const PAGE_SIZE = 60;
 
@@ -37,6 +40,22 @@ export default function DumpApp() {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const pendingToasts = useRef(new Set<string>());
   const searchRef = useRef<HTMLInputElement>(null);
+  const bookmarklet = useRef<HTMLAnchorElement>(null);
+  const [density, setDensity] = useState(280);
+
+  useEffect(() => {
+    const saved = Number(localStorage.getItem(DENSITY_KEY));
+    if (saved) setDensity(saved);
+    // React refuses javascript: hrefs in JSX, so set it directly.
+    const code = `javascript:(()=>{window.open('${window.location.origin}/dump?url='+encodeURIComponent(location.href)+'&title='+encodeURIComponent(document.title),'dump','width=360,height=220')})()`;
+    bookmarklet.current?.setAttribute("href", code);
+  }, []);
+
+  function changeDensity(px: number) {
+    setDensity(px);
+    localStorage.setItem(DENSITY_KEY, String(px));
+    document.documentElement.style.setProperty("--col-w", `${px}px`);
+  }
 
   const toast = useCallback((text: string, tone: Toast["tone"] = "info") => {
     const id = Date.now() + Math.random();
@@ -113,7 +132,7 @@ export default function DumpApp() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement;
-      if (e.key === "/" && !el.closest("input, textarea, select")) {
+      if ((e.key === "k" && (e.metaKey || e.ctrlKey)) || (e.key === "/" && !el.closest("input, textarea, select"))) {
         e.preventDefault();
         searchRef.current?.focus();
       }
@@ -170,87 +189,71 @@ export default function DumpApp() {
   }
 
   const activeLabel = topic ? topicMeta(topic).label : kind ? kindMeta(kind).label : null;
+  const kinds = KINDS.filter((k) => counts.kinds[k.id]);
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-7xl gap-8 px-4 py-6 sm:px-6">
-      <aside className="sticky top-6 hidden h-[calc(100vh-3rem)] w-56 shrink-0 overflow-y-auto md:block">
-        <div className="mb-6 flex items-baseline gap-2 px-2.5">
-          <h1 className="text-2xl font-black tracking-tight">Dump</h1>
-          <span className="text-xs text-stone-400">save anything</span>
-        </div>
-        <Sidebar counts={counts} kind={kind} topic={topic} onSelect={setFilter} />
-      </aside>
+    <div className="d-page">
+      <Masthead total={counts.total} />
+      <SectionNav counts={counts} topic={topic} onSelect={(t) => setFilter({ topic: t })} />
 
-      <main className="min-w-0 flex-1">
-        <h1 className="mb-4 text-2xl font-black tracking-tight md:hidden">Dump</h1>
+      <main className="d-main">
         <Composer onDump={handleDump} />
 
-        <div className="mt-6 mb-4 flex flex-wrap items-center gap-3">
-          <div className="relative min-w-60 flex-1">
+        <div className="d-toolbar">
+          <div className="d-tabs" role="tablist" aria-label="Type">
+            <button role="tab" aria-selected={!kind} onClick={() => setFilter({ kind: null })}>
+              All
+            </button>
+            {kinds.map((k) => (
+              <button key={k.id} role="tab" aria-selected={kind === k.id} onClick={() => setFilter({ kind: kind === k.id ? null : k.id })}>
+                {k.label}
+              </button>
+            ))}
+          </div>
+          <div className="d-tools">
+            {(activeLabel || q) && (
+              <span className="d-results">
+                {items.length} {items.length === 1 ? "result" : "results"}
+              </span>
+            )}
+            <label className="d-search">
+              <input
+                ref={searchRef}
+                type="search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search"
+                aria-label="Search"
+              />
+              <kbd>⌘K</kbd>
+            </label>
             <input
-              ref={searchRef}
-              type="search"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search everything you've dumped…  ( / )"
-              aria-label="Search"
-              className="w-full rounded-xl border border-stone-200 bg-white px-4 py-2 text-sm outline-none focus:border-stone-400"
+              type="range"
+              min={200}
+              max={440}
+              step={20}
+              value={density}
+              onChange={(e) => changeDensity(Number(e.target.value))}
+              aria-label="Card density"
+              title="Card density"
+              className="d-density"
             />
           </div>
-          {(activeLabel || q) && (
-            <div className="flex items-center gap-2 text-sm text-stone-500">
-              {items.length} {items.length === 1 ? "result" : "results"}
-              {activeLabel && (
-                <button onClick={() => setFilter({ kind: null, topic: null })} className="rounded-full bg-stone-900 px-2.5 py-0.5 text-xs text-white">
-                  {activeLabel} ×
-                </button>
-              )}
-            </div>
-          )}
-        </div>
-
-        <div className="mb-4 flex gap-1.5 overflow-x-auto md:hidden">
-          <select
-            value={topic ?? ""}
-            onChange={(e) => setFilter({ topic: e.target.value || null })}
-            className="rounded-lg border border-stone-200 bg-white px-2 py-1 text-sm"
-            aria-label="Topic"
-          >
-            <option value="">All topics</option>
-            {Object.keys(counts.topics).map((t) => (
-              <option key={t} value={t}>
-                {topicMeta(t).label} ({counts.topics[t]})
-              </option>
-            ))}
-          </select>
-          <select
-            value={kind ?? ""}
-            onChange={(e) => setFilter({ kind: e.target.value || null })}
-            className="rounded-lg border border-stone-200 bg-white px-2 py-1 text-sm"
-            aria-label="Type"
-          >
-            <option value="">All types</option>
-            {Object.keys(counts.kinds).map((k) => (
-              <option key={k} value={k}>
-                {kindMeta(k).label} ({counts.kinds[k]})
-              </option>
-            ))}
-          </select>
         </div>
 
         {loaded && items.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-stone-300 px-6 py-16 text-center text-stone-500">
+          <div className="d-empty">
             {q || kind || topic ? (
               <p>Nothing matches that. Try a different word.</p>
             ) : (
               <>
-                <p className="text-lg font-medium text-stone-700">Your dump is empty.</p>
-                <p className="mt-1 text-sm">Paste a link, an X post, a YouTube video, an image or a quick note above. Dump will file it for you.</p>
+                <p className="d-empty-title">Your dump is empty.</p>
+                <p>Paste a link, an X post, a YouTube video, an image or a quick note above. Dump will file it for you.</p>
               </>
             )}
           </div>
         ) : (
-          <div className="columns-1 gap-4 sm:columns-2 xl:columns-3">
+          <div className="d-grid">
             {items.map((d) => (
               <DumpCard
                 key={d.id}
@@ -264,24 +267,27 @@ export default function DumpApp() {
           </div>
         )}
         {hasMore && (
-          <div className="mt-6 flex justify-center">
-            <button
-              type="button"
-              onClick={() => setPage({ key: filterKey, limit: limit + PAGE_SIZE })}
-              className="rounded-xl border border-stone-200 bg-white px-5 py-2 text-sm font-medium text-stone-700 shadow-sm hover:bg-stone-50"
-            >
+          <div className="mt-8 flex justify-center">
+            <button type="button" onClick={() => setPage({ key: filterKey, limit: limit + PAGE_SIZE })} className="d-ghost-btn">
               Load more
             </button>
           </div>
         )}
+
+        <footer className="d-footer">
+          Dump from any page: drag{" "}
+          <a ref={bookmarklet} onClick={(e) => e.preventDefault()} className="d-bookmarklet">
+            + Dump it
+          </a>{" "}
+          to your bookmarks bar.
+        </footer>
       </main>
+
+      <ThemeSwitcher />
 
       <div className="pointer-events-none fixed inset-x-0 bottom-6 z-50 flex flex-col items-center gap-2">
         {toasts.map((t) => (
-          <div
-            key={t.id}
-            className={`rounded-full px-4 py-2 text-sm shadow-lg ${t.tone === "error" ? "bg-red-600 text-white" : "bg-stone-900 text-white"}`}
-          >
+          <div key={t.id} className="d-toast" data-tone={t.tone}>
             {t.text}
           </div>
         ))}
