@@ -50,11 +50,13 @@ export default function DumpCard({ dump, onTopic, onDelete, onRetry }: Props) {
   const title = subject ? subjectLine(subject) : dump.title || (dump.url ? titleFromUrl(dump.url) : null);
   const href = dump.url ?? (kind === "image" ? dump.imageUrl : null);
   const site = dump.siteName && dump.siteName.length < 30 ? dump.siteName : dump.domain;
-  const isXPost = kind === "post" && /(^|\.)(x|twitter)\.com$/.test(dump.domain ?? "");
+  const isX = /(^|\.)(x|twitter)\.com$/.test(dump.domain ?? "");
+  const isXPost = kind === "post" && isX;
   const postText = isXPost ? (dump.description ?? dump.summary) : null;
   const author = kind === "post" ? postAuthor(dump) : null;
   const showMedia = !!dump.imageUrl && !imgFailed;
-  const mediaOnly = kind === "image" && showMedia && !dump.note && !subject;
+  // Image/video cards render media-only; their caption stays in a hover overlay.
+  const mediaOnly = showMedia && (kind === "image" || kind === "video");
   // The identified description (summary) shows as the dek even under media; other deks stay text-only.
   const dek = dump.summary ?? (!showMedia ? dump.description : null);
   const filedBy = dump.classifiedBy === "you" ? "Filed by you" : dump.classifiedBy === "ai" ? "Filed by AI" : "Filed automatically";
@@ -149,7 +151,51 @@ export default function DumpCard({ dump, onTopic, onDelete, onRetry }: Props) {
               </svg>
             </span>
           )}
-          {mediaOnly && <span className="d-overlay">{topicChip}</span>}
+          {mediaOnly && dump.domain && !iconFailed && (
+            <span className="d-src" aria-hidden>
+              {isX ? (
+                <XLogo />
+              ) : (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(dump.domain)}&sz=32`}
+                  alt=""
+                  onError={() => setIconFailed(true)}
+                />
+              )}
+            </span>
+          )}
+          {mediaOnly && (
+            <span className="d-overlay">
+              {(title || dek || dump.note || dump.description) && (
+                <span className="d-overlay-caption">
+                  {title && <span className="d-overlay-title">{title}</span>}
+                  {(dump.note ?? dek ?? dump.description) && (
+                    <span className="d-overlay-sub">{dump.note ?? dek ?? dump.description}</span>
+                  )}
+                </span>
+              )}
+              <span className="d-overlay-meta">
+                {site && <span className="min-w-0 truncate">{site}</span>}
+                {site && <span aria-hidden>·</span>}
+                <time className="shrink-0 whitespace-nowrap" dateTime={new Date(dump.createdAt).toISOString()}>
+                  {timeAgo(dump.createdAt)}
+                </time>
+                {dump.status === "failed" && (
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      onRetry(dump.id);
+                    }}
+                    className="d-retry"
+                  >
+                    Retry
+                  </button>
+                )}
+                <span className="ml-auto">{topicChip}</span>
+              </span>
+            </span>
+          )}
         </a>
       )}
 
