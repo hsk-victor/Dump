@@ -15,10 +15,19 @@ interface Props {
   onRetry: (id: string) => void;
 }
 
+/** The name inside a "Name on X"-style title — only when the suffix is a known
+ *  name (provider label or site), so "Thoughts on Rust | Hacker News" isn't read as an author. */
+function attributionName(title: string | null, dump: Dump) {
+  const m = title?.match(/^(.+?) on (.{1,32})$/);
+  if (!m) return null;
+  const names = [providerMeta(dump.provider)?.label, dump.siteName].filter((n): n is string => !!n);
+  return names.some((n) => m[2].toLowerCase() === n.toLowerCase()) ? m[1] : null;
+}
+
 function postAuthor(dump: Dump) {
   if (dump.author) return dump.author;
-  const m = dump.title?.match(/^(.+?) on .{1,32}$/);
-  return m && m[1] !== "Post" ? m[1] : null;
+  const name = attributionName(dump.title, dump);
+  return name && name !== "Post" ? name : null;
 }
 
 // Grapheme-cluster first character: w[0] would split an emoji surrogate pair.
@@ -162,6 +171,9 @@ function PostCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
   const provider = providerMeta(dump.provider);
   const author = postAuthor(dump);
   const postText = dump.description ?? dump.summary ?? dump.title;
+  // A real title (Reddit headline, identified subject) still shows above the post text;
+  // a "Name on X" attribution title is already in the header, so it isn't repeated.
+  const headline = bits.title && bits.title !== postText && !attributionName(dump.title, dump) ? bits.title : null;
   return (
     <article {...bits.cardProps} className="d-card d-post group">
       {bits.actions}
@@ -173,7 +185,12 @@ function PostCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
         </span>
         <ProviderIcon provider={dump.provider} className="d-prov d-post-prov" />
       </a>
-      {bits.processing && !postText ? shimmerLines() : postText && <p className="d-post-text">{postText}</p>}
+      {bits.processing && !postText ? shimmerLines() : (
+        <>
+          {headline && <p className="d-post-headline">{headline}</p>}
+          {postText && <p className="d-post-text">{postText}</p>}
+        </>
+      )}
       {bits.showMedia && (
         // eslint-disable-next-line @next/next/no-img-element
         <img className="d-post-media" src={dump.imageUrl!} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => bits.setImgFailed(true)} />

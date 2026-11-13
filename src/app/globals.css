@@ -830,6 +830,17 @@ button {
   font-size: 0.74rem;
   color: var(--muted);
 }
+.d-post-headline {
+  margin: 0.1rem 0 0.35rem;
+  font-size: 0.9rem;
+  font-weight: 650;
+  line-height: 1.3;
+  letter-spacing: -0.012em;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
 .d-post-text {
   font-size: 0.875rem;
   line-height: 1.5;
