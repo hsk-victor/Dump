@@ -82,50 +82,26 @@ export default function Composer({ onDump }: Props) {
   }
 
   return (
-    <div className="d-composer" data-dragging={dragging || undefined}>
-      <label className="d-composer-label" htmlFor="dump-input">
-        Dump something
-      </label>
-      <textarea
-        id="dump-input"
-        ref={inputRef}
-        autoFocus
-        rows={text.includes("\n") ? 4 : 1}
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" && !e.shiftKey) {
-            e.preventDefault();
-            submit();
-          }
-        }}
-        onPaste={(e) => {
-          const img = [...e.clipboardData.files].find((f) => f.type.startsWith("image/"));
-          if (img) {
-            e.preventDefault();
-            setFile(img);
-          }
-        }}
-        placeholder="Paste a link, an X post, a video, an image, or just type a note…"
-        className="d-composer-input"
-      />
-      <div className="d-composer-bar">
+    <>
+      <div className="d-dock" data-dragging={dragging || undefined}>
         {preview ? (
-          <div className="relative">
+          <div className="relative shrink-0">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={preview} alt="Image to dump" className="h-10 w-10 rounded object-cover" />
+            <img src={preview} alt="Image to dump" className="h-9 w-9 rounded-lg object-cover" />
             <button
               type="button"
               onClick={() => setFile(null)}
-              className="absolute -top-1.5 -right-1.5 grid h-5 w-5 place-items-center rounded-full bg-black text-[11px] text-white"
+              className="absolute -top-1.5 -right-1.5 grid h-4.5 w-4.5 place-items-center rounded-full bg-black text-[10px] text-white"
               aria-label="Remove image"
             >
               ×
             </button>
           </div>
         ) : (
-          <button type="button" onClick={() => fileRef.current?.click()} className="d-ghost-btn">
-            + Image
+          <button type="button" onClick={() => fileRef.current?.click()} className="d-dock-icon" aria-label="Add image" title="Add image">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
           </button>
         )}
         <input
@@ -138,12 +114,39 @@ export default function Composer({ onDump }: Props) {
             e.target.value = "";
           }}
         />
-        <span className="d-hint hidden sm:inline">Enter to dump · Shift+Enter for a new line · paste or drop images</span>
-        <button type="button" onClick={submit} disabled={busy || (!text.trim() && !file)} className="d-primary-btn ml-auto">
-          {busy ? "Dumping…" : "Dump it"}
+        <textarea
+          ref={inputRef}
+          autoFocus
+          rows={text.includes("\n") ? 3 : 1}
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              submit();
+            }
+          }}
+          onPaste={(e) => {
+            const img = [...e.clipboardData.files].find((f) => f.type.startsWith("image/"));
+            if (img) {
+              e.preventDefault();
+              setFile(img);
+            }
+          }}
+          placeholder="Dump a link, post, image or note…"
+          aria-label="Dump something"
+          className="d-dock-input"
+        />
+        <kbd className="d-dock-kbd">N</kbd>
+        <button type="button" onClick={submit} disabled={busy || (!text.trim() && !file)} className="d-dock-btn">
+          {busy ? "Dumping…" : "Dump"}
         </button>
       </div>
-      {dragging && <div className="d-drop">Drop to dump</div>}
-    </div>
+      {dragging && (
+        <div className="d-drop">
+          <span>Drop to dump</span>
+        </div>
+      )}
+    </>
   );
 }

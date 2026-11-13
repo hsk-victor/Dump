@@ -3,13 +3,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { Dump } from "@/lib/db";
-import { KINDS, kindMeta, topicMeta } from "@/lib/taxonomy";
-import { DENSITY_KEY } from "@/lib/theme";
+import { kindMeta, topicMeta } from "@/lib/taxonomy";
+import { DENSITY_KEY, MODE_KEY } from "@/lib/theme";
 import Composer from "./Composer";
 import DumpCard from "./DumpCard";
-import Masthead from "./Masthead";
 import SectionNav, { type Counts } from "./SectionNav";
-import ThemeSwitcher from "./ThemeSwitcher";
 
 const PAGE_SIZE = 60;
 
@@ -41,15 +39,24 @@ export default function DumpApp() {
   const pendingToasts = useRef(new Set<string>());
   const searchRef = useRef<HTMLInputElement>(null);
   const bookmarklet = useRef<HTMLAnchorElement>(null);
-  const [density, setDensity] = useState(280);
+  const [density, setDensity] = useState(260);
+  const [dark, setDark] = useState(false);
 
   useEffect(() => {
     const saved = Number(localStorage.getItem(DENSITY_KEY));
     if (saved) setDensity(saved);
+    setDark(document.documentElement.dataset.mode === "dark");
     // React refuses javascript: hrefs in JSX, so set it directly.
     const code = `javascript:(()=>{window.open('${window.location.origin}/dump?url='+encodeURIComponent(location.href)+'&title='+encodeURIComponent(document.title),'dump','width=360,height=220')})()`;
     bookmarklet.current?.setAttribute("href", code);
   }, []);
+
+  function toggleDark() {
+    const mode = dark ? "light" : "dark";
+    setDark(!dark);
+    document.documentElement.dataset.mode = mode;
+    localStorage.setItem(MODE_KEY, mode);
+  }
 
   function changeDensity(px: number) {
     setDensity(px);
@@ -189,85 +196,91 @@ export default function DumpApp() {
   }
 
   const activeLabel = topic ? topicMeta(topic).label : kind ? kindMeta(kind).label : null;
-  const kinds = KINDS.filter((k) => counts.kinds[k.id]);
 
   return (
     <div className="d-page">
-      <Masthead total={counts.total} />
-      <SectionNav counts={counts} topic={topic} onSelect={(t) => setFilter({ topic: t })} />
+      <header className="d-header">
+        <div className="d-header-row">
+          <button className="d-brand" onClick={() => setFilter({ q: null, kind: null, topic: null })} aria-label="Dump home">
+            <span className="d-logo">d</span>
+            <span className="d-wordmark">Dump</span>
+            <span className="d-count">{counts.total}</span>
+          </button>
 
-      <main className="d-main">
-        <Composer onDump={handleDump} />
-
-        <div className="d-toolbar">
-          <div className="d-tabs" role="tablist" aria-label="Type">
-            <button role="tab" aria-selected={!kind} onClick={() => setFilter({ kind: null })}>
-              All
-            </button>
-            {kinds.map((k) => (
-              <button key={k.id} role="tab" aria-selected={kind === k.id} onClick={() => setFilter({ kind: kind === k.id ? null : k.id })}>
-                {k.label}
-              </button>
-            ))}
-          </div>
-          <div className="d-tools">
+          <label className="d-search">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
+              <circle cx="11" cy="11" r="7" />
+              <path d="m20 20-3.5-3.5" />
+            </svg>
+            <input
+              ref={searchRef}
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search everything you've dumped"
+              aria-label="Search"
+            />
             {(activeLabel || q) && (
               <span className="d-results">
                 {items.length} {items.length === 1 ? "result" : "results"}
               </span>
             )}
-            <label className="d-search">
+            <kbd>⌘K</kbd>
+          </label>
+
+          <div className="d-header-tools">
+            <span className="d-density-wrap" title="Card size">
+              <span className="d-density-icon small" aria-hidden />
               <input
-                ref={searchRef}
-                type="search"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search"
-                aria-label="Search"
+                type="range"
+                min={200}
+                max={440}
+                step={20}
+                value={density}
+                onChange={(e) => changeDensity(Number(e.target.value))}
+                aria-label="Card size"
+                className="d-density"
               />
-              <kbd>⌘K</kbd>
-            </label>
-            <input
-              type="range"
-              min={200}
-              max={440}
-              step={20}
-              value={density}
-              onChange={(e) => changeDensity(Number(e.target.value))}
-              aria-label="Card density"
-              title="Card density"
-              className="d-density"
-            />
+              <span className="d-density-icon" aria-hidden />
+            </span>
+            <button className="d-icon-btn" onClick={toggleDark} aria-label={dark ? "Light mode" : "Dark mode"} title={dark ? "Light mode" : "Dark mode"}>
+              {dark ? (
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                  <circle cx="12" cy="12" r="4" />
+                  <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
+                </svg>
+              ) : (
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" />
+                </svg>
+              )}
+            </button>
           </div>
         </div>
+        <SectionNav counts={counts} topic={topic} kind={kind} onSelect={setFilter} />
+      </header>
 
+      <main className="d-main">
         {loaded && items.length === 0 ? (
           <div className="d-empty">
             {q || kind || topic ? (
               <p>Nothing matches that. Try a different word.</p>
             ) : (
               <>
-                <p className="d-empty-title">Your dump is empty.</p>
-                <p>Paste a link, an X post, a YouTube video, an image or a quick note above. Dump will file it for you.</p>
+                <p className="d-empty-title">Your dump is empty</p>
+                <p>Paste a link, an X post, a YouTube video, an image or a quick note below. Dump files it for you.</p>
               </>
             )}
           </div>
         ) : (
           <div className="d-grid">
             {items.map((d) => (
-              <DumpCard
-                key={d.id}
-                dump={d}
-                onTopic={handleTopic}
-                onDelete={handleDelete}
-                onRetry={handleRetry}
-                onTag={(t) => setSearch(t)}
-              />
+              <DumpCard key={d.id} dump={d} onTopic={handleTopic} onDelete={handleDelete} onRetry={handleRetry} />
             ))}
           </div>
         )}
         {hasMore && (
-          <div className="mt-8 flex justify-center">
+          <div className="mt-6 flex justify-center">
             <button type="button" onClick={() => setPage({ key: filterKey, limit: limit + PAGE_SIZE })} className="d-ghost-btn">
               Load more
             </button>
@@ -283,9 +296,9 @@ export default function DumpApp() {
         </footer>
       </main>
 
-      <ThemeSwitcher />
+      <Composer onDump={handleDump} />
 
-      <div className="pointer-events-none fixed inset-x-0 bottom-6 z-50 flex flex-col items-center gap-2">
+      <div className="d-toasts">
         {toasts.map((t) => (
           <div key={t.id} className="d-toast" data-tone={t.tone}>
             {t.text}
