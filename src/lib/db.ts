@@ -269,6 +269,11 @@ export function listDumps({ q, kind, topic, limit = 200, offset = 0 }: ListOptio
   return (db().prepare(sql).all(params) as Row[]).map(toDump);
 }
 
+/** Dumps whose topic can be re-decided: not filed by hand and not mid-enrichment. */
+export function listResortable(): string[] {
+  return (db().prepare("SELECT id FROM dumps WHERE topic_locked = 0 AND status != 'processing' ORDER BY created_at DESC").all() as { id: string }[]).map((r) => r.id);
+}
+
 export function counts(): { total: number; kinds: Record<string, number>; topics: Record<string, number> } {
   const conn = db();
   const total = (conn.prepare("SELECT COUNT(*) AS n FROM dumps").get() as { n: number }).n;

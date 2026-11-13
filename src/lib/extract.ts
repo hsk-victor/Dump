@@ -119,19 +119,44 @@ async function fetchWithTimeout(url: string, init: { headers?: Record<string, st
   throw new Error("Too many redirects");
 }
 
-async function readLimited(res: Response): Promise<string> {
-  if (!res.body) return "";
+async function readBytes(res: Response, max: number): Promise<{ data: Buffer; truncated: boolean }> {
+  if (!res.body) return { data: Buffer.alloc(0), truncated: false };
   const reader = res.body.getReader();
   const chunks: Uint8Array[] = [];
   let size = 0;
-  while (size < MAX_BYTES) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    chunks.push(value);
-    size += value.byteLength;
+  let done = false;
+  while (size < max) {
+    const chunk = await reader.read();
+    if (chunk.done) {
+      done = true;
+      break;
+    }
+    chunks.push(chunk.value);
+    size += chunk.value.byteLength;
   }
   reader.cancel().catch(() => {});
-  return new TextDecoder().decode(Buffer.concat(chunks));
+  return { data: Buffer.concat(chunks), truncated: !done };
+}
+
+async function readLimited(res: Response): Promise<string> {
+  return new TextDecoder().decode((await readBytes(res, MAX_BYTES)).data);
+}
+
+const MAX_IMAGE_BYTES = 16 * 1024 * 1024;
+
+/** Downloads an image through the same private-network guard used for pages. Null on any failure. */
+export async function fetchImage(url: string): Promise<Buffer | null> {
+  try {
+    const res = await fetchWithTimeout(url, { headers: { accept: "image/*" } });
+    if (!res.ok || !(res.headers.get("content-type") ?? "").startsWith("image/")) {
+      res.body?.cancel().catch(() => {});
+      return null;
+    }
+    const { data, truncated } = await readBytes(res, MAX_IMAGE_BYTES);
+    return truncated ? null : data;
+  } catch {
+    return null;
+  }
 }
 
 interface OEmbed {

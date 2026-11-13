@@ -8,10 +8,11 @@ process.env.DUMP_DATA_DIR = dir;
 
 const extractUrl = vi.fn();
 vi.mock("../extract", () => ({ extractUrl: (url: string) => extractUrl(url) }));
-vi.mock("../llm", () => ({ classifyWithAi: async () => null }));
+const classifyWithAi = vi.fn();
+vi.mock("../llm", () => ({ classifyWithAi: (input: unknown) => classifyWithAi(input) }));
 
 const db = await import("../db");
-const { enrichDump } = await import("../enrich");
+const { enrichDump, resortAll } = await import("../enrich");
 
 const page = (over: Record<string, unknown> = {}) => ({
   kind: "article",
@@ -26,7 +27,10 @@ const page = (over: Record<string, unknown> = {}) => ({
 });
 
 describe("enrichDump", () => {
-  beforeEach(() => extractUrl.mockReset());
+  beforeEach(() => {
+    extractUrl.mockReset();
+    classifyWithAi.mockReset().mockResolvedValue(null);
+  });
   afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
   it("keeps a topic the user picked while enrichment was running", async () => {
@@ -81,5 +85,40 @@ describe("enrichDump", () => {
     await enrichDump(d.id);
     expect(db.listDumps({ q: "chipotle tacos" }).map((x) => x.id)).toContain(d.id);
     expect(db.listDumps({ q: "dinner ideas" }).map((x) => x.id)).toContain(d.id);
+  });
+
+  it("takes the topic from the AI and the tags from the rules", async () => {
+    const d = db.createDump({ kind: "link", url: "https://example.com/p", domain: "example.com" });
+    extractUrl.mockResolvedValueOnce(page());
+    classifyWithAi.mockResolvedValueOnce({ topic: "health", confidence: 0.9, model: "jev" });
+    const out = await enrichDump(d.id);
+    expect(out).toMatchObject({ topic: "health", classifiedBy: "ai", status: "ready" });
+    expect(out?.tags.length).toBeGreaterThan(0);
+  });
+});
+
+describe("resortAll", () => {
+  beforeEach(() => classifyWithAi.mockReset());
+
+  it("re-files dumps with the AI, leaving hand-filed ones alone", async () => {
+    for (const d of db.listDumps({ limit: 1000 })) db.deleteDump(d.id);
+    const auto = db.createDump({ kind: "note", content: "watched a great film last night" });
+    db.updateDump(auto.id, { status: "ready", topic: "other", classifiedBy: "rules" });
+    const mine = db.createDump({ kind: "note", content: "pasta" });
+    db.updateDump(mine.id, { status: "ready", topic: "travel", topicLocked: true, classifiedBy: "you" });
+    classifyWithAi.mockResolvedValue({ topic: "film", confidence: 1, model: "jev" });
+
+    expect(await resortAll()).toEqual({ sorted: 1, moved: 1, failed: 0 });
+    expect(db.getDump(auto.id)).toMatchObject({ topic: "film", classifiedBy: "ai" });
+    expect(db.getDump(mine.id)).toMatchObject({ topic: "travel", classifiedBy: "you" });
+  });
+
+  it("keeps the current topic when the AI can't answer", async () => {
+    for (const d of db.listDumps({ limit: 1000 })) db.deleteDump(d.id);
+    const d = db.createDump({ kind: "note", content: "hello" });
+    db.updateDump(d.id, { status: "ready", topic: "fun", classifiedBy: "rules" });
+    classifyWithAi.mockResolvedValue(null);
+    expect(await resortAll()).toEqual({ sorted: 0, moved: 0, failed: 1 });
+    expect(db.getDump(d.id)).toMatchObject({ topic: "fun", classifiedBy: "rules" });
   });
 });

@@ -37,6 +37,8 @@ export default function DumpApp() {
   const limit = page.key === filterKey ? page.limit : PAGE_SIZE;
   const lastSyncedQ = useRef(q);
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [aiOn, setAiOn] = useState(false);
+  const [resorting, setResorting] = useState(false);
   const pendingToasts = useRef(new Set<string>());
   const searchRef = useRef<HTMLInputElement>(null);
   const bookmarklet = useRef<HTMLAnchorElement>(null);
@@ -99,8 +101,9 @@ export default function DumpApp() {
     sp.set("limit", String(limit));
     const res = await fetch(`/api/dumps?${sp}`, { cache: "no-store" });
     if (!res.ok) return;
-    const data = (await res.json()) as { items: Dump[]; hasMore: boolean; counts: Counts };
+    const data = (await res.json()) as { items: Dump[]; hasMore: boolean; counts: Counts; ai: boolean };
     setItems(data.items);
+    setAiOn(data.ai);
     setHasMore(data.hasMore);
     setCounts(data.counts);
     setLoaded(true);
@@ -202,6 +205,24 @@ export default function DumpApp() {
     load();
   }
 
+  async function handleResort() {
+    setResorting(true);
+    try {
+      const res = await fetch("/api/dumps/resort", { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) toast(data.error ?? "Couldn't re-sort right now", "error");
+      else if (data.sorted === 0 && data.failed > 0) toast("Couldn't reach the AI. Nothing was moved.", "error");
+      else
+        toast(
+          `Re-sorted ${data.sorted} ${data.sorted === 1 ? "dump" : "dumps"}: ${data.moved} moved${data.failed ? `, ${data.failed} skipped` : ""}`,
+          data.failed ? "error" : "info",
+        );
+      load();
+    } finally {
+      setResorting(false);
+    }
+  }
+
   const activeLabel = topic ? topicMeta(topic).label : kind ? kindMeta(kind).label : null;
 
   return (
@@ -236,6 +257,20 @@ export default function DumpApp() {
           </label>
 
           <div className="d-header-tools">
+            {aiOn && (
+              <button
+                className={`d-icon-btn${resorting ? " is-busy" : ""}`}
+                onClick={handleResort}
+                disabled={resorting}
+                aria-label="Re-sort with AI"
+                title={resorting ? "Re-sorting…" : "Re-sort with AI (topics you picked stay put)"}
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z" />
+                  <path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z" />
+                </svg>
+              </button>
+            )}
             <span className="d-density-wrap" title="Card size">
               <span className="d-density-icon small" aria-hidden />
               <input
