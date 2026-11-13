@@ -903,7 +903,10 @@ button {
     order: 10;
   }
   .d-grid {
-    column-width: 160px;
+    /* Scale the card-size preference down for small screens: the default
+       260px still lands at ~160px (two columns), and the slider stays
+       responsive instead of silently doing nothing. */
+    column-width: calc(var(--col-w) * 0.62);
   }
   .d-meta .ml-auto {
     display: none;
@@ -964,7 +967,7 @@ button {
       border-top-width: 1px;
     }
   }
-  :is(.d-icon-btn, .d-dock-icon, .d-actions button, .d-ghost-btn, .d-retry, .d-bookmarklet, .d-topic, .d-dock-btn):active {
+  :is(.d-icon-btn, .d-dock-icon, .d-actions button, .d-ghost-btn, .d-retry, .d-bookmarklet, .d-brand, .d-topic, .d-dock-btn, .d-seg-btn):active {
     scale: none;
   }
   .d-icon-btn.is-busy svg {
