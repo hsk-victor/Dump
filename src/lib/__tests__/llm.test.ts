@@ -76,6 +76,9 @@ describe("prepareImage", () => {
 
     const small = await size((await prepareImage(await png(100, 80)))!);
     expect(Math.min(small.width!, small.height!)).toBeGreaterThanOrEqual(256);
+
+    const odd = await size((await prepareImage(await png(100, 101)))!);
+    expect(odd.width! * odd.height!).toBeGreaterThanOrEqual(78_400);
   });
 
   it("skips images whose shape can't fit and junk bytes", async () => {
