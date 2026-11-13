@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { Toaster, toast as sonnerToast } from "sonner";
 import type { Dump } from "@/lib/db";
 import { kindMeta, topicMeta } from "@/lib/taxonomy";
 import { DENSITY_KEY, MODE_KEY } from "@/lib/theme";
@@ -11,12 +12,6 @@ import Logo from "./Logo";
 import SectionNav, { type Counts } from "./SectionNav";
 
 const PAGE_SIZE = 60;
-
-interface Toast {
-  id: number;
-  text: string;
-  tone: "info" | "error";
-}
 
 export default function DumpApp() {
   const router = useRouter();
@@ -31,12 +26,13 @@ export default function DumpApp() {
   const [loaded, setLoaded] = useState(false);
   const [search, setSearch] = useState(q);
   const [hasMore, setHasMore] = useState(false);
+  const [freshId, setFreshId] = useState<string | null>(null);
+  const [removingIds, setRemovingIds] = useState<Set<string>>(new Set());
   // How many items to show; resets to one page whenever the filters change.
   const filterKey = `${q}|${kind}|${topic}`;
   const [page, setPage] = useState({ key: filterKey, limit: PAGE_SIZE });
   const limit = page.key === filterKey ? page.limit : PAGE_SIZE;
   const lastSyncedQ = useRef(q);
-  const [toasts, setToasts] = useState<Toast[]>([]);
   const [aiOn, setAiOn] = useState(false);
   const [resorting, setResorting] = useState(false);
   const pendingToasts = useRef(new Set<string>());
@@ -74,10 +70,9 @@ export default function DumpApp() {
     document.documentElement.style.setProperty("--col-w", `${px}px`);
   }
 
-  const toast = useCallback((text: string, tone: Toast["tone"] = "info") => {
-    const id = Date.now() + Math.random();
-    setToasts((t) => [...t, { id, text, tone }]);
-    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 3500);
+  const toast = useCallback((text: string, tone: "info" | "error" = "info") => {
+    if (tone === "error") sonnerToast.error(text);
+    else sonnerToast(text);
   }, []);
 
   const setFilter = useCallback(
@@ -177,6 +172,8 @@ export default function DumpApp() {
     const dump = (await res.json()) as Dump & { duplicate?: boolean };
     if (dump.duplicate) toast(`Already in your dump (${topicMeta(dump.topic).label}). Moved it to the top`);
     else pendingToasts.current.add(dump.id);
+    setFreshId(dump.id);
+    setTimeout(() => setFreshId(null), 2500);
     // Show it immediately; clear filters so the new dump is visible.
     if (q || kind || topic) {
       setSearch("");
@@ -195,9 +192,17 @@ export default function DumpApp() {
   }
 
   async function handleDelete(id: string) {
-    setItems((prev) => prev.filter((d) => d.id !== id));
-    await fetch(`/api/dumps/${id}`, { method: "DELETE" });
-    load();
+    setRemovingIds((prev) => new Set(prev).add(id));
+    setTimeout(async () => {
+      setItems((prev) => prev.filter((d) => d.id !== id));
+      setRemovingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+      await fetch(`/api/dumps/${id}`, { method: "DELETE" });
+      load();
+    }, 180);
   }
 
   async function handleRetry(id: string) {
@@ -350,7 +355,15 @@ export default function DumpApp() {
         ) : (
           <div className="d-grid">
             {items.map((d) => (
-              <DumpCard key={d.id} dump={d} onTopic={handleTopic} onDelete={handleDelete} onRetry={handleRetry} />
+              <DumpCard
+                key={d.id}
+                dump={d}
+                fresh={d.id === freshId}
+                removing={removingIds.has(d.id)}
+                onTopic={handleTopic}
+                onDelete={handleDelete}
+                onRetry={handleRetry}
+              />
             ))}
           </div>
         )}
@@ -373,13 +386,13 @@ export default function DumpApp() {
 
       <Composer onDump={handleDump} />
 
-      <div className="d-toasts">
-        {toasts.map((t) => (
-          <div key={t.id} className="d-toast" data-tone={t.tone}>
-            {t.text}
-          </div>
-        ))}
-      </div>
+      <Toaster
+        position="bottom-center"
+        theme={dark ? "dark" : "light"}
+        offset="5.5rem"
+        mobileOffset="5.5rem"
+        toastOptions={{ style: { borderRadius: "999px" } }}
+      />
     </div>
   );
 }

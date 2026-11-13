@@ -8,6 +8,8 @@ import { titleFromUrl } from "@/lib/detect";
 
 interface Props {
   dump: Dump;
+  fresh?: boolean;
+  removing?: boolean;
   onTopic: (id: string, topic: string) => void;
   onDelete: (id: string) => void;
   onRetry: (id: string) => void;
@@ -19,12 +21,14 @@ function postAuthor(dump: Dump) {
   return m && m[1] !== "Post" ? m[1] : null;
 }
 
+// Grapheme-cluster first character: w[0] would split an emoji surrogate pair.
 function initials(name: string) {
+  const segmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
   return name
     .replace(/^@/, "")
     .split(/\s+/)
     .slice(0, 2)
-    .map((w) => w[0]?.toUpperCase() ?? "")
+    .map((w) => segmenter.segment(w)[Symbol.iterator]().next().value?.segment.toUpperCase() ?? "")
     .join("");
 }
 
@@ -39,7 +43,7 @@ function XLogo() {
   );
 }
 
-export default function DumpCard({ dump, onTopic, onDelete, onRetry }: Props) {
+export default function DumpCard({ dump, fresh, removing, onTopic, onDelete, onRetry }: Props) {
   const [imgFailed, setImgFailed] = useState(false);
   const [iconFailed, setIconFailed] = useState(false);
   const topic = topicMeta(dump.topic);
@@ -115,7 +119,12 @@ export default function DumpCard({ dump, onTopic, onDelete, onRetry }: Props) {
 
   if (isXPost && postText) {
     return (
-      <article className="d-card d-post group" style={{ "--topic": topic.color } as React.CSSProperties}>
+      <article
+        className="d-card d-post group"
+        data-fresh={fresh || undefined}
+        data-removing={removing || undefined}
+        style={{ "--topic": topic.color } as React.CSSProperties}
+      >
         {actions}
         <a href={href ?? undefined} target="_blank" rel="noreferrer" className="d-post-head">
           <span className="d-avatar">{author ? initials(author) : <XLogo />}</span>
@@ -137,7 +146,13 @@ export default function DumpCard({ dump, onTopic, onDelete, onRetry }: Props) {
   }
 
   return (
-    <article className={`d-card group ${mediaOnly ? "d-media-only" : ""}`} data-kind={kind} style={{ "--topic": topic.color } as React.CSSProperties}>
+    <article
+      className={`d-card group ${mediaOnly ? "d-media-only" : ""}`}
+      data-kind={kind}
+      data-fresh={fresh || undefined}
+      data-removing={removing || undefined}
+      style={{ "--topic": topic.color } as React.CSSProperties}
+    >
       {actions}
       {showMedia && (
         <a href={href ?? undefined} target="_blank" rel="noreferrer" className="d-media">

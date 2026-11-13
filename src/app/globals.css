@@ -7,6 +7,9 @@
 :root {
   --col-w: 260px;
   --gap: 12px;
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  color-scheme: light;
   --bg: #fafafa;
   --surface: #ffffff;
   --raised: rgb(255 255 255 / 0.78);
@@ -34,10 +37,54 @@
   --dock-shadow: 0 0 0 1px rgb(255 255 255 / 0.08), 0 20px 50px -12px rgb(0 0 0 / 0.8);
 }
 
+html {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+}
+
 body {
   background: var(--bg);
   color: var(--ink);
   font-family: var(--font-sans);
+}
+
+/* ── Touch & press baseline ── */
+
+button,
+a,
+select {
+  touch-action: manipulation;
+}
+button {
+  user-select: none;
+  -webkit-user-select: none;
+}
+.d-icon-btn,
+.d-dock-icon,
+.d-actions button,
+.d-ghost-btn,
+.d-retry,
+.d-bookmarklet,
+.d-brand {
+  transition: scale 0.16s var(--ease-out);
+}
+:is(.d-icon-btn, .d-dock-icon, .d-actions button, .d-ghost-btn, .d-retry, .d-bookmarklet, .d-brand, .d-topic, .d-dock-btn):active {
+  scale: 0.97;
+}
+@media (hover: none) {
+  /* No hover on touch: keep card actions reachable instead of stuck-open. */
+  .d-actions {
+    opacity: 1;
+  }
+}
+@media (pointer: coarse) {
+  /* 16px minimum keeps iOS from auto-zooming the page on input focus. */
+  .d-search input,
+  .d-dock-input,
+  .d-actions select,
+  .d-kind-select {
+    font-size: 16px;
+  }
 }
 
 /* ── Header ── */
@@ -64,10 +111,12 @@ body {
 }
 .d-logo {
   flex-shrink: 0;
-  transition: transform 0.25s ease;
+  transition: transform 0.25s var(--ease-out);
 }
-.d-brand:hover .d-logo {
-  transform: rotate(-6deg) scale(1.06);
+@media (hover: hover) and (pointer: fine) {
+  .d-brand:hover .d-logo {
+    transform: rotate(-6deg) scale(1.06);
+  }
 }
 .d-logo-front {
   fill: var(--ink);
@@ -191,9 +240,11 @@ body {
   color: var(--muted);
   cursor: pointer;
 }
-.d-icon-btn:hover {
-  color: var(--ink);
-  background: var(--hairline);
+@media (hover: hover) and (pointer: fine) {
+  .d-icon-btn:hover {
+    color: var(--ink);
+    background: var(--hairline);
+  }
 }
 .d-icon-btn:disabled {
   cursor: progress;
@@ -236,10 +287,12 @@ body {
   color: var(--muted);
   white-space: nowrap;
   cursor: pointer;
-  transition: background 0.15s, color 0.15s;
+  transition: background 0.15s, color 0.15s, scale 0.16s var(--ease-out);
 }
-.d-topic:hover {
-  color: var(--ink);
+@media (hover: hover) and (pointer: fine) {
+  .d-topic:hover {
+    color: var(--ink);
+  }
 }
 .d-topic[aria-pressed="true"] {
   color: var(--ink);
@@ -291,11 +344,27 @@ body {
   overflow: hidden;
   background: var(--surface);
   box-shadow: var(--shadow);
-  transition: box-shadow 0.2s, translate 0.2s;
+  transition: box-shadow 0.2s, translate 0.2s var(--ease-out), opacity 0.16s var(--ease-out);
 }
-.d-card:hover {
-  box-shadow: var(--shadow-hover);
-  translate: 0 -1px;
+@media (hover: hover) and (pointer: fine) {
+  .d-card:hover {
+    box-shadow: var(--shadow-hover);
+    translate: 0 -1px;
+  }
+}
+.d-card[data-fresh] {
+  animation: d-card-in 0.28s var(--ease-out);
+}
+@keyframes d-card-in {
+  from {
+    opacity: 0;
+    translate: 0 10px;
+  }
+}
+.d-card[data-removing] {
+  opacity: 0;
+  translate: 0 -6px;
+  pointer-events: none;
 }
 .d-media {
   display: block;
@@ -340,9 +409,13 @@ body {
   background: linear-gradient(transparent, rgb(0 0 0 / 0.68));
   color: #fff;
   opacity: 0;
-  transition: opacity 0.15s;
+  transition: opacity 0.15s var(--ease-out);
 }
-.d-card:hover .d-overlay,
+@media (hover: hover) and (pointer: fine) {
+  .d-card:hover .d-overlay {
+    opacity: 1;
+  }
+}
 .d-card:focus-within .d-overlay {
   opacity: 1;
 }
@@ -395,10 +468,12 @@ body {
   color: #fff;
   background: rgb(0 0 0 / 0.45);
   backdrop-filter: blur(6px);
-  transition: opacity 0.15s;
+  transition: opacity 0.15s var(--ease-out);
 }
-.d-card:hover .d-src {
-  opacity: 0;
+@media (hover: hover) and (pointer: fine) {
+  .d-card:hover .d-src {
+    opacity: 0;
+  }
 }
 .d-src svg {
   width: 0.7rem;
@@ -443,9 +518,15 @@ body {
   color: var(--muted);
   min-width: 0;
   opacity: 0;
-  transition: opacity 0.15s, max-height 0.15s, margin-top 0.15s;
+  transition: opacity 0.15s var(--ease-out), max-height 0.15s var(--ease-out), margin-top 0.15s var(--ease-out);
 }
-.d-card:hover .d-meta,
+@media (hover: hover) and (pointer: fine) {
+  .d-card:hover .d-meta {
+    opacity: 1;
+    max-height: 1.5rem;
+    margin-top: 0.6rem;
+  }
+}
 .d-card:focus-within .d-meta {
   opacity: 1;
   max-height: 1.5rem;
@@ -579,9 +660,13 @@ body {
   font-size: 0.72rem;
   color: var(--ink-2);
   opacity: 0;
-  transition: opacity 0.15s;
+  transition: opacity 0.15s var(--ease-out);
 }
-.d-card:hover .d-actions,
+@media (hover: hover) and (pointer: fine) {
+  .d-card:hover .d-actions {
+    opacity: 1;
+  }
+}
 .d-card:focus-within .d-actions {
   opacity: 1;
 }
@@ -600,9 +685,11 @@ body {
   line-height: 1;
   cursor: pointer;
 }
-.d-actions button:hover {
-  color: #dc2626;
-  background: rgb(220 38 38 / 0.1);
+@media (hover: hover) and (pointer: fine) {
+  .d-actions button:hover {
+    color: #dc2626;
+    background: rgb(220 38 38 / 0.1);
+  }
 }
 .d-actions option {
   background: var(--surface);
@@ -615,7 +702,7 @@ body {
   position: fixed;
   z-index: 40;
   left: 50%;
-  bottom: 1.25rem;
+  bottom: calc(1.25rem + env(safe-area-inset-bottom, 0px));
   translate: -50% 0;
   width: min(40rem, calc(100vw - 2rem));
   display: flex;
@@ -641,9 +728,11 @@ body {
   color: var(--muted);
   cursor: pointer;
 }
-.d-dock-icon:hover {
-  color: var(--ink);
-  background: var(--hairline);
+@media (hover: hover) and (pointer: fine) {
+  .d-dock-icon:hover {
+    color: var(--ink);
+    background: var(--hairline);
+  }
 }
 .d-dock-icon svg {
   width: 1.15rem;
@@ -676,7 +765,7 @@ body {
   color: var(--bg);
   background: var(--ink);
   cursor: pointer;
-  transition: opacity 0.15s;
+  transition: opacity 0.15s, scale 0.16s var(--ease-out);
 }
 .d-dock-btn:disabled {
   opacity: 0.25;
@@ -820,30 +909,7 @@ body {
   box-shadow: var(--shadow);
   cursor: grab;
 }
-.d-toasts {
-  pointer-events: none;
-  position: fixed;
-  inset-inline: 0;
-  bottom: 5.5rem;
-  z-index: 50;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.4rem;
-}
-.d-toast {
-  padding: 0.5rem 0.95rem;
-  border-radius: 999px;
-  font-size: 0.8rem;
-  font-weight: 500;
-  color: var(--bg);
-  background: var(--ink);
-  box-shadow: 0 8px 24px rgb(0 0 0 / 0.2);
-}
-.d-toast[data-tone="error"] {
-  background: #dc2626;
-  color: #fff;
-}
+/* Toasts are rendered by Sonner (mounted in DumpApp), styled via toastOptions. */
 
 @media (max-width: 720px) {
   .d-density-wrap,
@@ -873,4 +939,36 @@ body {
   background: linear-gradient(90deg, var(--hairline) 0%, color-mix(in srgb, var(--ink) 10%, transparent) 50%, var(--hairline) 100%);
   background-size: 800px 100%;
   animation: shimmer 1.4s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Reduced motion means gentler, not zero: opacity/color transitions stay, movement goes. */
+  .d-empty-card,
+  .shimmer {
+    animation: none;
+  }
+  .d-card {
+    transition: box-shadow 0.15s, opacity 0.15s;
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .d-card:hover {
+      translate: none;
+    }
+  }
+  .d-card[data-fresh] {
+    animation: none;
+  }
+  .d-card[data-removing] {
+    translate: none;
+  }
+  .d-meta {
+    transition: opacity 0.15s;
+  }
+  :is(.d-icon-btn, .d-dock-icon, .d-actions button, .d-ghost-btn, .d-retry, .d-bookmarklet, .d-brand, .d-topic, .d-dock-btn):active {
+    scale: none;
+  }
+  .d-icon-btn.is-busy svg {
+    animation: none;
+    opacity: 0.5;
+  }
 }
