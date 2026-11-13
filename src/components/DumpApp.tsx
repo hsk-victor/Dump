@@ -44,8 +44,10 @@ export default function DumpApp() {
   const [dark, setDark] = useState(false);
 
   useEffect(() => {
-    const saved = Number(localStorage.getItem(DENSITY_KEY));
-    if (saved) setDensity(saved);
+    try {
+      const saved = Number(localStorage.getItem(DENSITY_KEY));
+      if (saved) setDensity(saved);
+    } catch {}
     setDark(document.documentElement.dataset.mode === "dark");
     // React refuses javascript: hrefs in JSX, so set it directly.
     const code = `javascript:(()=>{window.open('${window.location.origin}/dump?url='+encodeURIComponent(location.href)+'&title='+encodeURIComponent(document.title),'dump','width=360,height=220')})()`;
@@ -56,12 +58,16 @@ export default function DumpApp() {
     const mode = dark ? "light" : "dark";
     setDark(!dark);
     document.documentElement.dataset.mode = mode;
-    localStorage.setItem(MODE_KEY, mode);
+    try {
+      localStorage.setItem(MODE_KEY, mode);
+    } catch {}
   }
 
   function changeDensity(px: number) {
     setDensity(px);
-    localStorage.setItem(DENSITY_KEY, String(px));
+    try {
+      localStorage.setItem(DENSITY_KEY, String(px));
+    } catch {}
     document.documentElement.style.setProperty("--col-w", `${px}px`);
   }
 
