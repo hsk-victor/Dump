@@ -572,120 +572,424 @@ button {
   background: var(--hairline);
 }
 
-/* Reddit card: the subreddit is the identity */
-.d-rd-head {
+/* Platform-native chrome */
+.d-glyph {
+  width: 1.05rem;
+  height: 1.05rem;
+  color: var(--muted);
+}
+
+/* X — embedded tweet */
+.d-tw {
+  padding: 0.9rem 0.95rem 0.6rem;
+}
+.d-tw-head {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  color: inherit;
+  text-decoration: none;
+}
+.d-tw-avatar {
+  display: grid;
+  place-items: center;
+  width: 2.4rem;
+  height: 2.4rem;
+  border-radius: 999px;
+  flex-shrink: 0;
+  background: var(--ink);
+  color: var(--surface);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+.d-tw-avatar .d-prov {
+  width: 1.1rem;
+  height: 1.1rem;
+  color: var(--surface);
+}
+.d-tw-name {
+  display: block;
+  font-size: 0.92rem;
+  font-weight: 700;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.d-tw-handle {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+.d-tw-logo {
+  margin-left: auto;
+  width: 1.25rem;
+  height: 1.25rem;
+  flex-shrink: 0;
+  color: var(--ink);
+}
+.d-tw-text {
+  margin-top: 0.55rem;
+  font-size: 0.95rem;
+  line-height: 1.45;
+  white-space: pre-line;
+  display: -webkit-box;
+  -webkit-line-clamp: 10;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.d-tw-media {
+  display: block;
+  margin-top: 0.65rem;
+  border-radius: 14px;
+  overflow: hidden;
+  line-height: 0;
+}
+.d-tw-img {
+  width: 100%;
+  max-height: 18rem;
+  object-fit: cover;
+}
+.d-tw-actions {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 0.7rem;
+  padding: 0 0.3rem;
+}
+.d-tw-act {
+  display: inline-flex;
+  color: var(--muted);
+}
+.d-tw-act .d-glyph {
+  width: 1.05rem;
+  height: 1.05rem;
+}
+.d-tw .d-meta {
+  margin-top: 0.65rem;
+}
+
+/* reddit — vote rail + r/sub · u/author · ago + headline */
+.d-rd {
+  display: flex;
+}
+.d-rd-votes {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  width: 2.1rem;
+  flex-shrink: 0;
+  padding-top: 0.8rem;
+  background: color-mix(in srgb, var(--ink) 5%, transparent);
+}
+.d-rd-arrow {
+  width: 1.15rem;
+  height: 1.15rem;
+  color: var(--muted);
+}
+.d-rd-body {
+  flex: 1;
+  min-width: 0;
+  padding: 0.75rem 0.9rem 0.7rem 0.7rem;
+}
+.d-rd-top {
   display: flex;
   align-items: center;
   gap: 0.45rem;
-  margin-bottom: 0.45rem;
-  color: inherit;
-  text-decoration: none;
+  margin-bottom: 0.35rem;
+  min-width: 0;
 }
 .d-rd-mark {
   display: grid;
   place-items: center;
-  width: 1.7rem;
-  height: 1.7rem;
+  width: 1.15rem;
+  height: 1.15rem;
   border-radius: 999px;
   flex-shrink: 0;
   color: #fff;
-  background: var(--provider, var(--ink));
+  background: var(--provider, #ff4500);
 }
 .d-rd-mark .d-prov {
-  width: 1rem;
-  height: 1rem;
+  width: 0.8rem;
+  height: 0.8rem;
 }
 .d-rd-sub {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: inherit;
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.d-rd-by {
+  font-size: 0.7rem;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.d-rd-title {
+  font-size: 0.95rem;
+  font-weight: 650;
+  line-height: 1.3;
+  margin-bottom: 0.15rem;
+}
+.d-rd-title a {
+  color: inherit;
+  text-decoration: none;
+}
+@media (hover: hover) and (pointer: fine) {
+  .d-rd-title a:hover,
+  .d-rd-sub:hover {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+}
+
+/* video platforms — thumbnail then channel-avatar row, like the platform's own card */
+.d-vid-thumb {
+  display: block;
+  position: relative;
+  aspect-ratio: 16 / 9;
+  background: var(--hairline);
+}
+.d-vid-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.d-vid-placeholder {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--provider, var(--muted));
+}
+.d-vid-placeholder .d-prov {
+  width: 3rem;
+  height: 3rem;
+}
+.d-vid-info {
+  display: flex;
+  gap: 0.6rem;
+  padding: 0.7rem 0.9rem 0.55rem;
+  color: inherit;
+  text-decoration: none;
+}
+.d-vid-avatar {
+  display: grid;
+  place-items: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  border-radius: 999px;
+  flex-shrink: 0;
+  background: var(--ink);
+  color: var(--surface);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.d-vid-avatar .d-prov {
+  width: 1rem;
+  height: 1rem;
+  color: var(--surface);
+}
+.d-vid-title {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 0.92rem;
+  font-weight: 650;
+  line-height: 1.3;
+}
+.d-vid-channel {
+  display: block;
+  margin-top: 0.1rem;
+  font-size: 0.76rem;
+  color: var(--muted);
+}
+.d-vid .d-meta {
+  margin: 0.1rem 0.9rem 0.7rem;
+}
+
+/* instagram — gradient-ring avatar, square media, action bar, caption */
+.d-ig-head {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.6rem 0.9rem;
+  color: inherit;
+  text-decoration: none;
+}
+.d-ig-ring {
+  display: block;
+  width: 2.05rem;
+  height: 2.05rem;
+  padding: 2px;
+  border-radius: 999px;
+  flex-shrink: 0;
+  background: linear-gradient(45deg, #feda75, #fa7e1e, #d62976, #962fbf, #4f5bd5);
+}
+.d-ig-avatar {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  border-radius: 999px;
+  border: 2px solid var(--surface);
+  background: var(--ink);
+  color: var(--surface);
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+.d-ig-name {
   font-size: 0.84rem;
   font-weight: 650;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.d-rd-by {
-  font-size: 0.72rem;
-  color: var(--muted);
-  flex-shrink: 0;
+.d-ig-dots {
+  margin-left: auto;
+  width: 1.1rem;
+  height: 1.1rem;
+  color: var(--ink);
 }
-@media (hover: hover) and (pointer: fine) {
-  .d-rd-head:hover .d-rd-sub {
-    text-decoration: underline;
-    text-underline-offset: 2px;
-  }
+.d-ig-media {
+  display: block;
+  line-height: 0;
 }
-
-/* Hacker News card: compact item like the HN list */
-.d-hn {
+.d-ig-img {
+  display: block;
+  width: 100%;
+  max-height: 22rem;
+  object-fit: cover;
+}
+.d-ig-actions {
   display: flex;
-  align-items: flex-start;
-  gap: 0.55rem;
-  color: inherit;
-  text-decoration: none;
+  gap: 0.85rem;
+  padding: 0.55rem 0.9rem 0.1rem;
 }
-.d-hn-mark {
-  display: grid;
-  place-items: center;
-  width: 1.5rem;
-  height: 1.5rem;
-  border-radius: 5px;
-  flex-shrink: 0;
-  color: #fff;
-  background: var(--provider, var(--ink));
+.d-ig-actions .d-glyph {
+  width: 1.25rem;
+  height: 1.25rem;
+  color: var(--ink);
 }
-.d-hn-mark .d-prov {
-  width: 1rem;
-  height: 1rem;
+.d-ig-actions .d-ig-heart {
+  color: #ed4956;
 }
-.d-hn-title {
+.d-ig-actions .d-ig-save {
+  margin-left: auto;
+}
+.d-ig-caption {
+  padding: 0.15rem 0.9rem 0.2rem;
+  font-size: 0.82rem;
+  line-height: 1.4;
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  font-size: 0.9rem;
-  font-weight: 650;
-  line-height: 1.3;
-  letter-spacing: -0.01em;
 }
-.d-hn-site {
-  display: block;
-  margin-top: 0.1rem;
-  font-size: 0.7rem;
-  color: var(--muted);
-}
-@media (hover: hover) and (pointer: fine) {
-  .d-hn:hover .d-hn-title {
-    text-decoration: underline;
-    text-underline-offset: 2px;
-  }
+article.d-ig .d-meta,
+.d-ig .d-meta {
+  margin-left: 0.9rem;
+  margin-right: 0.9rem;
 }
 
-/* Audio card: square artwork (or a brand-tinted waveform) + title + artist */
-.d-audio {
+/* music — dark player tile like the service's own card */
+.d-mus {
+  background: #171a1e;
+  color: #fff;
+}
+.d-mus-row {
   display: flex;
   align-items: center;
-  gap: 0.7rem;
-  padding: 0.7rem 0.9rem;
+  gap: 0.75rem;
+  padding: 0.75rem 0.9rem;
   color: inherit;
   text-decoration: none;
 }
-.d-art {
+.d-mus-art {
   position: relative;
-  flex-shrink: 0;
-  width: 3.6rem;
-  height: 3.6rem;
-  border-radius: 10px;
+  width: 4.2rem;
+  height: 4.2rem;
+  border-radius: 8px;
   overflow: hidden;
+  flex-shrink: 0;
   display: grid;
   place-items: center;
-  background: color-mix(in srgb, var(--provider, var(--topic)) 22%, var(--surface-2, var(--hairline)));
+  background: color-mix(in srgb, var(--provider, #3a3f45) 25%, #26292e);
 }
-.d-art img {
+.d-mus-img {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
+.d-mus-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+.d-mus-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  line-height: 1.3;
+  color: #fff;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.d-mus-sub {
+  font-size: 0.76rem;
+  color: rgb(255 255 255 / 0.6);
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.d-mus-play {
+  margin-left: auto;
+  display: grid;
+  place-items: center;
+  width: 2.6rem;
+  height: 2.6rem;
+  border-radius: 999px;
+  flex-shrink: 0;
+  color: #121212;
+  background: var(--provider, #1db954);
+}
+.d-mus-play svg {
+  width: 1.1rem;
+  height: 1.1rem;
+  margin-left: 2px;
+}
+.d-mus-foot {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0 0.9rem 0.7rem;
+}
+.d-mus-foot .d-meta {
+  flex: 1;
+  min-width: 0;
+  margin-top: 0;
+  padding-top: 0.45rem;
+  border-top-color: rgb(255 255 255 / 0.14);
+  color: rgb(255 255 255 / 0.55);
+}
+.d-mus-foot .d-meta .d-retry {
+  color: #fbbf24;
+}
+.d-mus-prov {
+  width: 1.05rem;
+  height: 1.05rem;
+  color: var(--provider, #fff);
+}
+/* Brand-tinted placeholder bars when a track has no artwork */
 .d-wave {
   display: flex;
   align-items: center;
@@ -703,42 +1007,10 @@ button {
 .d-wave i:nth-child(3) { height: 100%; }
 .d-wave i:nth-child(4) { height: 60%; }
 .d-wave i:nth-child(5) { height: 35%; }
-.d-audio-text {
-  display: flex;
-  flex-direction: column;
-  gap: 0.1rem;
-}
-.d-audio-title {
-  font-size: 0.9rem;
-  font-weight: 650;
-  line-height: 1.3;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-.d-audio-sub {
-  font-size: 0.74rem;
-  color: var(--ink-2);
-  display: -webkit-box;
-  -webkit-line-clamp: 1;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-.d-audio-prov {
-  margin-left: auto;
-  width: 1rem;
-  height: 1rem;
-  color: var(--provider, var(--ink-2));
-}
-.d-audio + .d-meta,
-.d-audio ~ .d-annotation {
-  margin-left: 0.9rem;
-  margin-right: 0.9rem;
-}
-.d-audio ~ .d-annotation {
-  margin-top: 0;
-  margin-bottom: 0.3rem;
+.d-mus .d-actions select,
+.d-mus .d-actions button {
+  background: rgb(255 255 255 / 0.12);
+  color: #fff;
 }
 
 /* GitHub card: the mark + owner/repo headline */
