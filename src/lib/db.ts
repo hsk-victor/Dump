@@ -2,7 +2,8 @@ import Database from "better-sqlite3";
 import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import type { Kind, Subject, Topic } from "./taxonomy";
+import type { Kind, Provider, Subject, Topic } from "./taxonomy";
+import { providerFromUrl } from "./detect";
 
 export type Status = "processing" | "ready" | "failed";
 
@@ -13,6 +14,8 @@ export interface Dump {
   status: Status;
   url: string | null;
   domain: string | null;
+  /** The service the URL came from (github, youtube, x…). Picks the card variant; null for notes/other sites. */
+  provider: Provider | null;
   title: string | null;
   description: string | null;
   content: string | null;
@@ -37,6 +40,7 @@ interface Row {
   status: string;
   url: string | null;
   domain: string | null;
+  provider: string | null;
   title: string | null;
   description: string | null;
   content: string | null;
@@ -64,6 +68,7 @@ CREATE TABLE IF NOT EXISTS dumps (
   status TEXT NOT NULL DEFAULT 'processing',
   url TEXT,
   domain TEXT,
+  provider TEXT,
   title TEXT,
   description TEXT,
   content TEXT,
@@ -116,6 +121,7 @@ export function db(): Database.Database {
     // Columns added after v1 land here for databases created before them.
     const cols = conn.prepare("PRAGMA table_info(dumps)").all() as { name: string }[];
     if (!cols.some((c) => c.name === "subject")) conn.exec("ALTER TABLE dumps ADD COLUMN subject TEXT");
+    if (!cols.some((c) => c.name === "provider")) conn.exec("ALTER TABLE dumps ADD COLUMN provider TEXT");
     globalForDb.__dumpDb = conn;
   }
   return globalForDb.__dumpDb;
@@ -129,6 +135,8 @@ function toDump(r: Row): Dump {
     status: r.status as Status,
     url: r.url,
     domain: r.domain,
+    // Rows saved before the column existed still get a provider: it's a pure function of the URL.
+    provider: (r.provider as Provider | null) ?? (r.url ? providerFromUrl(r.url) : null),
     title: r.title,
     description: r.description,
     content: r.content,
@@ -171,6 +179,7 @@ const COLUMN: Record<string, string> = {
   status: "status",
   url: "url",
   domain: "domain",
+  provider: "provider",
   title: "title",
   description: "description",
   content: "content",
