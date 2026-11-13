@@ -42,12 +42,11 @@ export async function enrichDump(id: string): Promise<Dump | null> {
     if (dump.url) {
       const ex = await extractUrl(dump.url);
       unreachable = ex.unreachable;
-      // A title equal to the URL-derived fallback came from an earlier failed attempt, not from the user.
-      const fallbackTitle = titleFromUrl(dump.url);
-      const providedTitle = dump.title && dump.title !== fallbackTitle ? dump.title : null;
+      // If the site was unreachable, leave the title empty so a later retry can fill it in;
+      // the card shows the URL-derived title meanwhile.
       fields = {
         kind: ex.kind,
-        title: providedTitle ?? truncate(ex.title, 300) ?? fallbackTitle,
+        title: dump.title ?? truncate(ex.title, 300) ?? (unreachable ? null : titleFromUrl(dump.url)),
         description: truncate(ex.description, 1000),
         content: ex.content,
         imageUrl: ex.imageUrl,
@@ -56,9 +55,10 @@ export async function enrichDump(id: string): Promise<Dump | null> {
       };
     }
     const merged = { ...dump, ...fields };
+    const forClassifying = { ...merged, title: merged.title ?? (dump.url ? titleFromUrl(dump.url) : null) };
 
     let classification: Partial<Dump>;
-    const ai = await classifyWithAi({ ...merged, useImage: merged.kind === "image" });
+    const ai = await classifyWithAi({ ...forClassifying, useImage: merged.kind === "image" });
     if (ai) {
       classification = {
         topic: ai.topic,
@@ -68,7 +68,7 @@ export async function enrichDump(id: string): Promise<Dump | null> {
         ...(ai.title && (!merged.title || merged.kind === "image") ? { title: ai.title } : {}),
       };
     } else {
-      const rules = classifyHeuristic(merged);
+      const rules = classifyHeuristic(forClassifying);
       classification = { topic: rules.topic, tags: rules.tags, classifiedBy: "rules" };
     }
 
@@ -76,7 +76,7 @@ export async function enrichDump(id: string): Promise<Dump | null> {
     return commit(id, { ...fields, ...classification, status: unreachable ? "failed" : "ready" });
   } catch (err) {
     console.warn(`[dump] enrich failed for ${id}:`, (err as Error).message);
-    const rules = classifyHeuristic(dump);
+    const rules = classifyHeuristic({ ...dump, title: dump.title ?? (dump.url ? titleFromUrl(dump.url) : null) });
     return commit(id, { status: "failed", topic: rules.topic, classifiedBy: "rules", tags: rules.tags });
   }
 }

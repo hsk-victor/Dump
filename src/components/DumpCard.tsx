@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { Dump } from "@/lib/db";
 import { TOPICS, kindMeta, topicMeta } from "@/lib/taxonomy";
 import { timeAgo } from "@/lib/format";
+import { titleFromUrl } from "@/lib/detect";
 
 interface Props {
   dump: Dump;
@@ -18,7 +19,8 @@ export default function DumpCard({ dump, onTopic, onDelete, onRetry, onTag }: Pr
   const topic = topicMeta(dump.topic);
   const processing = dump.status === "processing";
   const body = dump.summary ?? dump.description ?? (dump.kind === "note" ? dump.content : null);
-  const showBody = body && body !== dump.title;
+  const title = dump.title || (dump.url ? titleFromUrl(dump.url) : null);
+  const showBody = body && body !== title;
   const href = dump.url ?? (dump.kind === "image" ? dump.imageUrl : null);
 
   return (
@@ -74,7 +76,7 @@ export default function DumpCard({ dump, onTopic, onDelete, onRetry, onTag }: Pr
           </div>
         </div>
 
-        {processing && !dump.title ? (
+        {processing && !title ? (
           <div className="space-y-2">
             <div className="shimmer h-4 w-3/4 rounded" />
             <div className="shimmer h-3 w-1/2 rounded" />
@@ -83,10 +85,10 @@ export default function DumpCard({ dump, onTopic, onDelete, onRetry, onTag }: Pr
           <h3 className="text-[15px] leading-snug font-semibold text-stone-900">
             {href ? (
               <a href={href} target="_blank" rel="noreferrer" className="hover:underline">
-                {dump.title || dump.url}
+                {title || dump.url}
               </a>
             ) : (
-              dump.title
+              title
             )}
           </h3>
         )}

@@ -43,15 +43,21 @@ describe("enrichDump", () => {
     const d = db.createDump({ kind: "link", url: "https://example.com/spinach-and-feta-pasta-recipe", domain: "example.com" });
     extractUrl.mockResolvedValue(page({ title: null, description: null, siteName: "example.com", unreachable: true }));
     const out = await enrichDump(d.id);
-    expect(out).toMatchObject({ status: "failed", topic: "food", title: "Spinach and feta pasta recipe" });
+    expect(out).toMatchObject({ status: "failed", topic: "food", title: null });
   });
 
   it("replaces the fallback title once a retry reaches the site", async () => {
     const d = db.createDump({ kind: "link", url: "https://example.com/easy-weeknight-pasta", domain: "example.com" });
     extractUrl.mockResolvedValueOnce(page({ title: null, unreachable: true }));
-    expect(await enrichDump(d.id)).toMatchObject({ status: "failed", title: "Easy weeknight pasta" });
+    expect(await enrichDump(d.id)).toMatchObject({ status: "failed", title: null });
     extractUrl.mockResolvedValueOnce(page({ title: "The Best Weeknight Pasta" }));
     expect(await enrichDump(d.id)).toMatchObject({ status: "ready", title: "The Best Weeknight Pasta" });
+  });
+
+  it("keeps a title the user supplied, even one matching the URL slug", async () => {
+    const d = db.createDump({ kind: "link", url: "https://example.com/easy-pasta", domain: "example.com", title: "Easy pasta" });
+    extractUrl.mockResolvedValueOnce(page());
+    expect(await enrichDump(d.id)).toMatchObject({ title: "Easy pasta" });
   });
 
   it("keeps a title the user supplied", async () => {
