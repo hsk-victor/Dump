@@ -73,7 +73,10 @@ body {
   fill: var(--ink);
 }
 .d-logo-line {
-  fill: var(--surface);
+  fill: var(--bg);
+}
+.d-logo-handle {
+  stroke: var(--ink);
 }
 .d-wordmark {
   font-weight: 800;
