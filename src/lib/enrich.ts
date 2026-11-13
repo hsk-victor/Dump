@@ -42,9 +42,12 @@ export async function enrichDump(id: string): Promise<Dump | null> {
     if (dump.url) {
       const ex = await extractUrl(dump.url);
       unreachable = ex.unreachable;
+      // A title equal to the URL-derived fallback came from an earlier failed attempt, not from the user.
+      const fallbackTitle = titleFromUrl(dump.url);
+      const providedTitle = dump.title && dump.title !== fallbackTitle ? dump.title : null;
       fields = {
         kind: ex.kind,
-        title: dump.title ?? truncate(ex.title, 300) ?? titleFromUrl(dump.url),
+        title: providedTitle ?? truncate(ex.title, 300) ?? fallbackTitle,
         description: truncate(ex.description, 1000),
         content: ex.content,
         imageUrl: ex.imageUrl,

@@ -45,4 +45,18 @@ describe("enrichDump", () => {
     const out = await enrichDump(d.id);
     expect(out).toMatchObject({ status: "failed", topic: "food", title: "Spinach and feta pasta recipe" });
   });
+
+  it("replaces the fallback title once a retry reaches the site", async () => {
+    const d = db.createDump({ kind: "link", url: "https://example.com/easy-weeknight-pasta", domain: "example.com" });
+    extractUrl.mockResolvedValueOnce(page({ title: null, unreachable: true }));
+    expect(await enrichDump(d.id)).toMatchObject({ status: "failed", title: "Easy weeknight pasta" });
+    extractUrl.mockResolvedValueOnce(page({ title: "The Best Weeknight Pasta" }));
+    expect(await enrichDump(d.id)).toMatchObject({ status: "ready", title: "The Best Weeknight Pasta" });
+  });
+
+  it("keeps a title the user supplied", async () => {
+    const d = db.createDump({ kind: "link", url: "https://example.com/p/123", domain: "example.com", title: "My pasta bookmark" });
+    extractUrl.mockResolvedValueOnce(page());
+    expect(await enrichDump(d.id)).toMatchObject({ title: "My pasta bookmark" });
+  });
 });
