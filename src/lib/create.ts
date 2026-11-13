@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import { domainOf, kindFromUrl, parseInput } from "./detect";
+import { domainOf, kindFromUrl, parseInput, providerFromUrl } from "./detect";
 import { bumpDump, createDump, findByUrl, updateDump, UPLOAD_DIR, type Dump } from "./db";
 import { noteTitle } from "./enrich";
 
@@ -62,6 +62,7 @@ export function createFromText(raw: string, opts?: CreateOptions | string | null
       kind: kindFromUrl(parsed.url) ?? "link",
       url: parsed.url,
       domain: domainOf(parsed.url),
+      provider: providerFromUrl(parsed.url),
       title,
       description,
       imageUrl,

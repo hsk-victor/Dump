@@ -1,4 +1,4 @@
-import type { Kind } from "./taxonomy";
+import type { Kind, Provider } from "./taxonomy";
 
 const URL_RE = /\bhttps?:\/\/[^\s<>"'`]+/i;
 const BARE_DOMAIN_RE = /^(?:www\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}(?:[/?#][^\s]*)?$/i;
@@ -114,6 +114,83 @@ export function kindFromUrl(url: string): Kind | null {
   }
   if (/\.pdf(\?|$)/i.test(path)) return "article";
   return null;
+}
+
+/**
+ * Which service a URL belongs to. `kind` stays coarse (link, post, video…);
+ * the provider picks the brand icon and card variant (github, youtube, x…).
+ */
+export function providerFromUrl(url: string): Provider | null {
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return null;
+  }
+  const host = domainOf(url) ?? "";
+  const path = u.pathname;
+
+  if (hostMatches(host, ["github.com"])) return "github";
+  if (hostMatches(host, ["x.com", "twitter.com"])) return "x";
+  if (hostMatches(host, ["threads.net", "threads.com"])) return "threads";
+  if (hostMatches(host, ["bsky.app"])) return "bluesky";
+  if (hostMatches(host, ["reddit.com", "redd.it"])) return "reddit";
+  if (hostMatches(host, ["linkedin.com"])) return "linkedin";
+  if (hostMatches(host, ["news.ycombinator.com"])) return "hackernews";
+  if (hostMatches(host, ["instagram.com"])) return "instagram";
+  if (hostMatches(host, ["facebook.com", "fb.watch"])) return "facebook";
+  if (hostMatches(host, ["youtube.com", "youtu.be"])) return "youtube";
+  if (hostMatches(host, ["vimeo.com"])) return "vimeo";
+  if (hostMatches(host, ["tiktok.com"])) return "tiktok";
+  if (hostMatches(host, ["twitch.tv"])) return "twitch";
+  if (hostMatches(host, ["loom.com"])) return "loom";
+  if (hostMatches(host, ["dailymotion.com", "dai.ly"])) return "dailymotion";
+  if (hostMatches(host, ["spotify.com"])) return "spotify";
+  if (hostMatches(host, ["soundcloud.com"])) return "soundcloud";
+  if (hostMatches(host, ["podcasts.apple.com", "music.apple.com", "itunes.apple.com"])) return "applemusic";
+  if (hostMatches(host, ["bandcamp.com"])) return "bandcamp";
+  if (hostMatches(host, ["imgur.com"])) return "imgur";
+  if (hostMatches(host, ["pinterest.com", "pin.it"])) return "pinterest";
+  if (hostMatches(host, ["unsplash.com"])) return "unsplash";
+  if (hostMatches(host, ["dribbble.com"])) return "dribbble";
+  if (hostMatches(host, ["flickr.com"])) return "flickr";
+  if (hostMatches(host, ["medium.com"])) return "medium";
+  if (hostMatches(host, ["substack.com"])) return "substack";
+  if (hostMatches(host, ["dev.to"])) return "devto";
+  if (hostMatches(host, ["hashnode.dev", "hashnode.com"])) return "hashnode";
+  if (hostMatches(host, ["mirror.xyz"])) return "mirror";
+  if (hostMatches(host, ["wikipedia.org"])) return "wikipedia";
+  if (/^\/@[\w.]+\/\d+$/.test(path)) return "mastodon"; // federated: the path shape is the tell
+  return null;
+}
+
+/** github.com top-level segments that aren't an owner name. */
+const GITHUB_NON_REPO = new Set([
+  "about", "apps", "collections", "contact", "copilot", "codespaces", "customer-stories",
+  "enterprise", "events", "explore", "features", "gist", "login", "marketplace", "new",
+  "notifications", "orgs", "pricing", "readme", "search", "security", "settings",
+  "signup", "sponsors", "team", "topics", "trending",
+]);
+
+/**
+ * The repo a GitHub URL points at: { repo: "owner/name", ref: "#123" } for pulls/issues,
+ * { repo: "user/gist-id" } for gists. Null for non-repo pages (explore, settings, …).
+ */
+export function githubRef(url: string): { repo: string; ref?: string } | null {
+  const host = domainOf(url) ?? "";
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return null;
+  }
+  const seg = u.pathname.split("/").filter(Boolean);
+  if (host === "gist.github.com") {
+    return seg.length >= 2 ? { repo: `${seg[0]}/${seg[1].slice(0, 12)}` } : null;
+  }
+  if (host !== "github.com" || seg.length < 2 || GITHUB_NON_REPO.has(seg[0].toLowerCase())) return null;
+  const m = u.pathname.match(/^\/[^/]+\/[^/]+\/(?:pull|issues)\/(\d+)/);
+  return { repo: `${seg[0]}/${seg[1]}`, ref: m ? `#${m[1]}` : undefined };
 }
 
 /** A readable fallback title from the URL path, e.g. ".../spinach-and-feta-burgers/" -> "Spinach and feta burgers". */

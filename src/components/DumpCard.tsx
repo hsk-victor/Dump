@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type CSSProperties, type ReactNode } from "react";
 import type { Dump } from "@/lib/db";
-import { SUBJECT_MIN_CONFIDENCE, subjectLine, TOPICS, kindMeta, topicMeta } from "@/lib/taxonomy";
+import { SUBJECT_MIN_CONFIDENCE, subjectLine, TOPICS, kindMeta, providerMeta, topicMeta } from "@/lib/taxonomy";
 import { timeAgo } from "@/lib/format";
-import { titleFromUrl } from "@/lib/detect";
+import { githubRef, titleFromUrl } from "@/lib/detect";
 
 interface Props {
   dump: Dump;
@@ -17,7 +17,7 @@ interface Props {
 
 function postAuthor(dump: Dump) {
   if (dump.author) return dump.author;
-  const m = dump.title?.match(/^(.+?) on X$/);
+  const m = dump.title?.match(/^(.+?) on .{1,32}$/);
   return m && m[1] !== "Post" ? m[1] : null;
 }
 
@@ -32,14 +32,306 @@ function initials(name: string) {
     .join("");
 }
 
-function XLogo() {
+function ProviderIcon({ provider, className = "d-prov" }: { provider: string | null | undefined; className?: string }) {
+  const meta = providerMeta(provider);
+  if (!meta || !("icon" in meta) || !meta.icon) return null;
   return (
-    <svg viewBox="0 0 24 24" aria-label="X" className="d-x">
-      <path
-        fill="currentColor"
-        d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"
-      />
+    <svg viewBox="0 0 24 24" className={className} aria-label={meta.label}>
+      <path fill="currentColor" d={meta.icon} />
     </svg>
+  );
+}
+
+/** Site favicon via Google's favicon service (same idea as loading remote og:images). */
+function Favicon({ domain }: { domain: string | null }) {
+  const [bad, setBad] = useState(false);
+  if (!domain || bad) return null;
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      className="d-favicon"
+      src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=64`}
+      alt=""
+      loading="lazy"
+      onError={() => setBad(true)}
+    />
+  );
+}
+
+/** Brand chip top corner of a media surface; falls back to the kind label like before. */
+function Flag({ dump }: { dump: Dump }) {
+  const meta = providerMeta(dump.provider);
+  if (meta && "icon" in meta && meta.icon) {
+    return (
+      <span className="d-flag" title={meta.label}>
+        <ProviderIcon provider={dump.provider} />
+      </span>
+    );
+  }
+  if (dump.kind !== "image" && dump.kind !== "link") return <span className="d-kind-flag">{kindMeta(dump.kind).singular}</span>;
+  return null;
+}
+
+function PlayBadge() {
+  return (
+    <span className="d-play" aria-hidden>
+      <svg viewBox="0 0 24 24">
+        <path fill="currentColor" d="M8 5.5v13l11-6.5z" />
+      </svg>
+    </span>
+  );
+}
+
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** PR/issue titles come back like "Fix bug · Pull Request #12 · owner/repo"; strip the repo tail. */
+function githubDek(dump: Dump, repo: string | null): string | null {
+  let t = dump.title ?? "";
+  if (repo) {
+    const esc = escapeRe(repo);
+    t = t
+      .replace(new RegExp(`^GitHub\\s*-\\s*${esc}:\\s*`, "i"), "")
+      .replace(new RegExp(`\\s*·\\s*${esc}\\s*(?:·\\s*GitHub)?$`, "i"), "")
+      .trim();
+  }
+  return t && t !== repo ? t : dump.description;
+}
+
+interface CardBits {
+  actions: ReactNode;
+  meta: ReactNode;
+  href: string | null;
+  title: string | null;
+  dek: string | null;
+  site: string | null;
+  showMedia: boolean;
+  setImgFailed: (v: boolean) => void;
+  processing: boolean;
+  cardProps: Record<string, unknown>;
+}
+
+function shimmerLines() {
+  return (
+    <div className="space-y-2 py-1">
+      <div className="shimmer h-4 w-3/4 rounded" />
+      <div className="shimmer h-3 w-1/2 rounded" />
+    </div>
+  );
+}
+
+/** image/video: media fills the card, title + meta ride a soft scrim on top. */
+function MediaCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
+  return (
+    <article {...bits.cardProps} className="d-card d-mediacard group">
+      {bits.actions}
+      <a href={bits.href ?? undefined} target="_blank" rel="noreferrer" className="d-media">
+        {/* External thumbnails come from arbitrary domains, so next/image's allow-list doesn't fit here. */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={dump.imageUrl!} alt={bits.title ?? ""} loading="lazy" referrerPolicy="no-referrer" onError={() => bits.setImgFailed(true)} />
+        {dump.kind === "video" && <PlayBadge />}
+        <Flag dump={dump} />
+      </a>
+      <div className="d-scrim">
+        {bits.processing && !bits.title ? (
+          shimmerLines()
+        ) : (
+          <>
+            {bits.title && (
+              <h3 className="d-overlay-title">
+                {bits.href ? (
+                  <a href={bits.href} target="_blank" rel="noreferrer">
+                    {bits.title}
+                  </a>
+                ) : (
+                  bits.title
+                )}
+              </h3>
+            )}
+            {bits.dek && bits.dek !== bits.title && <p className="d-overlay-dek">{bits.dek}</p>}
+            {dump.note && <p className="d-overlay-note">{dump.note}</p>}
+          </>
+        )}
+        {bits.meta}
+      </div>
+    </article>
+  );
+}
+
+/** post: author head + provider mark + the post text, media below — for every post provider, not just X. */
+function PostCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
+  const provider = providerMeta(dump.provider);
+  const author = postAuthor(dump);
+  const postText = dump.description ?? dump.summary ?? dump.title;
+  return (
+    <article {...bits.cardProps} className="d-card d-post group">
+      {bits.actions}
+      <a href={bits.href ?? undefined} target="_blank" rel="noreferrer" className="d-post-head">
+        <span className="d-avatar">{author ? initials(author) : <ProviderIcon provider={dump.provider} />}</span>
+        <span className="min-w-0">
+          <span className="d-author-name">{author ?? provider?.label ?? "Post"}</span>
+          <span className="d-author-site">{bits.site ?? provider?.label ?? "Post"}</span>
+        </span>
+        <ProviderIcon provider={dump.provider} className="d-prov d-post-prov" />
+      </a>
+      {bits.processing && !postText ? shimmerLines() : postText && <p className="d-post-text">{postText}</p>}
+      {bits.showMedia && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img className="d-post-media" src={dump.imageUrl!} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => bits.setImgFailed(true)} />
+      )}
+      {dump.note && <p className="d-annotation">{dump.note}</p>}
+      {bits.meta}
+    </article>
+  );
+}
+
+/** github: the mark + owner/repo headline; PRs and issues get their ref appended. */
+function GithubCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
+  const gh = dump.url ? githubRef(dump.url) : null;
+  const dek = githubDek(dump, gh?.repo ?? null);
+  return (
+    <article {...bits.cardProps} className="d-card group">
+      {bits.actions}
+      <div className="d-body">
+        <a className="d-gh" href={bits.href ?? undefined} target="_blank" rel="noreferrer">
+          <span className="d-gh-mark">
+            <ProviderIcon provider="github" />
+          </span>
+          <span className="d-gh-repo min-w-0">
+            {gh?.repo ?? bits.title ?? "GitHub"}
+            {gh?.ref && <span className="d-gh-ref"> · {gh.ref}</span>}
+          </span>
+        </a>
+        {dek && <p className="d-dek">{dek}</p>}
+        {dump.note && <p className="d-annotation">{dump.note}</p>}
+        {bits.meta}
+      </div>
+    </article>
+  );
+}
+
+/** audio: artwork (or a brand-tinted waveform) + title + artist line. */
+function AudioCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
+  const provider = providerMeta(dump.provider);
+  const sub = dump.author ?? (bits.dek !== bits.title ? bits.dek : null) ?? provider?.label;
+  return (
+    <article {...bits.cardProps} className="d-card group">
+      {bits.actions}
+      <a href={bits.href ?? undefined} target="_blank" rel="noreferrer" className="d-audio">
+        <span className="d-art">
+          {bits.showMedia ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={dump.imageUrl!} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => bits.setImgFailed(true)} />
+          ) : (
+            <span className="d-wave" aria-hidden>
+              <i />
+              <i />
+              <i />
+              <i />
+              <i />
+            </span>
+          )}
+        </span>
+        <span className="d-audio-text min-w-0">
+          <span className="d-audio-title">{bits.title ?? bits.site ?? provider?.label ?? "Audio"}</span>
+          {sub && <span className="d-audio-sub">{sub}</span>}
+        </span>
+        <ProviderIcon provider={dump.provider} className="d-prov d-audio-prov" />
+      </a>
+      {dump.note && <p className="d-annotation">{dump.note}</p>}
+      {bits.meta}
+    </article>
+  );
+}
+
+/** article: site-name kicker for the news feel, headline + dek, thumbnail stays small. */
+function ArticleCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
+  return (
+    <article {...bits.cardProps} className="d-card group">
+      {bits.actions}
+      <div className="d-body">
+        {(bits.site || dump.domain) && (
+          <div className="d-kicker">
+            <Favicon domain={dump.domain} />
+            <span className="min-w-0 truncate">{bits.site ?? dump.domain}</span>
+          </div>
+        )}
+        <div className="d-article-row">
+          <div className="min-w-0 flex-1">
+            {bits.processing && !bits.title ? (
+              shimmerLines()
+            ) : (
+              <>
+                {(bits.title || bits.site || dump.url) && (
+                  <h3 className="d-headline">
+                    {bits.href ? (
+                      <a href={bits.href} target="_blank" rel="noreferrer">
+                        {bits.title ?? bits.site ?? dump.url}
+                      </a>
+                    ) : (
+                      bits.title ?? bits.site ?? dump.url
+                    )}
+                  </h3>
+                )}
+                {bits.dek && <p className="d-dek">{bits.dek}</p>}
+              </>
+            )}
+          </div>
+          {bits.showMedia && (
+            <a href={bits.href ?? undefined} target="_blank" rel="noreferrer" className="d-thumb-link">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img className="d-thumb" src={dump.imageUrl!} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => bits.setImgFailed(true)} />
+            </a>
+          )}
+        </div>
+        {dump.note && <p className="d-annotation">{dump.note}</p>}
+        {bits.meta}
+      </div>
+    </article>
+  );
+}
+
+/** link (and anything else without a tailored card): favicon kicker + title + description. */
+function LinkCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
+  return (
+    <article {...bits.cardProps} className="d-card group">
+      {bits.actions}
+      {bits.showMedia && (
+        <a href={bits.href ?? undefined} target="_blank" rel="noreferrer" className="d-media">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={dump.imageUrl!} alt={bits.title ?? ""} loading="lazy" referrerPolicy="no-referrer" onError={() => bits.setImgFailed(true)} />
+          {dump.kind === "video" && <PlayBadge />}
+          <Flag dump={dump} />
+        </a>
+      )}
+      <div className="d-body">
+        {(bits.site || dump.domain) && (
+          <div className="d-kicker">
+            <Favicon domain={dump.domain} />
+            <span className="min-w-0 truncate">{bits.site ?? dump.domain}</span>
+          </div>
+        )}
+        {bits.processing && !bits.title ? (
+          shimmerLines()
+        ) : (
+          <>
+            {(bits.title || bits.site || dump.url) && (
+              <h3 className="d-headline">
+                {bits.href ? (
+                  <a href={bits.href} target="_blank" rel="noreferrer">
+                    {bits.title ?? bits.site ?? dump.url}
+                  </a>
+                ) : (
+                  bits.title ?? bits.site ?? dump.url
+                )}
+              </h3>
+            )}
+            {bits.dek && <p className="d-dek">{bits.dek}</p>}
+          </>
+        )}
+        {dump.note && <p className="d-annotation">{dump.note}</p>}
+        {bits.meta}
+      </div>
+    </article>
   );
 }
 
@@ -47,16 +339,13 @@ export default function DumpCard({ dump, fresh, removing, onTopic, onDelete, onR
   const [imgFailed, setImgFailed] = useState(false);
   const topic = topicMeta(dump.topic);
   const kind = dump.kind;
+  const provider = providerMeta(dump.provider);
   const processing = dump.status === "processing";
   const subject = dump.subject && (dump.subject.confidence ?? 0) >= SUBJECT_MIN_CONFIDENCE ? dump.subject : null;
   // An identified subject headlines the card ("Severance (2022) · TV series"); the link stays on it.
   const title = subject ? subjectLine(subject) : dump.title || (dump.url ? titleFromUrl(dump.url) : null);
   const href = dump.url ?? (kind === "image" ? dump.imageUrl : null);
   const site = dump.siteName && dump.siteName.length < 30 ? dump.siteName : dump.domain;
-  const isX = /(^|\.)(x|twitter)\.com$/.test(dump.domain ?? "");
-  const isXPost = kind === "post" && isX;
-  const postText = isXPost ? (dump.description ?? dump.summary) : null;
-  const author = kind === "post" ? postAuthor(dump) : null;
   const showMedia = !!dump.imageUrl && !imgFailed;
   const dek = dump.summary ?? dump.description;
   const filedBy = dump.classifiedBy === "you" ? "Filed by you" : dump.classifiedBy === "ai" ? "Filed by AI" : "Filed automatically";
@@ -91,7 +380,7 @@ export default function DumpCard({ dump, fresh, removing, onTopic, onDelete, onR
   const meta = (
     <div className="d-meta">
       {topicChip}
-      <span className="min-w-0 truncate">{site ?? kindMeta(kind).singular}</span>
+      <span className="min-w-0 truncate">{site ?? provider?.label ?? kindMeta(kind).singular}</span>
       {dump.status === "failed" && (
         <button onClick={() => onRetry(dump.id)} className="d-retry">
           Retry
@@ -103,86 +392,42 @@ export default function DumpCard({ dump, fresh, removing, onTopic, onDelete, onR
     </div>
   );
 
-  if (isXPost && postText) {
+  const bits: CardBits = {
+    actions,
+    meta,
+    href,
+    title,
+    dek,
+    site,
+    showMedia,
+    setImgFailed,
+    processing,
+    cardProps: {
+      "data-kind": kind,
+      "data-provider": dump.provider ?? undefined,
+      "data-fresh": fresh || undefined,
+      "data-removing": removing || undefined,
+      style: { "--topic": topic.color, "--provider": provider && "color" in provider ? provider.color : undefined } as CSSProperties,
+    },
+  };
+
+  // Media dumps with a usable image get the overlay card; without one they degrade to a link card.
+  if ((kind === "image" || kind === "video") && showMedia) return <MediaCard dump={dump} bits={bits} />;
+  if (kind === "note") {
     return (
-      <article
-        className="d-card d-post group"
-        data-fresh={fresh || undefined}
-        data-removing={removing || undefined}
-        style={{ "--topic": topic.color } as React.CSSProperties}
-      >
+      <article {...bits.cardProps} className="d-card group">
         {actions}
-        <a href={href ?? undefined} target="_blank" rel="noreferrer" className="d-post-head">
-          <span className="d-avatar">{author ? initials(author) : <XLogo />}</span>
-          <span className="min-w-0">
-            <span className="d-author-name">{author ?? "Post"}</span>
-            <span className="d-author-site">{site ?? "X"}</span>
-          </span>
-          <XLogo />
-        </a>
-        <p className="d-post-text">{postText}</p>
-        {showMedia && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img className="d-post-media" src={dump.imageUrl!} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setImgFailed(true)} />
-        )}
-        {dump.note && <p className="d-annotation">{dump.note}</p>}
-        {meta}
+        <div className="d-body">
+          {processing && !title ? shimmerLines() : <p className="d-note-text">{dump.content ?? title}</p>}
+          {dump.note && <p className="d-annotation">{dump.note}</p>}
+          {meta}
+        </div>
       </article>
     );
   }
-
-  return (
-    <article
-      className="d-card group"
-      data-kind={kind}
-      data-fresh={fresh || undefined}
-      data-removing={removing || undefined}
-      style={{ "--topic": topic.color } as React.CSSProperties}
-    >
-      {actions}
-      {showMedia && (
-        <a href={href ?? undefined} target="_blank" rel="noreferrer" className="d-media">
-          {/* External thumbnails come from arbitrary domains, so next/image's allow-list doesn't fit here. */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={dump.imageUrl!} alt={title ?? ""} loading="lazy" referrerPolicy="no-referrer" onError={() => setImgFailed(true)} />
-          {kind === "video" && (
-            <span className="d-play" aria-hidden>
-              <svg viewBox="0 0 24 24">
-                <path fill="currentColor" d="M8 5.5v13l11-6.5z" />
-              </svg>
-            </span>
-          )}
-          {kind !== "image" && <span className="d-kind-flag">{kindMeta(kind).singular}</span>}
-        </a>
-      )}
-
-      <div className="d-body">
-        {processing && !title ? (
-          <div className="space-y-2 py-1">
-            <div className="shimmer h-4 w-3/4 rounded" />
-            <div className="shimmer h-3 w-1/2 rounded" />
-          </div>
-        ) : kind === "note" ? (
-          <p className="d-note-text">{dump.content ?? title}</p>
-        ) : (
-          <>
-            {(title || site || dump.url) && (
-              <h3 className="d-headline">
-                {href ? (
-                  <a href={href} target="_blank" rel="noreferrer">
-                    {title ?? site ?? dump.url}
-                  </a>
-                ) : (
-                  title ?? site ?? dump.url
-                )}
-              </h3>
-            )}
-            {dek && <p className="d-dek">{dek}</p>}
-          </>
-        )}
-        {dump.note && <p className="d-annotation">{dump.note}</p>}
-        {meta}
-      </div>
-    </article>
-  );
+  if (kind === "post") return <PostCard dump={dump} bits={bits} />;
+  if (dump.provider === "github") return <GithubCard dump={dump} bits={bits} />;
+  if (kind === "audio") return <AudioCard dump={dump} bits={bits} />;
+  if (kind === "article") return <ArticleCard dump={dump} bits={bits} />;
+  return <LinkCard dump={dump} bits={bits} />;
 }

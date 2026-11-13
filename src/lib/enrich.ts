@@ -1,7 +1,7 @@
 import { classifyHeuristic } from "./classify";
 import { db, getDump, listResortable, updateDump, type Dump } from "./db";
 import { extractUrl } from "./extract";
-import { titleFromUrl } from "./detect";
+import { providerFromUrl, titleFromUrl } from "./detect";
 import { classifyWithAi, identifySubject } from "./llm";
 import { SUBJECT_MIN_CONFIDENCE, type Subject } from "./taxonomy";
 
@@ -92,6 +92,7 @@ async function runEnrich(id: string): Promise<Dump | null> {
       // Without one, the card shows the URL-derived title and its words go into `content` to stay searchable.
       fields = {
         kind: ex.kind,
+        provider: providerFromUrl(dump.url),
         title,
         // A bookmarklet-sent og:description/og:image survives a page fetch that got nothing.
         description: truncate(ex.description, 1000) ?? dump.description,

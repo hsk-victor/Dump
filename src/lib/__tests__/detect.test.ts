@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { kindFromUrl, normalizeUrl, parseInput, titleFromUrl } from "../detect";
+import { githubRef, kindFromUrl, normalizeUrl, parseInput, providerFromUrl, titleFromUrl } from "../detect";
 
 describe("parseInput", () => {
   it("treats a lone URL as a link", () => {
@@ -44,6 +44,46 @@ describe("kindFromUrl", () => {
     ["https://github.com/vercel/next.js", null],
   ])("%s -> %s", (url, kind) => {
     expect(kindFromUrl(url)).toBe(kind);
+  });
+});
+
+describe("providerFromUrl", () => {
+  it.each([
+    ["https://github.com/vercel/next.js", "github"],
+    ["https://gist.github.com/user/abc123", "github"],
+    ["https://x.com/jack/status/20", "x"],
+    ["https://twitter.com/jack/status/20", "x"],
+    ["https://www.threads.net/@user/post/abc", "threads"],
+    ["https://bsky.app/profile/user/post/abc", "bluesky"],
+    ["https://www.reddit.com/r/cooking/comments/abc/x/", "reddit"],
+    ["https://news.ycombinator.com/item?id=123", "hackernews"],
+    ["https://www.youtube.com/watch?v=dQw4w9WgXcQ", "youtube"],
+    ["https://youtu.be/dQw4w9WgXcQ", "youtube"],
+    ["https://www.tiktok.com/@user/video/123", "tiktok"],
+    ["https://open.spotify.com/track/123", "spotify"],
+    ["https://soundcloud.com/artist/track", "soundcloud"],
+    ["https://someone.substack.com/p/my-essay", "substack"],
+    ["https://mastodon.social/@user/123456", "mastodon"],
+    ["https://en.wikipedia.org/wiki/Function_(mathematics)", "wikipedia"],
+    ["https://example.com/a", null],
+    ["not a url", null],
+  ])("%s -> %s", (url, provider) => {
+    expect(providerFromUrl(url)).toBe(provider);
+  });
+});
+
+describe("githubRef", () => {
+  it("reads owner/repo, plus a ref for pulls and issues", () => {
+    expect(githubRef("https://github.com/vercel/next.js")).toEqual({ repo: "vercel/next.js", ref: undefined });
+    expect(githubRef("https://github.com/vercel/next.js/pull/123")).toEqual({ repo: "vercel/next.js", ref: "#123" });
+    expect(githubRef("https://github.com/vercel/next.js/issues/45")).toEqual({ repo: "vercel/next.js", ref: "#45" });
+  });
+
+  it("handles gists and ignores non-repo pages", () => {
+    expect(githubRef("https://gist.github.com/mattn/abcdef1234567890")).toEqual({ repo: "mattn/abcdef123456" });
+    expect(githubRef("https://github.com/explore")).toBeNull();
+    expect(githubRef("https://github.com/settings/profile")).toBeNull();
+    expect(githubRef("https://example.com/vercel/next.js")).toBeNull();
   });
 });
 
