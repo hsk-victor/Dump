@@ -1,2 +1,76 @@
 # Dump
 
+Save ("dump") anything you come across, like X posts, links, articles, videos, images and notes, and never organise it yourself. Every dump is filed automatically by **type** and **topic**, so you can browse or search it later.
+
+## Run it
+
+```bash
+npm install
+npm run dev        # http://localhost:3000
+```
+
+Requires Node 20+. Data lives in `./data` (SQLite database + uploaded images); set `DUMP_DATA_DIR` to put it elsewhere.
+
+Optional: set `OPENAI_API_KEY` to use an LLM for categorisation. It picks better topics, writes a one-line summary and tags, and can "see" images. Without a key, Dump uses a built-in rules classifier that works offline.
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `OPENAI_API_KEY` | unset | Turns on AI categorisation |
+| `OPENAI_MODEL` | `gpt-4o-mini` | Model used for categorisation |
+| `OPENAI_BASE_URL` | `https://api.openai.com/v1` | Any OpenAI-compatible endpoint |
+| `DUMP_DATA_DIR` | `./data` | Where the DB and uploads are stored |
+
+```bash
+npm test           # unit tests (vitest)
+npm run lint
+npm run build && npm start
+```
+
+## Using it
+
+- **Dump:** paste a link, type a note, or paste/drop an image into the box and press Enter. Text around a link is kept as your note ("try this weekend https://…").
+- **Auto-filing:** the dump appears instantly with a "Sorting…" badge, then fills in with its title, preview, topic and tags a moment later.
+- **Browse:** the sidebar lists topics and types with counts. Click to filter.
+- **Search:** press `/` and type. Search runs across titles, descriptions, page text, notes, tags and sites, with prefix matching.
+- **Bookmarklet:** drag "+ Dump it" from the sidebar to your bookmarks bar to dump the page you're on in one click.
+- **Fix a filing (optional):** hover a card, then use "Move…". Manual choices are never overwritten.
+- Dumping the same link twice moves it back to the top instead of creating a duplicate.
+
+## How it works
+
+```
+POST /api/dumps ──► save row (status=processing) ──► respond immediately
+                         │
+                         └─ after(): enrich in background
+                              1. URL → kind guess (x.com/status → post, youtube → video, .jpg → image …)
+                              2. fetch metadata: oEmbed (X, YouTube, Vimeo, TikTok, Reddit, Spotify, SoundCloud)
+                                 + the page's Open Graph tags / JSON-LD / main text
+                              3. classify topic + tags: LLM if configured, otherwise keyword/domain rules
+                              4. save (status=ready); the UI polls until nothing is processing
+```
+
+Key files:
+
+- `src/lib/taxonomy.ts`: the fixed lists of types and topics
+- `src/lib/detect.ts`: input parsing, URL normalisation, kind detection
+- `src/lib/extract.ts`: metadata fetching (with an SSRF guard against private-network URLs)
+- `src/lib/classify.ts`: offline keyword/domain topic classifier
+- `src/lib/llm.ts`: optional OpenAI classifier (structured JSON output, falls back to rules)
+- `src/lib/db.ts`: SQLite schema, FTS5 search index kept in sync by triggers
+- `src/app/api/*`: REST API; `src/app/dump`: bookmarklet endpoint
+- `src/components/*`: UI
+
+## Design decisions
+
+- **Next.js (App Router) + TypeScript:** UI and API live in one app and one deploy. Route handlers plus `after()` let us answer instantly and do the slow fetching and classification in the background.
+- **SQLite (better-sqlite3) + FTS5:** zero setup and a single file, with fast, ranked full-text search built in. That's plenty for a personal library; swap in Postgres when there are multiple users.
+- **Two axes, fixed topic list:** *type* comes from the source (reliable), *topic* comes from content. A fixed list of about 20 topics keeps the library tidy. Free-form AI categories drift into near-duplicates ("Cooking", "Recipes", "Food & Drink"). Tags carry the specifics.
+- **Rules first, AI optional:** the app is fully useful with no API key or cost. The LLM path is a drop-in upgrade and falls back to rules on any error.
+- **Save first, enrich later:** a dump is never lost because a site was slow or blocked. If fetching fails you still get a title from the URL and a topic from what's known.
+
+## Known limitations (v1)
+
+- Single user, no accounts or auth. Run it locally or behind your own auth.
+- Some sites block bots or need JavaScript (e.g. IMDb, Allrecipes, Medium). For these, Dump falls back to the URL slug for the title and classification.
+- X posts are read via the public oEmbed endpoint (text and author only, no media).
+- Without an API key, images are classified only by filename and any note you add.
