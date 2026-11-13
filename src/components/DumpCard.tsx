@@ -357,9 +357,9 @@ function GithubCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
   );
 }
 
-/** youtube/vimeo/twitch/tiktok/loom/dailymotion — platform layout:
- *  thumbnail first, then channel-avatar + title + channel line, like a video platform card. */
-function VideoCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
+/** youtube keeps the platform-native card: thumbnail first, then channel-avatar +
+ *  title + channel line — matching YouTube's own listing. */
+function YouTubeCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
   const provider = providerMeta(dump.provider);
   return (
     <article {...bits.cardProps} className="d-card d-vid group">
@@ -390,6 +390,72 @@ function VideoCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
       </a>
       {dump.note && <p className="d-annotation">{dump.note}</p>}
       {bits.meta}
+    </article>
+  );
+}
+
+/** video — youtube keeps its platform-native card; every other provider (vimeo, twitch, tiktok,
+ *  loom, dailymotion, plain links) gets the cinema layout: like the media card, the thumbnail is
+ *  the card — glass byline chip at rest, title/byline/dek/note/meta rise in a glass panel on
+ *  hover/focus (touch shows the title in the chip). */
+function VideoCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
+  if (dump.provider === "youtube") return <YouTubeCard dump={dump} bits={bits} />;
+  const t = mediaText(dump, bits);
+  const byline =
+    [dump.author?.trim(), providerMeta(dump.provider)?.label].filter(Boolean).join(" · ") ||
+    (dump.url ? bits.site : null);
+  const restLabel = byline ?? t.title ?? t.note;
+  const touchLabel = t.title ?? byline ?? t.note;
+  return (
+    <article {...bits.cardProps} className="d-card d-mediacard d-vidcard group" data-open={dump.status === "failed" || undefined}>
+      {bits.actions}
+      <a href={bits.href ?? undefined} target="_blank" rel="noreferrer" className="d-media d-vmedia" aria-label={t.title ?? byline ?? "Open video"}>
+        {bits.showMedia ? (
+          <FadeImg dump={dump} bits={bits} alt={t.title ?? ""} />
+        ) : (
+          <span className="d-vph" aria-hidden>
+            <ProviderIcon provider={dump.provider} />
+          </span>
+        )}
+        <span className="d-vscrim" aria-hidden />
+        <PlayBadge />
+        <Flag dump={dump} />
+      </a>
+      {bits.processing ? (
+        <span className="d-mchip" aria-hidden>
+          <span className="d-mchip-sorting shimmer" />
+        </span>
+      ) : (
+        (restLabel || t.hasMark) && (
+          <span className="d-mchip" aria-hidden>
+            {t.hasMark ? <ProviderIcon provider={dump.provider} className="d-mchip-prov" /> : <span className="d-dot" />}
+            {restLabel && <span className="d-mchip-text d-mchip-rest" dir="auto">{restLabel}</span>}
+            {touchLabel && <span className="d-mchip-text d-mchip-touch" dir="auto">{touchLabel}</span>}
+          </span>
+        )
+      )}
+      <div className="d-mpanel">
+        {bits.processing && !t.title ? (
+          shimmerLines()
+        ) : (
+          <>
+            {t.title && (
+              <h3 className="d-mpanel-title" dir="auto">
+                {bits.href ? <a href={bits.href} target="_blank" rel="noreferrer">{t.title}</a> : t.title}
+              </h3>
+            )}
+            {byline && (
+              <p className="d-mpanel-by">
+                {t.hasMark && <ProviderIcon provider={dump.provider} className="d-mpanel-prov" />}
+                <span className="min-w-0 truncate" dir="auto">{byline}</span>
+              </p>
+            )}
+            {t.dek && <p className="d-mpanel-dek" dir="auto">{t.dek}</p>}
+            {t.note && <p className="d-annotation d-mpanel-note" dir="auto">{t.note}</p>}
+          </>
+        )}
+        {bits.meta}
+      </div>
     </article>
   );
 }

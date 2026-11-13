@@ -646,6 +646,58 @@ button {
   padding-top: 0;
   border-top-width: 0;
 }
+
+/* Video (non-YouTube): same glass chip/panel as the media card, over a 16:9 frame.
+ * The frame crops to the video ratio and carries the scrim, play badge and flag. */
+.d-vidcard .d-media {
+  aspect-ratio: 16 / 9;
+}
+.d-vidcard .d-media img {
+  min-height: 0;
+  max-height: none;
+  height: 100%;
+  object-position: center;
+  transition: opacity 0.22s var(--ease-out), scale 0.4s var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .d-vidcard:hover .d-media img[data-loaded] {
+    scale: 1.03;
+  }
+}
+.d-vph {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--provider, var(--muted));
+}
+.d-vph .d-prov {
+  width: 2.6rem;
+  height: 2.6rem;
+}
+/* Thin bottom scrim so the chip always reads — much lighter than a full overlay. */
+.d-vscrim {
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 44%;
+  background: linear-gradient(0deg, rgb(0 0 0 / 0.34), transparent);
+  pointer-events: none;
+}
+.d-vidcard .d-play {
+  transition: scale 0.18s var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .d-vidcard:hover .d-play {
+    scale: 1.08;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .d-vidcard .d-media img,
+  .d-vidcard .d-play {
+    transition: opacity 0.15s;
+    scale: none;
+  }
+}
 .d-body {
   padding: 0.8rem 0.9rem 0.8rem;
 }
