@@ -182,7 +182,9 @@ function Img({ dump, bits, className, alt = "" }: { dump: Dump; bits: CardBits; 
 /** x — an embedded tweet: avatar, name, @handle, big X, text, media, reply/repost/like/views. */
 function XCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
   const author = postAuthor(dump) ?? dump.author;
-  const handle = dump.author?.replace(/^@/, "");
+  const raw = dump.author?.replace(/^@/, "");
+  // oEmbed author_name can be a display name ("Jane Doe"), not a handle — only @-ify real handles.
+  const handle = raw && /^[\w.]{1,30}$/.test(raw) ? `@${raw}` : null;
   const text = dump.description ?? dump.summary ?? bits.title;
   return (
     <article {...bits.cardProps} className="d-card d-tw group">
@@ -191,7 +193,7 @@ function XCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
         <span className="d-tw-avatar">{author ? initials(author) : <ProviderIcon provider="x" />}</span>
         <span className="min-w-0">
           <span className="d-tw-name">{author ?? "Post"}</span>
-          <span className="d-tw-handle">{handle ? `@${handle}` : "X"}</span>
+          <span className="d-tw-handle">{handle ?? "X"}</span>
         </span>
         <ProviderIcon provider="x" className="d-tw-logo" />
       </a>
@@ -404,6 +406,7 @@ function MediaCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
 function IgCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
   const author = postAuthor(dump);
   const caption = dump.description ?? dump.summary ?? bits.title;
+  const headline = bits.title && bits.title !== caption && !attributionName(dump.title, dump) ? bits.title : null;
   return (
     <article {...bits.cardProps} className="d-card group">
       {bits.actions}
@@ -424,6 +427,7 @@ function IgCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
         <Glyph name="bookmark" className="d-glyph d-ig-save" />
       </div>
       {caption && <p className="d-ig-caption">{author && <strong>{author} </strong>}{caption}</p>}
+      {headline && <p className="d-ig-subject">{headline}</p>}
       {dump.note && <p className="d-annotation">{dump.note}</p>}
       {bits.meta}
     </article>
@@ -453,6 +457,7 @@ function MusicCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
           <svg viewBox="0 0 24 24"><path fill="currentColor" d="M8 5.5v13l11-6.5z" /></svg>
         </span>
       </a>
+      {dump.note && <p className="d-mus-note">{dump.note}</p>}
       <div className="d-mus-foot">
         <ProviderIcon provider={dump.provider} className="d-prov d-mus-prov" />
         {bits.meta}
