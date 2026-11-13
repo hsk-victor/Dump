@@ -239,11 +239,12 @@ export interface ListOptions {
   kind?: string | null;
   topic?: string | null;
   limit?: number;
+  offset?: number;
 }
 
-export function listDumps({ q, kind, topic, limit = 200 }: ListOptions = {}): Dump[] {
+export function listDumps({ q, kind, topic, limit = 200, offset = 0 }: ListOptions = {}): Dump[] {
   const where: string[] = [];
-  const params: Record<string, unknown> = { limit };
+  const params: Record<string, unknown> = { limit, offset };
   if (kind) {
     where.push("d.kind = @kind");
     params.kind = kind;
@@ -259,11 +260,11 @@ export function listDumps({ q, kind, topic, limit = 200 }: ListOptions = {}): Du
     params.fts = fts;
     sql = `SELECT d.* FROM dumps_fts f JOIN dumps d ON d.rowid = f.rowid
            WHERE dumps_fts MATCH @fts ${where.length ? `AND ${where.join(" AND ")}` : ""}
-           ORDER BY bm25(dumps_fts, 10.0, 4.0, 1.0, 4.0, 3.0, 6.0, 2.0, 2.0, 2.0), d.created_at DESC
-           LIMIT @limit`;
+           ORDER BY bm25(dumps_fts, 10.0, 4.0, 1.0, 4.0, 3.0, 6.0, 2.0, 2.0, 2.0), d.created_at DESC, d.id
+           LIMIT @limit OFFSET @offset`;
   } else {
     sql = `SELECT d.* FROM dumps d ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
-           ORDER BY d.created_at DESC LIMIT @limit`;
+           ORDER BY d.created_at DESC, d.id LIMIT @limit OFFSET @offset`;
   }
   return (db().prepare(sql).all(params) as Row[]).map(toDump);
 }

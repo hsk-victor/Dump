@@ -20,7 +20,7 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
   const body = await req.json().catch(() => ({}));
 
   if (body.reprocess) {
-    const dump = updateDump(id, { status: "processing", topicLocked: false });
+    const dump = updateDump(id, { status: "processing" });
     after(() => enrichDump(id));
     return NextResponse.json(dump);
   }

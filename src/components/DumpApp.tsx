@@ -8,6 +8,8 @@ import Composer from "./Composer";
 import DumpCard from "./DumpCard";
 import Sidebar, { type Counts } from "./Sidebar";
 
+const PAGE_SIZE = 60;
+
 interface Toast {
   id: number;
   text: string;
@@ -26,6 +28,12 @@ export default function DumpApp() {
   const [counts, setCounts] = useState<Counts>({ total: 0, kinds: {}, topics: {} });
   const [loaded, setLoaded] = useState(false);
   const [search, setSearch] = useState(q);
+  const [hasMore, setHasMore] = useState(false);
+  // How many items to show; resets to one page whenever the filters change.
+  const filterKey = `${q}|${kind}|${topic}`;
+  const [page, setPage] = useState({ key: filterKey, limit: PAGE_SIZE });
+  const limit = page.key === filterKey ? page.limit : PAGE_SIZE;
+  const lastSyncedQ = useRef(q);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const pendingToasts = useRef(new Set<string>());
   const searchRef = useRef<HTMLInputElement>(null);
@@ -55,10 +63,12 @@ export default function DumpApp() {
     if (q) sp.set("q", q);
     if (kind) sp.set("kind", kind);
     if (topic) sp.set("topic", topic);
+    sp.set("limit", String(limit));
     const res = await fetch(`/api/dumps?${sp}`, { cache: "no-store" });
     if (!res.ok) return;
-    const data = (await res.json()) as { items: Dump[]; counts: Counts };
+    const data = (await res.json()) as { items: Dump[]; hasMore: boolean; counts: Counts };
     setItems(data.items);
+    setHasMore(data.hasMore);
     setCounts(data.counts);
     setLoaded(true);
 
@@ -68,16 +78,27 @@ export default function DumpApp() {
         toast(`Filed under ${topicMeta(d.topic).label} · ${kindMeta(d.kind).singular}`);
       }
     }
-  }, [q, kind, topic, toast]);
+  }, [q, kind, topic, limit, toast]);
 
   useEffect(() => {
     load();
   }, [load]);
 
+  // If the URL's search changes from outside (Back/Forward, a link), show it in the box.
+  useEffect(() => {
+    if (q === lastSyncedQ.current) return;
+    lastSyncedQ.current = q;
+    setSearch(q);
+  }, [q]);
+
   // Debounced search-as-you-type, kept in the URL so searches are shareable/bookmarkable.
   useEffect(() => {
-    if (search === q) return;
-    const t = setTimeout(() => setFilter({ q: search.trim() || null }), 200);
+    const next = search.trim();
+    if (next === q) return;
+    const t = setTimeout(() => {
+      lastSyncedQ.current = next;
+      setFilter({ q: next || null });
+    }, 200);
     return () => clearTimeout(t);
   }, [search, q, setFilter]);
 
@@ -240,6 +261,17 @@ export default function DumpApp() {
                 onTag={(t) => setSearch(t)}
               />
             ))}
+          </div>
+        )}
+        {hasMore && (
+          <div className="mt-6 flex justify-center">
+            <button
+              type="button"
+              onClick={() => setPage({ key: filterKey, limit: limit + PAGE_SIZE })}
+              className="rounded-xl border border-stone-200 bg-white px-5 py-2 text-sm font-medium text-stone-700 shadow-sm hover:bg-stone-50"
+            >
+              Load more
+            </button>
           </div>
         )}
       </main>

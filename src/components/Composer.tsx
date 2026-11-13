@@ -138,7 +138,10 @@ export default function Composer({ onDump }: Props) {
           type="file"
           accept="image/png,image/jpeg,image/gif,image/webp,image/avif"
           className="hidden"
-          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+          onChange={(e) => {
+            setFile(e.target.files?.[0] ?? null);
+            e.target.value = "";
+          }}
         />
         <span className="hidden text-xs text-stone-400 sm:inline">Enter to dump · Shift+Enter for a new line · paste or drop images</span>
         <button

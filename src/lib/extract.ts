@@ -1,6 +1,7 @@
 import * as cheerio from "cheerio";
-import dns from "node:dns/promises";
+import dns from "node:dns";
 import net from "node:net";
+import { Agent, fetch as undiciFetch } from "undici";
 import { domainOf, kindFromUrl } from "./detect";
 import type { Kind } from "./taxonomy";
 
@@ -12,42 +13,100 @@ export interface Extracted {
   imageUrl: string | null;
   siteName: string | null;
   author: string | null;
+  /** True when no request for this URL got any HTTP response (network error, timeout, blocked). */
+  unreachable: boolean;
 }
 
 const UA = "Mozilla/5.0 (compatible; DumpBot/0.1; +https://github.com/hsk-victor/Dump)";
 const TIMEOUT_MS = 8000;
 const MAX_BYTES = 2_000_000;
 
-function isPrivateIp(ip: string): boolean {
-  if (net.isIPv4(ip)) {
-    const [a, b] = ip.split(".").map(Number);
-    return a === 10 || a === 127 || a === 0 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127);
-  }
-  const v6 = ip.toLowerCase();
-  if (v6.startsWith("::ffff:")) return isPrivateIp(v6.slice(7));
-  return v6 === "::1" || v6 === "::" || v6.startsWith("fc") || v6.startsWith("fd") || v6.startsWith("fe80");
+function isPrivateIpv4(ip: string): boolean {
+  const [a, b] = ip.split(".").map(Number);
+  return (
+    a === 0 ||
+    a === 10 ||
+    a === 127 ||
+    a >= 224 ||
+    (a === 100 && b >= 64 && b <= 127) ||
+    (a === 169 && b === 254) ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 168) ||
+    (a === 198 && (b === 18 || b === 19))
+  );
 }
 
-/** Refuse to fetch internal network addresses (basic SSRF guard). */
-async function assertPublicUrl(url: string) {
+/** Expands any valid IPv6 spelling (compressed, embedded IPv4, zone id) into its 8 16-bit words. */
+function ipv6Words(ip: string): number[] | null {
+  let s = ip.toLowerCase().split("%")[0];
+  const v4Tail = s.match(/^(.*:)(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
+  if (v4Tail) {
+    const [a, b, c, d] = v4Tail.slice(2).map(Number);
+    s = `${v4Tail[1]}${((a << 8) | b).toString(16)}:${((c << 8) | d).toString(16)}`;
+  }
+  const halves = s.split("::");
+  if (halves.length > 2) return null;
+  const head = halves[0] ? halves[0].split(":") : [];
+  const tail = halves.length === 2 && halves[1] ? halves[1].split(":") : [];
+  const fill = 8 - head.length - tail.length;
+  if (halves.length === 1 ? fill !== 0 : fill < 1) return null;
+  const words = [...head, ...Array(halves.length === 2 ? fill : 0).fill("0"), ...tail].map((w) => (/^[0-9a-f]{1,4}$/.test(w) ? parseInt(w, 16) : NaN));
+  return words.some(Number.isNaN) ? null : words;
+}
+
+const wordsToIpv4 = (hi: number, lo: number) => `${hi >> 8}.${hi & 255}.${lo >> 8}.${lo & 255}`;
+
+export function isPrivateIp(ip: string): boolean {
+  if (net.isIPv4(ip)) return isPrivateIpv4(ip);
+  const w = ipv6Words(ip);
+  if (!w) return true;
+  const zeros = (n: number) => w.slice(0, n).every((x) => x === 0);
+  // IPv4-mapped (::ffff:a.b.c.d), IPv4-compatible (::a.b.c.d, incl. :: and ::1), NAT64 (64:ff9b::a.b.c.d), 6to4 (2002:AABB:CCDD::).
+  if ((zeros(5) && w[5] === 0xffff) || zeros(6)) return isPrivateIpv4(wordsToIpv4(w[6], w[7]));
+  if (w[0] === 0x64 && w[1] === 0xff9b && w.slice(2, 6).every((x) => x === 0)) return isPrivateIpv4(wordsToIpv4(w[6], w[7]));
+  if (w[0] === 0x2002) return isPrivateIpv4(wordsToIpv4(w[1], w[2]));
+  return (w[0] & 0xfe00) === 0xfc00 || (w[0] & 0xffc0) === 0xfe80 || (w[0] & 0xffc0) === 0xfec0 || (w[0] & 0xff00) === 0xff00;
+}
+
+const allowPrivate = () => process.env.DUMP_ALLOW_PRIVATE_URLS === "1";
+
+/**
+ * Basic SSRF guard. IP-literal hosts are checked here; hostnames are checked at connect time by
+ * `guardedLookup`, so the address we validate is the address we actually connect to (no DNS rebinding).
+ */
+function assertPublicUrl(url: string) {
   const u = new URL(url);
   if (!["http:", "https:"].includes(u.protocol)) throw new Error("Only http(s) URLs are supported");
-  if (process.env.DUMP_ALLOW_PRIVATE_URLS === "1") return;
   const host = u.hostname.replace(/^\[|\]$/g, "");
-  const addrs = net.isIP(host) ? [{ address: host }] : await dns.lookup(host, { all: true });
-  if (addrs.some((a) => isPrivateIp(a.address))) throw new Error("Refusing to fetch a private network address");
+  if (!allowPrivate() && net.isIP(host) && isPrivateIp(host)) throw new Error("Refusing to fetch a private network address");
 }
 
-async function fetchWithTimeout(url: string, init: RequestInit = {}): Promise<Response> {
+type LookupCallback = (err: NodeJS.ErrnoException | null, address: string | dns.LookupAddress[], family?: number) => void;
+
+function guardedLookup(hostname: string, options: dns.LookupOptions, callback: LookupCallback) {
+  dns.lookup(hostname, { ...options, all: true }, (err, addrs) => {
+    if (err) return callback(err, []);
+    if (!allowPrivate() && addrs.some((a) => isPrivateIp(a.address))) {
+      return callback(Object.assign(new Error(`Refusing to fetch a private network address (${hostname})`), { code: "EPRIVATE" }), []);
+    }
+    if (options.all) return callback(null, addrs);
+    if (!addrs.length) return callback(Object.assign(new Error(`No address for ${hostname}`), { code: "ENOTFOUND" }), []);
+    callback(null, addrs[0].address, addrs[0].family);
+  });
+}
+
+const dispatcher = new Agent({ connect: { lookup: guardedLookup as never } });
+
+async function fetchWithTimeout(url: string, init: { headers?: Record<string, string> } = {}): Promise<Response> {
   let current = url;
   for (let hop = 0; hop < 5; hop++) {
-    await assertPublicUrl(current);
-    const res = await fetch(current, {
-      ...init,
+    assertPublicUrl(current);
+    const res = (await undiciFetch(current, {
+      dispatcher,
       redirect: "manual",
       signal: AbortSignal.timeout(TIMEOUT_MS),
       headers: { "user-agent": UA, "accept-language": "en;q=0.9,*;q=0.5", ...(init.headers ?? {}) },
-    });
+    })) as unknown as Response;
     const location = res.headers.get("location");
     if (res.status >= 300 && res.status < 400 && location) {
       res.body?.cancel().catch(() => {});
@@ -98,15 +157,17 @@ function oembedEndpoint(url: string): string | null {
   return null;
 }
 
-async function fetchOEmbed(url: string): Promise<OEmbed | null> {
+async function fetchOEmbed(url: string): Promise<{ data: OEmbed | null; reached: boolean } | null> {
   const endpoint = oembedEndpoint(url);
   if (!endpoint) return null;
+  let reached = false;
   try {
     const res = await fetchWithTimeout(endpoint, { headers: { accept: "application/json" } });
-    if (!res.ok) return null;
-    return (await res.json()) as OEmbed;
+    reached = true;
+    if (!res.ok) return { data: null, reached };
+    return { data: (await res.json()) as OEmbed, reached };
   } catch {
-    return null;
+    return { data: null, reached };
   }
 }
 
@@ -191,7 +252,9 @@ function kindFromMeta(meta: PageMeta, wordCount: number): Kind | null {
 export async function extractUrl(url: string): Promise<Extracted> {
   const urlKind = kindFromUrl(url);
   const host = domainOf(url) ?? "";
-  const oembed = await fetchOEmbed(url);
+  const oembedResult = await fetchOEmbed(url);
+  const oembed = oembedResult?.data ?? null;
+  let reached = oembedResult?.reached ?? false;
 
   let page: PageMeta | null = null;
   let contentType = "";
@@ -200,6 +263,7 @@ export async function extractUrl(url: string): Promise<Extracted> {
   if (!isX) {
     try {
       const res = await fetchWithTimeout(url, { headers: { accept: "text/html,application/xhtml+xml,image/*;q=0.8,*/*;q=0.5" } });
+      reached = true;
       contentType = res.headers.get("content-type") ?? "";
       finalUrl = res.url || url;
       if (res.ok && /html|xml/.test(contentType)) page = parseHtml(await readLimited(res), finalUrl);
@@ -210,10 +274,10 @@ export async function extractUrl(url: string): Promise<Extracted> {
   }
 
   if (contentType.startsWith("image/")) {
-    return { kind: "image", title: decodeURIComponent(new URL(url).pathname.split("/").pop() || "Image"), description: null, content: null, imageUrl: url, siteName: host, author: null };
+    return { kind: "image", title: decodeURIComponent(new URL(url).pathname.split("/").pop() || "Image"), description: null, content: null, imageUrl: url, siteName: host, author: null, unreachable: false };
   }
   if (contentType.startsWith("video/")) {
-    return { kind: "video", title: null, description: null, content: null, imageUrl: null, siteName: host, author: null };
+    return { kind: "video", title: null, description: null, content: null, imageUrl: null, siteName: host, author: null, unreachable: false };
   }
 
   const embedText = textFromEmbedHtml(oembed?.html);
@@ -230,6 +294,7 @@ export async function extractUrl(url: string): Promise<Extracted> {
       imageUrl: null,
       siteName: "X",
       author,
+      unreachable: !reached,
     };
   }
 
@@ -241,5 +306,6 @@ export async function extractUrl(url: string): Promise<Extracted> {
     imageUrl: oembed?.thumbnail_url ?? page?.imageUrl ?? null,
     siteName: page?.siteName ?? oembed?.provider_name ?? host,
     author: oembed?.author_name ?? page?.author ?? null,
+    unreachable: !reached,
   };
 }

@@ -53,3 +53,22 @@ describe("titleFromUrl", () => {
     expect(titleFromUrl("https://www.imdb.com/title/tt0111161/")).toBe("imdb.com");
   });
 });
+
+describe("parseInput parentheses", () => {
+  it("keeps a closing parenthesis that belongs to the URL", () => {
+    expect(parseInput("https://en.wikipedia.org/wiki/Function_(mathematics)")).toMatchObject({
+      type: "url",
+      url: "https://en.wikipedia.org/wiki/Function_(mathematics)",
+    });
+  });
+
+  it("drops a parenthesis that wraps the URL in prose", () => {
+    expect(parseInput("worth a read (https://example.com/post).")).toMatchObject({
+      type: "url",
+      url: "https://example.com/post",
+    });
+    expect(parseInput("see (https://en.wikipedia.org/wiki/Function_(mathematics))")).toMatchObject({
+      url: "https://en.wikipedia.org/wiki/Function_(mathematics)",
+    });
+  });
+});

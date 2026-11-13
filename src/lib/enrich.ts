@@ -1,5 +1,5 @@
 import { classifyHeuristic } from "./classify";
-import { getDump, updateDump, type Dump } from "./db";
+import { db, getDump, updateDump, type Dump } from "./db";
 import { extractUrl } from "./extract";
 import { titleFromUrl } from "./detect";
 import { classifyWithAi } from "./llm";
@@ -16,6 +16,19 @@ export function noteTitle(text: string): string {
 }
 
 /**
+ * Writes enrichment results, re-reading the topic lock in the same transaction so a topic the user
+ * picked while enrichment was running is never overwritten.
+ */
+function commit(id: string, patch: Partial<Dump>): Dump | null {
+  return db().transaction(() => {
+    const current = getDump(id);
+    if (!current) return null;
+    const { topic, classifiedBy, ...rest } = patch;
+    return updateDump(id, current.topicLocked ? rest : { ...rest, topic, classifiedBy });
+  })();
+}
+
+/**
  * Fills in a freshly saved dump: fetch metadata for links, then file it under a topic.
  * Runs in the background after the dump has already been saved and shown to the user.
  */
@@ -25,8 +38,10 @@ export async function enrichDump(id: string): Promise<Dump | null> {
 
   try {
     let fields: Partial<Dump> = {};
+    let unreachable = false;
     if (dump.url) {
       const ex = await extractUrl(dump.url);
+      unreachable = ex.unreachable;
       fields = {
         kind: ex.kind,
         title: dump.title ?? truncate(ex.title, 300) ?? titleFromUrl(dump.url),
@@ -54,18 +69,11 @@ export async function enrichDump(id: string): Promise<Dump | null> {
       classification = { topic: rules.topic, tags: rules.tags, classifiedBy: "rules" };
     }
 
-    if (dump.topicLocked) {
-      delete classification.topic;
-      delete classification.classifiedBy;
-    }
-    return updateDump(id, { ...fields, ...classification, status: "ready" });
+    // Couldn't reach the site at all: keep the fallback title/topic but mark it failed so it can be retried.
+    return commit(id, { ...fields, ...classification, status: unreachable ? "failed" : "ready" });
   } catch (err) {
     console.warn(`[dump] enrich failed for ${id}:`, (err as Error).message);
     const rules = classifyHeuristic(dump);
-    return updateDump(id, {
-      status: "failed",
-      ...(dump.topicLocked ? {} : { topic: rules.topic, classifiedBy: "rules" as const }),
-      tags: rules.tags,
-    });
+    return commit(id, { status: "failed", topic: rules.topic, classifiedBy: "rules", tags: rules.tags });
   }
 }

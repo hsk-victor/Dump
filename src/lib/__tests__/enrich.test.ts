@@ -1,0 +1,48 @@
+import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+
+const dir = fs.mkdtempSync(path.join(os.tmpdir(), "dump-enrich-"));
+process.env.DUMP_DATA_DIR = dir;
+
+const extractUrl = vi.fn();
+vi.mock("../extract", () => ({ extractUrl: (url: string) => extractUrl(url) }));
+vi.mock("../llm", () => ({ classifyWithAi: async () => null }));
+
+const db = await import("../db");
+const { enrichDump } = await import("../enrich");
+
+const page = (over: Record<string, unknown> = {}) => ({
+  kind: "article",
+  title: "Easy weeknight pasta recipe",
+  description: "Dinner in 20 minutes with garlic and parmesan",
+  content: null,
+  imageUrl: null,
+  siteName: "Example",
+  author: null,
+  unreachable: false,
+  ...over,
+});
+
+describe("enrichDump", () => {
+  beforeEach(() => extractUrl.mockReset());
+  afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+  it("keeps a topic the user picked while enrichment was running", async () => {
+    const d = db.createDump({ kind: "link", url: "https://example.com/pasta", domain: "example.com" });
+    extractUrl.mockImplementation(async () => {
+      db.updateDump(d.id, { topic: "travel", topicLocked: true, classifiedBy: "you" });
+      return page();
+    });
+    const out = await enrichDump(d.id);
+    expect(out).toMatchObject({ topic: "travel", classifiedBy: "you", status: "ready", title: "Easy weeknight pasta recipe" });
+  });
+
+  it("marks unreachable links failed (retryable) but still files them", async () => {
+    const d = db.createDump({ kind: "link", url: "https://example.com/spinach-and-feta-pasta-recipe", domain: "example.com" });
+    extractUrl.mockResolvedValue(page({ title: null, description: null, siteName: "example.com", unreachable: true }));
+    const out = await enrichDump(d.id);
+    expect(out).toMatchObject({ status: "failed", topic: "food", title: "Spinach and feta pasta recipe" });
+  });
+});

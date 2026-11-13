@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseHtml } from "../extract";
+import { parseHtml, isPrivateIp } from "../extract";
 
 describe("parseHtml", () => {
   it("reads Open Graph metadata and resolves relative images", () => {
@@ -26,4 +26,15 @@ describe("parseHtml", () => {
   it("falls back to <title>", () => {
     expect(parseHtml("<title> Hello </title>", "https://e.com").title).toBe("Hello");
   });
+});
+
+describe("isPrivateIp", () => {
+  it.each(["127.0.0.1", "10.1.2.3", "192.168.0.1", "169.254.169.254", "0.0.0.0", "::1", "::", "fd00::1", "fe80::1", "::ffff:127.0.0.1", "::ffff:7f00:1", "0:0:0:0:0:ffff:a9fe:a9fe", "::7f00:1", "64:ff9b::7f00:1", "2002:7f00:1::", "not-an-ip"])(
+    "blocks %s",
+    (ip) => expect(isPrivateIp(ip)).toBe(true),
+  );
+
+  it.each(["8.8.8.8", "1.1.1.1", "2606:4700:4700::1111", "::ffff:8.8.8.8", "::ffff:808:808"])("allows %s", (ip) =>
+    expect(isPrivateIp(ip)).toBe(false),
+  );
 });

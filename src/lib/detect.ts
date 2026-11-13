@@ -7,6 +7,17 @@ export type ParsedInput =
   | { type: "url"; url: string; note: string | null }
   | { type: "note"; text: string };
 
+/** Drops sentence punctuation after a URL, keeping a closing ")" that balances one inside it (e.g. Wikipedia links). */
+function trimTrailingPunctuation(url: string): string {
+  let out = url;
+  for (;;) {
+    const last = out.slice(-1);
+    if (/[,.;:!?'"]/.test(last)) out = out.slice(0, -1);
+    else if (last === ")" && (out.match(/\)/g)?.length ?? 0) > (out.match(/\(/g)?.length ?? 0)) out = out.slice(0, -1);
+    else return out;
+  }
+}
+
 /** Splits raw dump text into either a link (plus optional note) or a plain note. */
 export function parseInput(raw: string): ParsedInput {
   const text = raw.trim();
@@ -18,7 +29,7 @@ export function parseInput(raw: string): ParsedInput {
 
   const match = text.match(URL_RE);
   if (match) {
-    const url = match[0].replace(/[),.;!?]+$/, "");
+    const url = trimTrailingPunctuation(match[0]);
     const rest = (text.slice(0, match.index) + " " + text.slice((match.index ?? 0) + match[0].length))
       .replace(/\s+/g, " ")
       .trim();

@@ -39,4 +39,10 @@ describe("db + search", () => {
   it("ignores FTS syntax characters in queries", () => {
     expect(() => db.listDumps({ q: '"unbalanced AND (' })).not.toThrow();
   });
+
+  it("pages through results with limit and offset", () => {
+    const all = db.listDumps();
+    const pages = [...db.listDumps({ limit: 2 }), ...db.listDumps({ limit: 2, offset: 2 })];
+    expect(pages.map((d) => d.id)).toEqual(all.map((d) => d.id));
+  });
 });
