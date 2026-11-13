@@ -71,12 +71,6 @@ button {
 :is(.d-icon-btn, .d-dock-icon, .d-actions button, .d-ghost-btn, .d-retry, .d-bookmarklet, .d-brand, .d-topic, .d-dock-btn):active {
   scale: 0.97;
 }
-@media (hover: none) {
-  /* No hover on touch: keep card actions reachable instead of stuck-open. */
-  .d-actions {
-    opacity: 1;
-  }
-}
 @media (pointer: coarse) {
   /* 16px minimum keeps iOS from auto-zooming the page on input focus. */
   .d-search input,
@@ -669,6 +663,12 @@ button {
 }
 .d-card:focus-within .d-actions {
   opacity: 1;
+}
+@media (hover: none) {
+  /* No hover on touch: keep card actions reachable instead of stuck-open. */
+  .d-actions {
+    opacity: 1;
+  }
 }
 .d-actions select {
   max-width: 5.5rem;
