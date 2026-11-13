@@ -169,6 +169,25 @@ describe("enrichDump", () => {
     expect(out?.tags.length).toBeGreaterThan(0);
   });
 
+  it("queues a second run instead of letting a stale snapshot overwrite new metadata", async () => {
+    const d = db.createDump({ kind: "link", url: "https://example.com/clip", domain: "example.com" });
+    let resolveFirst!: (v: unknown) => void;
+    extractUrl.mockImplementationOnce(() => new Promise((r) => (resolveFirst = r)));
+    extractUrl.mockResolvedValueOnce(page({ title: null, description: null, unreachable: true }));
+    const first = enrichDump(d.id);
+    // A duplicate lands mid-enrich, backfilling the metadata the first fetch never saw.
+    db.updateDump(d.id, { title: "A reel", description: "client og caption", imageUrl: "https://cdn.example.com/t.jpg", status: "processing" });
+    const second = enrichDump(d.id);
+    await new Promise((r) => setTimeout(r, 0)); // let the first run reach its fetch
+    resolveFirst(page({ title: null, description: null }));
+    const [a, b] = await Promise.all([first, second]);
+    expect(extractUrl).toHaveBeenCalledTimes(2);
+    // The stale first run can't erase what the duplicate saved; the queued run re-reads and keeps it.
+    expect(a).toMatchObject({ description: "client og caption" });
+    expect(b).toMatchObject({ title: "A reel", description: "client og caption", imageUrl: "https://cdn.example.com/t.jpg" });
+    expect(db.getDump(d.id)).toMatchObject({ title: "A reel", description: "client og caption", imageUrl: "https://cdn.example.com/t.jpg" });
+  });
+
   it("doesn't identify plain articles or notes", async () => {
     const d = db.createDump({ kind: "link", url: "https://example.com/p", domain: "example.com" });
     extractUrl.mockResolvedValueOnce(page());
