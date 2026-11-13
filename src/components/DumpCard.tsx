@@ -51,7 +51,7 @@ export default function DumpCard({ dump, onTopic, onDelete, onRetry }: Props) {
   const postText = kind === "post" ? (dump.description ?? dump.summary) : null;
   const author = kind === "post" ? postAuthor(dump) : null;
   const showMedia = !!dump.imageUrl && !imgFailed;
-  const mediaOnly = kind === "image" && showMedia;
+  const mediaOnly = kind === "image" && showMedia && !dump.note;
   const filedBy = dump.classifiedBy === "you" ? "Filed by you" : dump.classifiedBy === "ai" ? "Filed by AI" : "Filed automatically";
 
   const actions = (
