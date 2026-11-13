@@ -65,4 +65,13 @@ describe("enrichDump", () => {
     extractUrl.mockResolvedValueOnce(page());
     expect(await enrichDump(d.id)).toMatchObject({ title: "My pasta bookmark" });
   });
+
+  it("lets a reprocess pick up a page title when the first fetch had none", async () => {
+    const d = db.createDump({ kind: "link", url: "https://example.com/quick-garlic-noodles", domain: "example.com" });
+    extractUrl.mockResolvedValueOnce(page({ title: null, description: null }));
+    expect(await enrichDump(d.id)).toMatchObject({ status: "ready", title: null, content: "Quick garlic noodles" });
+    expect(db.listDumps({ q: "garlic noodles" }).map((x) => x.id)).toContain(d.id);
+    extractUrl.mockResolvedValueOnce(page({ title: "Garlic Noodles in 10 Minutes" }));
+    expect(await enrichDump(d.id)).toMatchObject({ title: "Garlic Noodles in 10 Minutes" });
+  });
 });

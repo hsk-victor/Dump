@@ -42,13 +42,14 @@ export async function enrichDump(id: string): Promise<Dump | null> {
     if (dump.url) {
       const ex = await extractUrl(dump.url);
       unreachable = ex.unreachable;
-      // If the site was unreachable, leave the title empty so a later retry can fill it in;
-      // the card shows the URL-derived title meanwhile.
+      const title = dump.title ?? truncate(ex.title, 300);
+      // Only user-supplied or fetched titles are stored, so a later retry can always fill one in.
+      // Without one, the card shows the URL-derived title and its words go into `content` to stay searchable.
       fields = {
         kind: ex.kind,
-        title: dump.title ?? truncate(ex.title, 300) ?? (unreachable ? null : titleFromUrl(dump.url)),
+        title,
         description: truncate(ex.description, 1000),
-        content: ex.content,
+        content: ex.content ?? (title ? null : titleFromUrl(dump.url)),
         imageUrl: ex.imageUrl,
         siteName: ex.siteName,
         author: ex.author,
@@ -65,14 +66,14 @@ export async function enrichDump(id: string): Promise<Dump | null> {
         tags: ai.tags,
         summary: ai.summary,
         classifiedBy: "ai",
-        ...(ai.title && (!merged.title || merged.kind === "image") ? { title: ai.title } : {}),
+        ...(ai.title && !dump.url && (!merged.title || merged.kind === "image") ? { title: ai.title } : {}),
       };
     } else {
       const rules = classifyHeuristic(forClassifying);
       classification = { topic: rules.topic, tags: rules.tags, classifiedBy: "rules" };
     }
 
-    // Couldn't reach the site at all: keep the fallback title/topic but mark it failed so it can be retried.
+    // Couldn't reach the site at all: keep the fallback topic but mark it failed so it can be retried.
     return commit(id, { ...fields, ...classification, status: unreachable ? "failed" : "ready" });
   } catch (err) {
     console.warn(`[dump] enrich failed for ${id}:`, (err as Error).message);
