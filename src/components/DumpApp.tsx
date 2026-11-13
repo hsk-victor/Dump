@@ -40,6 +40,8 @@ export default function DumpApp() {
   const bookmarklet = useRef<HTMLAnchorElement>(null);
   const [density, setDensity] = useState(260);
   const [dark, setDark] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const settingsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     try {
@@ -52,6 +54,22 @@ export default function DumpApp() {
     const code = `javascript:(()=>{const m=n=>{const e=document.querySelector('meta[property="'+n+'"],meta[name="'+n+'"]');return e?e.content:''};const u=v=>{try{return v?new URL(v,location.href).href:''}catch(x){return''}};window.open('${window.location.origin}/dump?url='+encodeURIComponent(location.href)+'&title='+encodeURIComponent(document.title)+'&desc='+encodeURIComponent(m('og:description')||m('twitter:description')||m('description'))+'&img='+encodeURIComponent(u(m('og:image')||m('twitter:image'))),'dump','width=360,height=220')})()`;
     bookmarklet.current?.setAttribute("href", code);
   }, []);
+
+  useEffect(() => {
+    if (!settingsOpen) return;
+    const close = (e: MouseEvent) => {
+      if (!settingsRef.current?.contains(e.target as Node)) setSettingsOpen(false);
+    };
+    const esc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSettingsOpen(false);
+    };
+    document.addEventListener("mousedown", close);
+    document.addEventListener("keydown", esc);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      document.removeEventListener("keydown", esc);
+    };
+  }, [settingsOpen]);
 
   function toggleDark() {
     const mode = dark ? "light" : "dark";
@@ -237,6 +255,10 @@ export default function DumpApp() {
     <div className="d-page">
       <header className="d-header">
         <div className="d-header-row">
+          <button className="d-brand" onClick={() => setFilter({ q: null, kind: null, topic: null })} aria-label="Dump home">
+            <span className="d-wordmark">dump</span>
+            <span className="d-count">{counts.total}</span>
+          </button>
           <SectionNav
             counts={counts}
             topic={topic}
@@ -258,20 +280,6 @@ export default function DumpApp() {
                     </svg>
                   </button>
                 )}
-                <span className="d-density-wrap" title="Card size">
-                  <span className="d-density-icon small" aria-hidden />
-                  <input
-                    type="range"
-                    min={200}
-                    max={440}
-                    step={20}
-                    value={density}
-                    onChange={(e) => changeDensity(Number(e.target.value))}
-                    aria-label="Card size"
-                    className="d-density"
-                  />
-                  <span className="d-density-icon" aria-hidden />
-                </span>
               </>
             }
           />
@@ -298,18 +306,53 @@ export default function DumpApp() {
           </label>
 
           <div className="d-header-tools">
-            <button className="d-icon-btn" onClick={toggleDark} aria-label={dark ? "Light mode" : "Dark mode"} title={dark ? "Light mode" : "Dark mode"}>
-              {dark ? (
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-                  <circle cx="12" cy="12" r="4" />
-                  <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
-                </svg>
-              ) : (
+            <div className="d-settings" ref={settingsRef}>
+              <button
+                className="d-icon-btn"
+                onClick={() => setSettingsOpen((o) => !o)}
+                aria-label="Settings"
+                title="Settings"
+                aria-expanded={settingsOpen}
+              >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" />
+                  <path d="M4 7h10M18 7h2M4 17h4M12 17h8" />
+                  <circle cx="16" cy="7" r="2.2" />
+                  <circle cx="10" cy="17" r="2.2" />
                 </svg>
+              </button>
+              {settingsOpen && (
+                <div className="d-settings-pop">
+                  <div className="d-settings-row">
+                    <span className="d-settings-label">Theme</span>
+                    <div className="d-seg">
+                      <button className="d-seg-btn" aria-pressed={!dark} onClick={() => !dark || toggleDark()}>
+                        Light
+                      </button>
+                      <button className="d-seg-btn" aria-pressed={dark} onClick={() => dark || toggleDark()}>
+                        Dark
+                      </button>
+                    </div>
+                  </div>
+                  <div className="d-settings-row">
+                    <span className="d-settings-label">Card size</span>
+                    <span className="d-density-wrap">
+                      <span className="d-density-icon small" aria-hidden />
+                      <input
+                        type="range"
+                        min={200}
+                        max={440}
+                        step={20}
+                        value={density}
+                        onChange={(e) => changeDensity(Number(e.target.value))}
+                        aria-label="Card size"
+                        className="d-density"
+                      />
+                      <span className="d-density-icon" aria-hidden />
+                    </span>
+                  </div>
+                </div>
               )}
-            </button>
+            </div>
           </div>
         </div>
       </header>

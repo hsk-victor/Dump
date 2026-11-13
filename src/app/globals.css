@@ -67,7 +67,7 @@ button {
 .d-bookmarklet {
   transition: scale 0.16s var(--ease-out);
 }
-:is(.d-icon-btn, .d-dock-icon, .d-actions button, .d-ghost-btn, .d-retry, .d-bookmarklet, .d-topic, .d-dock-btn):active {
+:is(.d-icon-btn, .d-dock-icon, .d-actions button, .d-ghost-btn, .d-retry, .d-bookmarklet, .d-brand, .d-topic, .d-dock-btn, .d-seg-btn):active {
   scale: 0.97;
 }
 /* ── Header ── */
@@ -85,6 +85,26 @@ button {
   flex-wrap: wrap;
   gap: 0.75rem 1rem;
   padding: 0.7rem 1.25rem;
+}
+.d-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+.d-wordmark {
+  font-weight: 800;
+  font-size: 1.1rem;
+  letter-spacing: -0.045em;
+}
+.d-count {
+  font-size: 0.7rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+  background: var(--hairline);
 }
 .d-search {
   flex: 0 1 15rem;
@@ -136,6 +156,58 @@ button {
   align-items: center;
   gap: 0.5rem;
   flex-shrink: 0;
+}
+.d-settings {
+  position: relative;
+}
+.d-settings-pop {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.5rem);
+  z-index: 40;
+  min-width: 15rem;
+  padding: 0.7rem 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  background: var(--surface);
+  border-radius: 14px;
+  box-shadow: var(--shadow-hover);
+  animation: d-pop 0.14s var(--ease-out);
+}
+@keyframes d-pop {
+  from { opacity: 0; transform: scale(0.96) translateY(-3px); }
+}
+.d-settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+}
+.d-settings-label {
+  font-size: 0.78rem;
+  font-weight: 550;
+  color: var(--ink-2);
+}
+.d-seg {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 8px;
+  background: var(--hairline);
+}
+.d-seg-btn {
+  padding: 0.25rem 0.65rem;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 550;
+  color: var(--muted);
+  cursor: pointer;
+}
+.d-seg-btn[aria-pressed="true"] {
+  color: var(--ink);
+  background: var(--surface);
+  box-shadow: 0 1px 3px rgb(0 0 0/0.12);
 }
 .d-density-wrap {
   display: flex;
@@ -818,7 +890,7 @@ button {
 /* Toasts are rendered by Sonner (mounted in DumpApp), styled via toastOptions. */
 
 @media (max-width: 720px) {
-  .d-density-wrap,
+  .d-count,
   .d-search kbd {
     display: none;
   }
@@ -898,5 +970,8 @@ button {
   .d-icon-btn.is-busy svg {
     animation: none;
     opacity: 0.5;
+  }
+  .d-settings-pop {
+    animation: none;
   }
 }
