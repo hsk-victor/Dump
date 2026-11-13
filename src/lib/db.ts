@@ -2,7 +2,7 @@ import Database from "better-sqlite3";
 import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import type { Kind, Topic } from "./taxonomy";
+import type { Kind, Subject, Topic } from "./taxonomy";
 
 export type Status = "processing" | "ready" | "failed";
 
@@ -21,6 +21,8 @@ export interface Dump {
   siteName: string | null;
   author: string | null;
   summary: string | null;
+  /** Identified subject for clips/images, e.g. {"type":"show","name":"Severance"}. JSON in the DB. */
+  subject: Subject | null;
   tags: string[];
   classifiedBy: "rules" | "ai" | "you" | null;
   topicLocked: boolean;
@@ -43,6 +45,7 @@ interface Row {
   site_name: string | null;
   author: string | null;
   summary: string | null;
+  subject: string | null;
   tags: string;
   classified_by: string | null;
   topic_locked: number;
@@ -69,6 +72,7 @@ CREATE TABLE IF NOT EXISTS dumps (
   site_name TEXT,
   author TEXT,
   summary TEXT,
+  subject TEXT,
   tags TEXT NOT NULL DEFAULT '[]',
   classified_by TEXT,
   topic_locked INTEGER NOT NULL DEFAULT 0,
@@ -109,6 +113,9 @@ export function db(): Database.Database {
     const conn = new Database(path.join(DATA_DIR, "dump.db"));
     conn.pragma("journal_mode = WAL");
     conn.exec(SCHEMA);
+    // Columns added after v1 land here for databases created before them.
+    const cols = conn.prepare("PRAGMA table_info(dumps)").all() as { name: string }[];
+    if (!cols.some((c) => c.name === "subject")) conn.exec("ALTER TABLE dumps ADD COLUMN subject TEXT");
     globalForDb.__dumpDb = conn;
   }
   return globalForDb.__dumpDb;
@@ -130,12 +137,23 @@ function toDump(r: Row): Dump {
     siteName: r.site_name,
     author: r.author,
     summary: r.summary,
+    subject: safeJsonObject(r.subject),
     tags: safeJsonArray(r.tags),
     classifiedBy: r.classified_by as Dump["classifiedBy"],
     topicLocked: r.topic_locked === 1,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
+}
+
+function safeJsonObject(s: string | null): Subject | null {
+  if (!s) return null;
+  try {
+    const v = JSON.parse(s);
+    return v && typeof v === "object" ? (v as Subject) : null;
+  } catch {
+    return null;
+  }
 }
 
 function safeJsonArray(s: string): string[] {
@@ -161,6 +179,7 @@ const COLUMN: Record<string, string> = {
   siteName: "site_name",
   author: "author",
   summary: "summary",
+  subject: "subject",
   tags: "tags",
   classifiedBy: "classified_by",
   topicLocked: "topic_locked",
@@ -174,6 +193,7 @@ function toColumns(patch: Patch): Record<string, unknown> {
     const col = COLUMN[key];
     if (!col || value === undefined) continue;
     if (key === "tags") out[col] = JSON.stringify(value);
+    else if (key === "subject") out[col] = value ? JSON.stringify(value) : null;
     else if (key === "topicLocked") out[col] = value ? 1 : 0;
     else out[col] = value;
   }

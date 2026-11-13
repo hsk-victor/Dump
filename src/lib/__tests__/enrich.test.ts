@@ -9,7 +9,11 @@ process.env.DUMP_DATA_DIR = dir;
 const extractUrl = vi.fn();
 vi.mock("../extract", () => ({ extractUrl: (url: string) => extractUrl(url) }));
 const classifyWithAi = vi.fn();
-vi.mock("../llm", () => ({ classifyWithAi: (input: unknown) => classifyWithAi(input) }));
+const identifySubject = vi.fn();
+vi.mock("../llm", () => ({
+  classifyWithAi: (input: unknown) => classifyWithAi(input),
+  identifySubject: (input: unknown) => identifySubject(input),
+}));
 
 const db = await import("../db");
 const { enrichDump, resortAll } = await import("../enrich");
@@ -26,10 +30,23 @@ const page = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
+const severance = (over: Record<string, unknown> = {}) => ({
+  type: "show",
+  name: "Severance",
+  year: 2022,
+  creator: "Dan Erickson",
+  genre: "sci-fi thriller",
+  description: "A clip of Mark and Helly in the elevator scene from the Apple TV+ series.",
+  confidence: 0.99,
+  model: "openai/gpt-6-luna-x",
+  ...over,
+});
+
 describe("enrichDump", () => {
   beforeEach(() => {
     extractUrl.mockReset();
     classifyWithAi.mockReset().mockResolvedValue(null);
+    identifySubject.mockReset().mockResolvedValue(null);
   });
   afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
@@ -94,6 +111,73 @@ describe("enrichDump", () => {
     const out = await enrichDump(d.id);
     expect(out).toMatchObject({ topic: "health", classifiedBy: "ai", status: "ready" });
     expect(out?.tags.length).toBeGreaterThan(0);
+  });
+
+  it("names a confident clip's subject, keeps it searchable, and feeds it to the AI", async () => {
+    const d = db.createDump({ kind: "video", url: "https://www.tiktok.com/@fan/video/1", domain: "tiktok.com" });
+    extractUrl.mockResolvedValueOnce(
+      page({
+        kind: "video",
+        title: null,
+        description: "mark and helly in the elevator scene still haunts me #lumon #appletv",
+        content: null,
+        siteName: "TikTok",
+        unreachable: true,
+      }),
+    );
+    identifySubject.mockResolvedValueOnce(severance());
+    classifyWithAi.mockResolvedValueOnce({ topic: "film", confidence: 0.95, model: "jev" });
+
+    const out = await enrichDump(d.id);
+    expect(identifySubject).toHaveBeenCalledOnce();
+    expect(out).toMatchObject({
+      status: "failed",
+      title: "Severance",
+      summary: "A clip of Mark and Helly in the elevator scene from the Apple TV+ series.",
+      subject: { type: "show", name: "Severance", year: 2022 },
+      topic: "film",
+    });
+    // The subject goes into Jev's state, its description feeds the rules, and it's searchable.
+    expect(classifyWithAi.mock.calls[0][0]).toMatchObject({
+      subject: { name: "Severance" },
+      description: expect.stringContaining("elevator scene"),
+    });
+    expect(db.listDumps({ q: "severance" }).map((x) => x.id)).toContain(d.id);
+    expect(db.listDumps({ q: "elevator" }).map((x) => x.id)).toContain(d.id);
+  });
+
+  it("identifies Instagram posts too, and keeps an unsure subject off the card", async () => {
+    const d = db.createDump({ kind: "post", url: "https://www.instagram.com/p/abc/", domain: "instagram.com" });
+    extractUrl.mockResolvedValueOnce(page({ kind: "post", title: null, description: null, siteName: "Instagram", unreachable: true }));
+    identifySubject.mockResolvedValueOnce(severance({ confidence: 0.3 }));
+
+    const out = await enrichDump(d.id);
+    expect(identifySubject).toHaveBeenCalledOnce();
+    // Stored for later, but the card keeps today's look: no invented title or dek.
+    expect(out).toMatchObject({ title: null, summary: null, subject: { name: "Severance", confidence: 0.3 } });
+    expect(classifyWithAi.mock.calls[0][0]?.subject).toBeNull();
+  });
+
+  it("lets the subject's description give an image-only dump its topic and tags", async () => {
+    const d = db.createDump({ kind: "image", title: "Image", imageUrl: "/api/files/x.jpg" });
+    identifySubject.mockResolvedValueOnce(
+      severance({ type: "food", name: "Miso ramen", year: null, creator: null, description: "A bowl of miso ramen with egg, scallions and noodles.", confidence: 0.9 }),
+    );
+
+    const out = await enrichDump(d.id);
+    expect(out).toMatchObject({ kind: "image", title: "Miso ramen", topic: "food" });
+    expect(out?.tags.length).toBeGreaterThan(0);
+  });
+
+  it("doesn't identify plain articles or notes", async () => {
+    const d = db.createDump({ kind: "link", url: "https://example.com/p", domain: "example.com" });
+    extractUrl.mockResolvedValueOnce(page());
+    await enrichDump(d.id);
+    expect(identifySubject).not.toHaveBeenCalled();
+
+    const n = db.createDump({ kind: "note", content: "remember the milk" });
+    await enrichDump(n.id);
+    expect(identifySubject).not.toHaveBeenCalled();
   });
 });
 

@@ -51,8 +51,9 @@ export default function DumpApp() {
       if (saved) setDensity(saved);
     } catch {}
     setDark(document.documentElement.dataset.mode === "dark");
-    // React refuses javascript: hrefs in JSX, so set it directly.
-    const code = `javascript:(()=>{window.open('${window.location.origin}/dump?url='+encodeURIComponent(location.href)+'&title='+encodeURIComponent(document.title),'dump','width=360,height=220')})()`;
+    // React refuses javascript: hrefs in JSX, so set it directly. Sends the page's og:description
+    // and og:image too — a logged-in Instagram/TikTok tab sees a caption and thumbnail the server can't fetch.
+    const code = `javascript:(()=>{const m=n=>{const e=document.querySelector('meta[property="'+n+'"],meta[name="'+n+'"]');return e?e.content:''};window.open('${window.location.origin}/dump?url='+encodeURIComponent(location.href)+'&title='+encodeURIComponent(document.title)+'&desc='+encodeURIComponent(m('og:description')||m('twitter:description')||m('description'))+'&img='+encodeURIComponent(m('og:image')||m('twitter:image')),'dump','width=360,height=220')})()`;
     bookmarklet.current?.setAttribute("href", code);
   }, []);
 

@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
       dump = file instanceof File && file.size > 0 ? await createFromFile(file, text) : createFromText(text);
     } else {
       const body = await req.json().catch(() => ({}));
-      dump = createFromText(String(body.text ?? ""), body.title);
+      dump = createFromText(String(body.text ?? ""), { title: body.title, description: body.description, imageUrl: body.imageUrl });
     }
     if (!("duplicate" in dump && dump.duplicate)) after(() => enrichDump(dump.id));
     return NextResponse.json(dump, { status: 201 });

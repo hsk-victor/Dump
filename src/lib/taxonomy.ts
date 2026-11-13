@@ -53,3 +53,49 @@ export function topicMeta(id: string) {
 export function kindMeta(id: string) {
   return KINDS.find((k) => k.id === id) ?? KINDS[KINDS.length - 2];
 }
+
+/** What a clip or image is about, identified by the vision model. */
+export const SUBJECT_TYPES = [
+  { id: "film", label: "Film" },
+  { id: "show", label: "TV series" },
+  { id: "music", label: "Music" },
+  { id: "book", label: "Book" },
+  { id: "game", label: "Game" },
+  { id: "food", label: "Food" },
+  { id: "place", label: "Place" },
+  { id: "product", label: "Product" },
+  { id: "person", label: "Person" },
+  { id: "other", label: "" },
+] as const;
+
+export type SubjectType = (typeof SUBJECT_TYPES)[number]["id"];
+
+export interface Subject {
+  type: SubjectType;
+  name: string;
+  year: number | null;
+  creator: string | null;
+  genre: string | null;
+  /** 1-2 sentence description; also stored in `summary` so it searches and shows as the dek. */
+  description: string | null;
+  confidence: number | null;
+  /** The versioned model that answered. */
+  model?: string | null;
+}
+
+export function isSubjectType(v: unknown): v is SubjectType {
+  return typeof v === "string" && (SUBJECT_TYPES as readonly { id: string }[]).some((t) => t.id === v);
+}
+
+export function subjectTypeMeta(id: string) {
+  return SUBJECT_TYPES.find((t) => t.id === id) ?? SUBJECT_TYPES[SUBJECT_TYPES.length - 1];
+}
+
+/** Below this confidence the card keeps its normal title instead of trusting the identification. */
+export const SUBJECT_MIN_CONFIDENCE = 0.7;
+
+/** Card headline for an identified subject, e.g. "Severance (2022) · TV series". */
+export function subjectLine(s: Subject): string {
+  const label = subjectTypeMeta(s.type).label;
+  return `${s.name}${s.year ? ` (${s.year})` : ""}${label ? ` · ${label}` : ""}`;
+}

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { Dump } from "@/lib/db";
-import { TOPICS, kindMeta, topicMeta } from "@/lib/taxonomy";
+import { SUBJECT_MIN_CONFIDENCE, subjectLine, TOPICS, kindMeta, topicMeta } from "@/lib/taxonomy";
 import { timeAgo } from "@/lib/format";
 import { titleFromUrl } from "@/lib/detect";
 
@@ -45,14 +45,18 @@ export default function DumpCard({ dump, onTopic, onDelete, onRetry }: Props) {
   const topic = topicMeta(dump.topic);
   const kind = dump.kind;
   const processing = dump.status === "processing";
-  const title = dump.title || (dump.url ? titleFromUrl(dump.url) : null);
+  const subject = dump.subject && (dump.subject.confidence ?? 0) >= SUBJECT_MIN_CONFIDENCE ? dump.subject : null;
+  // An identified subject headlines the card ("Severance (2022) · TV series"); the link stays on it.
+  const title = subject ? subjectLine(subject) : dump.title || (dump.url ? titleFromUrl(dump.url) : null);
   const href = dump.url ?? (kind === "image" ? dump.imageUrl : null);
   const site = dump.siteName && dump.siteName.length < 30 ? dump.siteName : dump.domain;
   const isXPost = kind === "post" && /(^|\.)(x|twitter)\.com$/.test(dump.domain ?? "");
   const postText = isXPost ? (dump.description ?? dump.summary) : null;
   const author = kind === "post" ? postAuthor(dump) : null;
   const showMedia = !!dump.imageUrl && !imgFailed;
-  const mediaOnly = kind === "image" && showMedia && !dump.note;
+  const mediaOnly = kind === "image" && showMedia && !dump.note && !subject;
+  // The identified description (summary) shows as the dek even under media; other deks stay text-only.
+  const dek = dump.summary ?? (!showMedia ? dump.description : null);
   const filedBy = dump.classifiedBy === "you" ? "Filed by you" : dump.classifiedBy === "ai" ? "Filed by AI" : "Filed automatically";
 
   const actions = (
@@ -169,7 +173,7 @@ export default function DumpCard({ dump, onTopic, onDelete, onRetry }: Props) {
                   title
                 )}
               </h3>
-              {!showMedia && (dump.summary ?? dump.description) && <p className="d-dek">{dump.summary ?? dump.description}</p>}
+              {dek && <p className="d-dek">{dek}</p>}
             </>
           )}
           {dump.note && <p className="d-annotation">{dump.note}</p>}

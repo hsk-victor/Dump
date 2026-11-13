@@ -18,11 +18,25 @@ export const MAX_UPLOAD_BYTES = 15 * 1024 * 1024;
 
 export type Created = Dump & { duplicate?: boolean };
 
+export interface CreateOptions {
+  title?: string | null;
+  description?: string | null;
+  imageUrl?: string | null;
+}
+
+/** Only http(s) thumbnails are kept; the URL is fetched through the SSRF guard during enrichment. */
+function safeImageUrl(u: string | null | undefined): string | null {
+  return u && /^https?:\/\/\S+$/i.test(u.trim()) ? u.trim().slice(0, 2000) : null;
+}
+
 /**
  * Saves raw text (a link, a link + comment, or a note) immediately; enrichment happens later.
  * Dumping a link that's already saved just moves it back to the top instead of duplicating it.
+ * `opts` carries metadata the client saw (the bookmarklet sends the page's og:description/og:image,
+ * which a server-side fetch often can't get — e.g. Instagram and TikTok serve login walls to bots).
  */
-export function createFromText(raw: string, title?: string | null): Created {
+export function createFromText(raw: string, opts?: CreateOptions | string | null): Created {
+  const o: CreateOptions = typeof opts === "string" || opts == null ? { title: opts } : opts;
   const parsed = parseInput(raw);
   if (parsed.type === "url") {
     const existing = findByUrl(parsed.url);
@@ -36,7 +50,9 @@ export function createFromText(raw: string, title?: string | null): Created {
       kind: kindFromUrl(parsed.url) ?? "link",
       url: parsed.url,
       domain: domainOf(parsed.url),
-      title: title?.trim() || null,
+      title: o.title?.trim() || null,
+      description: o.description?.replace(/\s+/g, " ").trim().slice(0, 2000) || null,
+      imageUrl: safeImageUrl(o.imageUrl),
       note: parsed.note,
     });
   }

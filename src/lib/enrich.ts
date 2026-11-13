@@ -2,7 +2,8 @@ import { classifyHeuristic } from "./classify";
 import { db, getDump, listResortable, updateDump, type Dump } from "./db";
 import { extractUrl } from "./extract";
 import { titleFromUrl } from "./detect";
-import { classifyWithAi } from "./llm";
+import { classifyWithAi, identifySubject } from "./llm";
+import { SUBJECT_MIN_CONFIDENCE, type Subject } from "./taxonomy";
 
 function truncate(s: string | null | undefined, n: number) {
   if (!s) return null;
@@ -28,11 +29,25 @@ function commit(id: string, patch: Partial<Dump>): Dump | null {
   })();
 }
 
+/** A subject the model is sure enough about to name on the card. */
+function trusted(subject: Subject | null | undefined): Subject | null {
+  return subject && (subject.confidence ?? 0) >= SUBJECT_MIN_CONFIDENCE ? subject : null;
+}
+
 /** Topic from Jev when configured (rules as the fallback); tags always come from the rules. */
 async function classify(input: Dump, useImage: boolean): Promise<Partial<Dump>> {
-  const ai = await classifyWithAi({ ...input, useImage });
-  const rules = classifyHeuristic(input, ai?.topic);
+  const subject = trusted(input.subject);
+  // The identified subject feeds Jev's state, and its description feeds the rules so
+  // image-only dumps (no other text) still get tags.
+  const forAI = { ...input, subject, description: input.description ?? subject?.description ?? null };
+  const ai = await classifyWithAi({ ...forAI, useImage });
+  const rules = classifyHeuristic(forAI, ai?.topic);
   return { topic: rules.topic, tags: rules.tags, classifiedBy: ai ? "ai" : "rules" };
+}
+
+/** Clips and images are worth a second pass to name what they're about. */
+function needsIdentify(d: Pick<Dump, "kind" | "domain">): boolean {
+  return d.kind === "image" || d.kind === "video" || /(^|\.)(instagram|tiktok)\.com$/.test(d.domain ?? "");
 }
 
 /**
@@ -55,14 +70,29 @@ export async function enrichDump(id: string): Promise<Dump | null> {
       fields = {
         kind: ex.kind,
         title,
-        description: truncate(ex.description, 1000),
+        // A bookmarklet-sent og:description/og:image survives a page fetch that got nothing.
+        description: truncate(ex.description, 1000) ?? dump.description,
         content: title ? ex.content : [titleFromUrl(dump.url), ex.content].filter(Boolean).join("\n") || null,
-        imageUrl: ex.imageUrl,
+        imageUrl: ex.imageUrl ?? dump.imageUrl,
         siteName: ex.siteName,
         author: ex.author,
       };
     }
     const merged = { ...dump, ...fields };
+
+    // Clips/images get a second pass to name what they're about, before the topic is decided,
+    // so the card can say "Severance (2022) · TV series" and Jev can file it under Movies & TV.
+    const subject = needsIdentify(merged)
+      ? await identifySubject({ ...merged, title: merged.title ?? (dump.url ? titleFromUrl(dump.url) : null) })
+      : null;
+    if (subject) {
+      fields.subject = merged.subject = subject;
+      if (trusted(subject)) {
+        fields.title = merged.title = subject.name;
+        if (subject.description) fields.summary = merged.summary = subject.description;
+      }
+    }
+
     const forClassifying = { ...merged, title: merged.title ?? (dump.url ? titleFromUrl(dump.url) : null) };
 
     const classification = await classify(forClassifying, merged.kind === "image");
