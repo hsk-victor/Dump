@@ -166,14 +166,14 @@ export default function DumpCard({ dump, fresh, removing, onTopic, onDelete, onR
           <p className="d-note-text">{dump.content ?? title}</p>
         ) : (
           <>
-            {title && (
+            {(title || site || dump.url) && (
               <h3 className="d-headline">
                 {href ? (
                   <a href={href} target="_blank" rel="noreferrer">
-                    {title}
+                    {title ?? site ?? dump.url}
                   </a>
                 ) : (
-                  title
+                  title ?? site ?? dump.url
                 )}
               </h3>
             )}
