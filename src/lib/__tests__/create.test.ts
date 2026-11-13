@@ -34,4 +34,22 @@ describe("createFromText", () => {
   it("rejects empty input", () => {
     expect(() => createFromText("   ")).toThrow(InputError);
   });
+
+  it("backfills bookmarklet metadata on a duplicate and flags it for re-enrichment", () => {
+    const first = createFromText("https://example.com/clip");
+    const again = createFromText("https://example.com/clip", {
+      title: "A reel",
+      description: "mark and helly in the elevator scene",
+      imageUrl: "https://cdn.example.com/t.jpg",
+    });
+    expect(again.id).toBe(first.id);
+    expect(again).toMatchObject({ duplicate: true, resync: true, title: "A reel", description: "mark and helly in the elevator scene", imageUrl: "https://cdn.example.com/t.jpg" });
+  });
+
+  it("keeps existing metadata on a duplicate and drops unsafe image URLs", () => {
+    const first = createFromText("https://example.com/vid", { title: "Kept", description: "old desc" });
+    const again = createFromText("https://example.com/vid", { title: "New", description: "new desc", imageUrl: "javascript:alert(1)" });
+    expect(again).toMatchObject({ duplicate: true, resync: false, title: "Kept", description: "old desc", imageUrl: null });
+    expect(first.imageUrl).toBeNull();
+  });
 });

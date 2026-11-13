@@ -15,13 +15,17 @@ function page(body: string, status = 200) {
   );
 }
 
-/** Target of the bookmarklet: /dump?url=...&title=... saves the page and closes the popup. */
+/**
+ * Target of the bookmarklet: /dump?url=...&title=...&desc=...&img=... saves the page and closes the
+ * popup. The client sends the page's og:description and og:image because a logged-in tab sees a
+ * caption and thumbnail that a server-side fetch never will (Instagram/TikTok wall them off).
+ */
 export async function GET(req: NextRequest) {
   const sp = req.nextUrl.searchParams;
   const text = [sp.get("url"), sp.get("text")].filter(Boolean).join(" ");
   try {
-    const dump = createFromText(text, sp.get("title"));
-    if (!("duplicate" in dump && dump.duplicate)) after(() => enrichDump(dump.id));
+    const dump = createFromText(text, { title: sp.get("title"), description: sp.get("desc"), imageUrl: sp.get("img") });
+    if (!("duplicate" in dump && dump.duplicate) || dump.resync) after(() => enrichDump(dump.id));
     return page(`<h2 style="margin:0 0 4px">Dumped.</h2><p style="color:#78716c;margin:0">Filing it for you…</p>`);
   } catch (err) {
     if (err instanceof InputError) return page(`<h2>Nothing to dump</h2>`, 400);

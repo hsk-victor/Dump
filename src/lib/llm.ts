@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import sharp from "sharp";
-import { isTopic, type Topic } from "./taxonomy";
+import { isSubjectType, isTopic, SUBJECT_TYPES, type Subject, type Topic } from "./taxonomy";
 import { UPLOAD_DIR } from "./db";
 import { fetchImage } from "./extract";
 import type { ClassifyInput } from "./classify";
@@ -15,7 +15,9 @@ export interface AiClassification {
 }
 
 const DECISIONS_URL = "https://openrouter.ai/api/alpha/decisions";
+const CHAT_URL = "https://openrouter.ai/api/v1/chat/completions";
 export const DEFAULT_MODEL = "typesafe/jev-1.14";
+export const DEFAULT_IDENTIFY_MODEL = "openai/gpt-6-luna";
 
 export function aiEnabled() {
   return !!process.env.OPENROUTER_API_KEY;
@@ -95,13 +97,14 @@ async function loadImage(imageUrl: string | null | undefined): Promise<string | 
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-async function decide(state: unknown, withImage: boolean) {
+/** POSTs to an OpenRouter endpoint, retrying rate limits and server errors twice. */
+async function postOpenRouter(url: string, label: string, payload: unknown, withImage: boolean) {
   for (let attempt = 0; ; attempt++) {
-    const res = await fetch(DECISIONS_URL, {
+    const res = await fetch(url, {
       method: "POST",
       signal: AbortSignal.timeout(withImage ? 45_000 : 20_000),
       headers: { "content-type": "application/json", authorization: `Bearer ${process.env.OPENROUTER_API_KEY}` },
-      body: JSON.stringify({ model: process.env.DUMP_MODEL || DEFAULT_MODEL, state, questions: QUESTIONS }),
+      body: JSON.stringify(payload),
     });
     if (res.ok) return res.json();
     const body = await res.text().catch(() => "");
@@ -110,14 +113,16 @@ async function decide(state: unknown, withImage: boolean) {
       await sleep(Math.min(retryAfter > 0 ? retryAfter : 1000 * 2 ** attempt, 10_000));
       continue;
     }
-    throw Object.assign(new Error(`Jev ${res.status}: ${body}`.slice(0, 300)), { status: res.status });
+    throw Object.assign(new Error(`${label} ${res.status}: ${body}`.slice(0, 300)), { status: res.status });
   }
 }
 
-/** Files an item under a topic with a decision model (Jev). Returns null (so the caller falls back to rules) on any failure. */
-export async function classifyWithAi(input: ClassifyInput & { kind: string; imageUrl?: string | null; useImage?: boolean }): Promise<AiClassification | null> {
-  if (!aiEnabled()) return null;
-  const item = Object.fromEntries(
+const decide = (state: unknown, withImage: boolean) =>
+  postOpenRouter(DECISIONS_URL, "Jev", { model: process.env.DUMP_MODEL || DEFAULT_MODEL, state, questions: QUESTIONS }, withImage);
+
+/** Everything worth telling a model about a dump, in a compact shape for prompts/state. */
+function describeItem(input: ClassifyInput & { kind: string; subject?: Subject | null }) {
+  return Object.fromEntries(
     Object.entries({
       kind: input.kind,
       url: input.url,
@@ -126,8 +131,28 @@ export async function classifyWithAi(input: ClassifyInput & { kind: string; imag
       description: input.description,
       owner_note: input.note,
       content_excerpt: input.content?.slice(0, 3000),
+      subject: input.subject
+        ? Object.fromEntries(
+            Object.entries({
+              type: input.subject.type,
+              name: input.subject.name,
+              year: input.subject.year,
+              creator: input.subject.creator,
+              genre: input.subject.genre,
+              description: input.subject.description,
+            }).filter(([, v]) => v != null),
+          )
+        : undefined,
     }).filter(([, v]) => v),
   );
+}
+
+/** Files an item under a topic with a decision model (Jev). Returns null (so the caller falls back to rules) on any failure. */
+export async function classifyWithAi(
+  input: ClassifyInput & { kind: string; imageUrl?: string | null; useImage?: boolean; subject?: Subject | null },
+): Promise<AiClassification | null> {
+  if (!aiEnabled()) return null;
+  const item = describeItem(input);
   const image = input.useImage ? await loadImage(input.imageUrl) : null;
 
   try {
@@ -148,6 +173,100 @@ export async function classifyWithAi(input: ClassifyInput & { kind: string; imag
     };
   } catch (err) {
     console.warn("[dump] AI classification failed:", (err as Error).message);
+    return null;
+  }
+}
+
+const IDENTIFY_PROMPT = `You identify the subject of an item the user saved to their personal library: usually a short clip, a reel, a post or an image.
+Decide what specific thing it shows or is about and answer in the requested JSON schema.
+- type: "film" (movie), "show" (TV or streaming series/episode), "music" (song, album, artist or music video), "book", "game" (video or board game), "food" (dish or recipe), "place" (location, venue, destination), "product" (a buyable thing), "person" (a public figure), or "other" for anything else.
+- name: the canonical name of the subject, e.g. "Severance" or "Carbonara". For "other", a short plain phrase for what it is.
+- year: release or creation year when you're confident, otherwise null.
+- creator: director, author, artist, chef etc. when confident and relevant, otherwise null.
+- genre: a short genre or style tag when relevant (e.g. "sci-fi thriller", "k-pop"), otherwise null.
+- description: 1-2 plain sentences describing the specific content — what happens or what is shown — written so someone can find it later.
+- confidence: 0-1. Set it low when the evidence is thin; never invent a name you aren't sure of.
+Judge by the caption, hashtags, link metadata and the image itself (title cards, logos, faces). The site hosting the clip is not the subject.`;
+
+const SUBJECT_JSON_SCHEMA = {
+  name: "dump_subject",
+  strict: true,
+  schema: {
+    type: "object",
+    properties: {
+      type: { type: "string", enum: SUBJECT_TYPES.map((t) => t.id) },
+      name: { type: "string" },
+      year: { type: ["integer", "null"] },
+      creator: { type: ["string", "null"] },
+      genre: { type: ["string", "null"] },
+      description: { type: "string" },
+      confidence: { type: "number" },
+    },
+    required: ["type", "name", "year", "creator", "genre", "description", "confidence"],
+    additionalProperties: false,
+  },
+};
+
+const textPart = (text: string) => ({ type: "text" as const, text });
+
+function str(v: unknown, max: number): string | null {
+  const s = typeof v === "string" ? v.replace(/\s+/g, " ").trim() : "";
+  return s ? s.slice(0, max) : null;
+}
+
+function parseSubject(json: unknown): Subject | null {
+  const raw = (json as { choices?: { message?: { content?: unknown } }[] })?.choices?.[0]?.message?.content;
+  if (typeof raw !== "string") return null;
+  let v: Record<string, unknown>;
+  try {
+    v = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  const name = str(v?.name, 200);
+  if (!v || !name) return null;
+  return {
+    type: isSubjectType(v.type) ? v.type : "other",
+    name,
+    year: Number.isInteger(v.year) ? (v.year as number) : null,
+    creator: str(v.creator, 200),
+    genre: str(v.genre, 100),
+    description: str(v.description, 600),
+    confidence: typeof v.confidence === "number" ? Math.min(1, Math.max(0, v.confidence)) : null,
+    model: str((json as { model?: unknown }).model, 100),
+  };
+}
+
+/**
+ * Names what a clip or image is about ("Severance (2022) · TV series") with a vision-capable chat
+ * model and a strict JSON schema. Returns null on any failure so enrichment carries on as before.
+ */
+export async function identifySubject(input: ClassifyInput & { kind: string; imageUrl?: string | null }): Promise<Subject | null> {
+  if (!aiEnabled()) return null;
+  const image = await loadImage(input.imageUrl);
+  const content = [
+    textPart(`Identify what this saved item is about.\n${JSON.stringify(describeItem(input))}`),
+    ...(image ? [{ type: "image_url" as const, image_url: { url: image } }] : []),
+  ];
+
+  try {
+    const json = await postOpenRouter(
+      CHAT_URL,
+      "identify",
+      {
+        model: process.env.DUMP_IDENTIFY_MODEL || DEFAULT_IDENTIFY_MODEL,
+        messages: [
+          { role: "system", content: IDENTIFY_PROMPT },
+          { role: "user", content },
+        ],
+        response_format: { type: "json_schema", json_schema: SUBJECT_JSON_SCHEMA },
+        reasoning: { effort: "minimal" },
+      },
+      !!image,
+    );
+    return parseSubject(json);
+  } catch (err) {
+    console.warn("[dump] subject identification failed:", (err as Error).message);
     return null;
   }
 }
