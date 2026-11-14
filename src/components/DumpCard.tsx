@@ -591,25 +591,23 @@ function MusicCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
                 <span className="d-mus-title" dir="auto">{title}</span>
                 {sub && <span className="d-mus-sub" dir="auto">{sub}</span>}
               </span>
-              {!bits.processing && (
-                <span className="d-mus-transport" aria-hidden>
-                  <svg viewBox="0 0 24 24"><path fill="currentColor" d="M6 5h2.4v14H6zM18 5.5v13L8.4 12z" /></svg>
-                  <svg viewBox="0 0 24 24" className="d-mus-transport-pause"><path fill="currentColor" d="M7.5 5h3v14h-3zM13.5 5h3v14h-3z" /></svg>
-                  <svg viewBox="0 0 24 24"><path fill="currentColor" d="M15.6 5H18v14h-2.4zM6 5.5v13L15.6 12z" /></svg>
-                </span>
-              )}
+              <span className="d-mus-transport" aria-hidden>
+                <svg viewBox="0 0 24 24"><path fill="currentColor" d="M6 5h2.4v14H6zM18 5.5v13L8.4 12z" /></svg>
+                <svg viewBox="0 0 24 24" className="d-mus-transport-pause"><path fill="currentColor" d="M7.5 5h3v14h-3zM13.5 5h3v14h-3z" /></svg>
+                <svg viewBox="0 0 24 24"><path fill="currentColor" d="M15.6 5H18v14h-2.4zM6 5.5v13L15.6 12z" /></svg>
+              </span>
             </>
           )}
         </span>
-        {!bits.processing && (
+        {!(bits.processing && !bits.title) && (
           <span className="d-mus-prog" aria-hidden>
             <span className="d-mus-prog-fill" />
           </span>
         )}
+        <ProviderIcon provider={dump.provider} className="d-prov d-mus-src" />
       </a>
       {dump.note && <p className="d-mus-note" dir="auto">{dump.note}</p>}
       <div className="d-mus-foot">
-        <ProviderIcon provider={dump.provider} className="d-prov d-mus-prov" />
         {bits.meta}
       </div>
     </article>
