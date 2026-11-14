@@ -1723,12 +1723,27 @@ article.d-ig .d-meta,
     opacity: 1;
   }
 }
-.d-actions select {
-  max-width: 5.5rem;
+/* The Move trigger is a base-ui Menu.Trigger (a <button>) — undo the square
+   icon-button sizing .d-actions button gives it and match the old select look. */
+.d-actions .d-move {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  width: auto;
+  height: auto;
+  max-width: 6rem;
   padding: 0.2rem 0.3rem;
+  font: inherit;
+  color: inherit;
   background: transparent;
   cursor: pointer;
   outline: none;
+}
+.d-move-caret {
+  width: 0.5rem;
+  height: 0.5rem;
+  flex-shrink: 0;
+  opacity: 0.7;
 }
 .d-actions button {
   width: 1.4rem;
@@ -1743,10 +1758,43 @@ article.d-ig .d-meta,
     color: #dc2626;
     background: rgb(220 38 38 / 0.1);
   }
+  /* Delete stays red-on-hover; Move takes a neutral wash instead. */
+  .d-actions .d-move:hover {
+    color: var(--ink);
+    background: color-mix(in srgb, var(--ink) 8%, transparent);
+  }
 }
-.d-actions option {
-  background: var(--surface);
+
+/* Move menu popup — same frosted material as .d-mpanel. */
+.d-menu {
+  min-width: 7rem;
+  padding: 0.25rem;
+  border-radius: calc(var(--radius) - 5px);
+  background: var(--raised);
+  -webkit-backdrop-filter: blur(16px) saturate(1.5);
+  backdrop-filter: blur(16px) saturate(1.5);
+  box-shadow: 0 6px 24px -6px rgb(0 0 0 / 0.3), 0 0 0 1px var(--hairline);
   color: var(--ink);
+  font-size: 0.78rem;
+  z-index: 50;
+  outline: none;
+  transition: opacity 0.14s var(--ease-out), translate 0.14s var(--ease-out);
+}
+.d-menu[data-starting-style],
+.d-menu[data-ending-style] {
+  opacity: 0;
+  translate: 0 -4px;
+}
+.d-menu-item {
+  padding: 0.35rem 0.5rem;
+  border-radius: 6px;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  outline: none;
+}
+.d-menu-item[data-highlighted] {
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
 }
 
 /* ── Dock composer ── */
@@ -2003,7 +2051,6 @@ article.d-ig .d-meta,
 @media (pointer: coarse) {
   .d-search input,
   .d-dock-input,
-  .d-actions select,
   .d-kind-select {
     font-size: 16px;
   }

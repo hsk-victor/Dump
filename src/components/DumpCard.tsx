@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type CSSProperties, type ReactNode } from "react";
+import { Menu } from "@base-ui/react/menu";
 import type { Dump } from "@/lib/db";
 import { SUBJECT_MIN_CONFIDENCE, subjectLine, TOPICS, kindMeta, providerMeta, topicMeta } from "@/lib/taxonomy";
 import { timeAgo } from "@/lib/format";
@@ -730,12 +731,25 @@ export default function DumpCard({ dump, fresh, removing, onTopic, onDelete, onR
 
   const actions = (
     <div className="d-actions">
-      <select aria-label="Move to topic" value="" onChange={(e) => e.target.value && onTopic(dump.id, e.target.value)}>
-        <option value="" disabled>Move…</option>
-        {TOPICS.filter((t) => t.id !== dump.topic).map((t) => (
-          <option key={t.id} value={t.id}>{t.label}</option>
-        ))}
-      </select>
+      <Menu.Root>
+        <Menu.Trigger className="d-move" aria-label="Move to topic">
+          Move…
+          <svg viewBox="0 0 10 6" className="d-move-caret" aria-hidden>
+            <path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </Menu.Trigger>
+        <Menu.Portal>
+          <Menu.Positioner side="bottom" align="end" sideOffset={4}>
+            <Menu.Popup className="d-menu">
+              {TOPICS.filter((t) => t.id !== dump.topic).map((t) => (
+                <Menu.Item key={t.id} className="d-menu-item" onClick={() => onTopic(dump.id, t.id)}>
+                  {t.label}
+                </Menu.Item>
+              ))}
+            </Menu.Popup>
+          </Menu.Positioner>
+        </Menu.Portal>
+      </Menu.Root>
       <button onClick={() => onDelete(dump.id)} aria-label="Delete" title="Delete">×</button>
     </div>
   );
