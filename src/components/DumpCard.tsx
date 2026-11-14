@@ -316,42 +316,52 @@ function PostCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
   );
 }
 
-/** reddit — vote rail + "r/sub · u/author · ago" + headline + text. */
+/** reddit — r/sub roundel + "r/sub · u/author · ago" kicker, headline, text,
+ *  framed media with a 1/N counter. Native-reddit identity without the vote
+ *  rail or action row; a dead thread renders a tombstone. */
 function RedditCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
+  const [failedIdx, setFailedIdx] = useState<ReadonlySet<number>>(new Set());
   const sub = redditSub(dump.url);
   const author = dump.author?.replace(/^u\//, "");
   const headline = bits.title ?? bits.site;
   const text = dump.description ?? dump.summary;
+  const images = (dump.imageUrls.length ? dump.imageUrls : dump.imageUrl ? [dump.imageUrl] : []).filter((_, i) => !failedIdx.has(i));
+  const dead = dump.status === "failed" && !text;
   return (
     <article {...bits.cardProps} className="d-card d-rd group">
       {bits.actions}
-      <div className="d-rd-votes" aria-hidden>
-        <Glyph name="voteUp" className="d-rd-arrow" />
-        <Glyph name="voteDown" className="d-rd-arrow" />
-      </div>
       <div className="d-rd-body">
         <div className="d-rd-top">
           <span className="d-rd-mark"><ProviderIcon provider="reddit" /></span>
-          <a href={bits.href ?? undefined} target="_blank" rel="noreferrer" className="d-rd-sub">{sub}</a>
-          <span className="d-rd-by">
-            {author ? `· Posted by u/${author} · ` : "· "}
+          <a href={bits.href ?? undefined} target="_blank" rel="noreferrer" className="d-rd-sub" dir="auto">{sub}</a>
+          <span className="d-rd-by" dir="auto">
+            {author ? `u/${author} · ` : ""}
             {timeAgo(dump.createdAt)}
           </span>
         </div>
-        {bits.processing && !headline && !text ? (
+        {bits.processing && !dump.title && !text ? (
           shimmerLines()
+        ) : dead ? (
+          <p className="d-tomb">This thread doesn&rsquo;t exist.</p>
         ) : (
           <>
             {headline && (
-              <h3 className="d-rd-title">
+              <h3 className="d-rd-title" dir="auto">
                 <a href={bits.href ?? undefined} target="_blank" rel="noreferrer">{headline}</a>
               </h3>
             )}
-            {text && text !== headline && <p className="d-post-text">{text}</p>}
+            {text && text !== headline && <p className="d-rd-text" dir="auto">{text}</p>}
           </>
         )}
-        {bits.showMedia && <Img dump={dump} bits={bits} className="d-post-media" />}
-        {dump.note && <p className="d-annotation">{dump.note}</p>}
+        {images.length > 0 && (
+          <a href={bits.href ?? undefined} target="_blank" rel="noreferrer" className="d-rd-media">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={images[0]} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setFailedIdx((s) => new Set(s).add(0))} />
+            {dump.kind === "video" && <PlayBadge />}
+            {images.length > 1 && <span className="d-post-count">1/{images.length}</span>}
+          </a>
+        )}
+        {dump.note && <p className="d-annotation" dir="auto">{dump.note}</p>}
         {bits.meta}
       </div>
     </article>
