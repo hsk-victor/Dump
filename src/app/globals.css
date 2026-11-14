@@ -492,35 +492,16 @@ button {
   pointer-events: none;
   transition: opacity 0.12s var(--ease-out);
 }
-.d-mchip-prov,
 .d-mpanel-prov {
   width: 0.8rem;
   height: 0.8rem;
   flex-shrink: 0;
   color: var(--provider, var(--ink-2));
 }
-.d-mchip-text {
-  min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
 .d-mchip-sorting {
   width: 3.5rem;
   height: 0.55rem;
   border-radius: 999px;
-}
-/* No hover on touch: the chip carries the title instead of the byline. */
-.d-mchip-touch {
-  display: none;
-}
-@media (hover: none), (pointer: coarse) {
-  .d-mchip-rest {
-    display: none;
-  }
-  .d-mchip-touch {
-    display: inline;
-  }
 }
 .d-mpanel {
   position: absolute;

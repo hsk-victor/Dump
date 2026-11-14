@@ -415,16 +415,13 @@ function YouTubeCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
 
 /** video — youtube keeps its platform-native card; every other provider (vimeo, twitch, tiktok,
  *  loom, dailymotion, plain links) gets the cinema layout: like the media card, the thumbnail is
- *  the card — glass byline chip at rest, title/byline/dek/note/meta rise in a glass panel on
- *  hover/focus (touch shows the title in the chip). */
+ *  the card — pure media at rest, title/byline/dek/note/meta rise in a glass panel on hover/focus. */
 function VideoCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
   if (dump.provider === "youtube") return <YouTubeCard dump={dump} bits={bits} />;
   const t = mediaText(dump, bits);
   const byline =
     [dump.author?.trim(), providerMeta(dump.provider)?.label].filter(Boolean).join(" · ") ||
     (dump.url ? bits.site : null);
-  const restLabel = byline ?? t.title ?? t.note;
-  const touchLabel = t.title ?? byline ?? t.note;
   return (
     <article {...bits.cardProps} className="d-card d-mediacard d-vidcard group" data-open={dump.status === "failed" || undefined}>
       {bits.actions}
@@ -440,18 +437,10 @@ function VideoCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
         <PlayBadge />
         <Flag dump={dump} />
       </a>
-      {bits.processing ? (
+      {bits.processing && (
         <span className="d-mchip" aria-hidden>
           <span className="d-mchip-sorting shimmer" />
         </span>
-      ) : (
-        (restLabel || t.hasMark) && (
-          <span className="d-mchip" aria-hidden>
-            {t.hasMark ? <ProviderIcon provider={dump.provider} className="d-mchip-prov" /> : <span className="d-dot" />}
-            {restLabel && <span className="d-mchip-text d-mchip-rest" dir="auto">{restLabel}</span>}
-            {touchLabel && <span className="d-mchip-text d-mchip-touch" dir="auto">{touchLabel}</span>}
-          </span>
-        )
       )}
       <div className="d-mpanel">
         {bits.processing && !t.title ? (
@@ -495,12 +484,10 @@ function mediaText(dump: Dump, bits: CardBits) {
   return { title, byline, dek, note: dump.note?.trim() || null, hasMark: providerHasIcon(dump.provider) };
 }
 
-/** image-kind dumps from visual platforms — the image is the card: a glass byline chip at rest,
- *  title / dek / note / meta rise in a glass panel on hover or focus (touch shows the title in the chip). */
+/** image-kind dumps from visual platforms — the image is the card: pure media at rest,
+ *  title / dek / note / meta rise in a glass panel on hover or focus. */
 function MediaCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
   const t = mediaText(dump, bits);
-  const restLabel = t.byline ?? t.title ?? t.note;
-  const touchLabel = t.title ?? t.byline ?? t.note;
   return (
     <article {...bits.cardProps} className="d-card d-mediacard group" data-open={dump.status === "failed" || undefined}>
       {bits.actions}
@@ -508,18 +495,10 @@ function MediaCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
         <FadeImg dump={dump} bits={bits} alt={t.title ?? ""} />
         {dump.kind === "video" && <PlayBadge />}
       </a>
-      {bits.processing ? (
+      {bits.processing && (
         <span className="d-mchip" aria-hidden>
           <span className="d-mchip-sorting shimmer" />
         </span>
-      ) : (
-        (restLabel || t.hasMark) && (
-          <span className="d-mchip" aria-hidden>
-            {t.hasMark ? <ProviderIcon provider={dump.provider} className="d-mchip-prov" /> : <span className="d-dot" />}
-            {restLabel && <span className="d-mchip-text d-mchip-rest" dir="auto">{restLabel}</span>}
-            {touchLabel && <span className="d-mchip-text d-mchip-touch" dir="auto">{touchLabel}</span>}
-          </span>
-        )
       )}
       <div className="d-mpanel">
         {bits.processing && !t.title ? (
