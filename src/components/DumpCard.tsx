@@ -222,37 +222,51 @@ function FadeImg({ dump, bits, className, alt = "" }: { dump: Dump; bits: CardBi
 
 /* ============================ platform-native cards ============================ */
 
-/** x — an embedded tweet: avatar, name, @handle, big X, text, media, reply/repost/like/views. */
+/** x — shares the Post card chrome (avatar + name + byline header, provider
+ *  mark, framed media with 1/N counter); the tweet text is the content. X
+ *  oEmbed rarely returns media or avatars, so the card is designed text-first;
+ *  a dead tweet renders a tombstone instead of empty chrome. */
 function XCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
-  const author = postAuthor(dump) ?? dump.author;
+  const [failedIdx, setFailedIdx] = useState<ReadonlySet<number>>(new Set());
+  const author = postAuthor(dump);
   const raw = dump.author?.replace(/^@/, "");
   // oEmbed author_name can be a display name ("Jane Doe"), not a handle — only @-ify real handles.
   const handle = raw && /^[\w.]{1,30}$/.test(raw) ? `@${raw}` : null;
-  const text = dump.description ?? dump.summary ?? bits.title;
+  const byline = (handle && handle !== author ? handle : null) ?? "X";
+  const postText = dump.description ?? dump.summary;
+  const text = postText && postText !== bits.title ? postText : null;
+  const headline =
+    bits.title && !bits.processing && bits.title !== postText && !attributionName(dump.title, dump) ? bits.title : null;
+  const images = (dump.imageUrls.length ? dump.imageUrls : dump.imageUrl ? [dump.imageUrl] : []).filter((_, i) => !failedIdx.has(i));
   return (
-    <article {...bits.cardProps} className="d-card d-tw group">
+    <article {...bits.cardProps} className="d-card d-post group">
       {bits.actions}
-      <a href={bits.href ?? undefined} target="_blank" rel="noreferrer" className="d-tw-head">
-        <span className="d-tw-avatar">{author ? initials(author) : <ProviderIcon provider="x" />}</span>
+      <a href={bits.href ?? undefined} target="_blank" rel="noreferrer" className="d-post-head">
+        <span className="d-avatar">{author ? initials(author) : <ProviderIcon provider="x" />}</span>
         <span className="min-w-0">
-          <span className="d-tw-name">{author ?? "Post"}</span>
-          <span className="d-tw-handle">{handle ?? "X"}</span>
+          <span className="d-author-name" dir="auto">{author ?? "Post"}</span>
+          <span className="d-author-site" dir="auto">{byline}</span>
         </span>
-        <ProviderIcon provider="x" className="d-tw-logo" />
+        <ProviderIcon provider="x" className="d-prov d-post-prov" />
       </a>
-      {bits.processing && !text ? shimmerLines() : text && <p className="d-tw-text">{text}</p>}
-      {bits.showMedia && (
-        <a href={bits.href ?? undefined} target="_blank" rel="noreferrer" className="d-tw-media">
-          <Img dump={dump} bits={bits} className="d-tw-img" />
+      {bits.processing && !text ? (
+        shimmerLines()
+      ) : dump.status === "failed" && !text ? (
+        <p className="d-tomb">This post doesn&rsquo;t exist.</p>
+      ) : (
+        <>
+          {headline && <p className="d-post-headline" dir="auto">{headline}</p>}
+          {text && <p className="d-post-text" dir="auto">{text}</p>}
+        </>
+      )}
+      {images.length > 0 && (
+        <a href={bits.href ?? undefined} target="_blank" rel="noreferrer" className="d-post-gallery">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={images[0]} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setFailedIdx((s) => new Set(s).add(0))} />
+          {images.length > 1 && <span className="d-post-count">1/{images.length}</span>}
         </a>
       )}
-      <div className="d-tw-actions" aria-hidden>
-        <span className="d-tw-act"><Glyph name="reply" /></span>
-        <span className="d-tw-act d-tw-repost"><Glyph name="repost" /></span>
-        <span className="d-tw-act d-tw-like"><Glyph name="heart" /></span>
-        <span className="d-tw-act"><Glyph name="chart" /></span>
-      </div>
-      {dump.note && <p className="d-annotation">{dump.note}</p>}
+      {dump.note && <p className="d-annotation" dir="auto">{dump.note}</p>}
       {bits.meta}
     </article>
   );

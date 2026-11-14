@@ -842,93 +842,26 @@ button {
   color: var(--muted);
 }
 
-/* X — embedded tweet */
-.d-tw {
-  padding: 0.9rem 0.95rem 0.6rem;
-}
-.d-tw-head {
-  display: flex;
-  align-items: center;
-  gap: 0.55rem;
-  color: inherit;
-  text-decoration: none;
-}
-.d-tw-avatar {
-  display: grid;
-  place-items: center;
-  width: 2.4rem;
-  height: 2.4rem;
-  border-radius: 999px;
-  flex-shrink: 0;
+/* X — shares the Post card chrome (.d-post); X's mark is black, so its avatar
+   stays ink-solid instead of the provider/topic gradient. */
+.d-post[data-provider="x"] .d-avatar {
   background: var(--ink);
   color: var(--surface);
-  font-size: 0.85rem;
-  font-weight: 700;
 }
-.d-tw-avatar .d-prov {
-  width: 1.1rem;
-  height: 1.1rem;
+.d-post[data-provider="x"] .d-avatar .d-prov {
   color: var(--surface);
 }
-.d-tw-name {
-  display: block;
-  font-size: 0.92rem;
-  font-weight: 700;
-  line-height: 1.25;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.d-tw-handle {
-  display: block;
-  font-size: 0.78rem;
-  color: var(--muted);
-}
-.d-tw-logo {
-  margin-left: auto;
-  width: 1.25rem;
-  height: 1.25rem;
-  flex-shrink: 0;
-  color: var(--ink);
-}
-.d-tw-text {
+
+/* Unavailable post — a deleted tweet or a failed fetch with no text left. */
+.d-tomb {
   margin-top: 0.55rem;
-  font-size: 0.95rem;
-  line-height: 1.45;
-  white-space: pre-line;
-  display: -webkit-box;
-  -webkit-line-clamp: 10;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-.d-tw-media {
-  display: block;
-  margin-top: 0.65rem;
-  border-radius: 14px;
-  overflow: hidden;
-  line-height: 0;
-}
-.d-tw-img {
-  width: 100%;
-  max-height: 18rem;
-  object-fit: cover;
-}
-.d-tw-actions {
-  display: flex;
-  justify-content: space-between;
-  margin-top: 0.7rem;
-  padding: 0 0.3rem;
-}
-.d-tw-act {
-  display: inline-flex;
+  padding: 0.7rem 0.8rem;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--ink) 5%, transparent);
   color: var(--muted);
-}
-.d-tw-act .d-glyph {
-  width: 1.05rem;
-  height: 1.05rem;
-}
-.d-tw .d-meta {
-  margin-top: 0.65rem;
+  font-size: 0.84rem;
+  font-weight: 550;
+  text-align: center;
 }
 
 /* reddit — vote rail + r/sub · u/author · ago + headline */
