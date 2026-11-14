@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type CSSProperties, type MouseEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type MouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { Menu } from "@base-ui/react/menu";
 import type { Dump } from "@/lib/db";
 import { SUBJECT_MIN_CONFIDENCE, subjectLine, TOPICS, kindMeta, providerMeta, topicMeta } from "@/lib/taxonomy";
@@ -1207,6 +1207,12 @@ export default function DumpCard({ dump, fresh, removing, onTopic, onDelete, onR
     return () => document.removeEventListener("pointerdown", onDown, true);
   }, [revealed]);
 
+  const onCardPointerDown = (e: ReactPointerEvent<HTMLElement>) => {
+    if (revealed || dump.status === "failed") return;
+    if (!window.matchMedia("(hover: none), (pointer: coarse)").matches) return;
+    if ((e.target as HTMLElement).closest(".d-inline-video .d-media")) setRevealed(true);
+  };
+
   /* Tap-to-reveal on coarse pointers, detected with the same capability query
    * the CSS gates on — matchMedia("(hover: none), (pointer: coarse)"). First
    * tap on a media card's face link opens the panel instead of navigating;
@@ -1301,6 +1307,7 @@ export default function DumpCard({ dump, fresh, removing, onTopic, onDelete, onR
       "data-removing": removing || undefined,
       ref: cardRef,
       onClick: onCardClick,
+      onPointerDownCapture: onCardPointerDown,
       style: { "--topic": topic.color, "--provider": provider && "color" in provider ? provider.color : undefined } as CSSProperties,
     },
   };
