@@ -25,6 +25,14 @@ it("keeps unreachable posts retryable if both sources fail", async () => {
   expect(await extractUrl(url)).toMatchObject({ unreachable: true, imageUrls: [] });
 });
 
+it.each([
+  ["https://example.com/Spring%20flowers.mp4", "application/octet-stream", "Spring flowers"],
+  ["https://example.com/clip", "video/webm", "clip"],
+])("extracts inline video sources from file extensions or content type: %s", async (url, contentType, title) => {
+  fetch.mockResolvedValue(new Response(null, { headers: { "content-type": contentType } }));
+  expect(await extractUrl(url)).toMatchObject({ kind: "video", title, videoUrl: url, videoType: "video", unreachable: false });
+});
+
 it("allows video bodies to stream past eight seconds after headers arrive", async () => {
   vi.useFakeTimers();
   try {

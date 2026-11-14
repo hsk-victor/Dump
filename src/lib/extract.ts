@@ -2,7 +2,7 @@ import * as cheerio from "cheerio";
 import dns from "node:dns";
 import net from "node:net";
 import { Agent, fetch as undiciFetch } from "undici";
-import { domainOf, kindFromUrl } from "./detect";
+import { domainOf, isDirectVideoUrl, kindFromUrl, videoTitleFromUrl } from "./detect";
 import type { Kind } from "./taxonomy";
 import { parseSyndication, syndicationUrl, type SyndicationTweet } from "./x-post";
 
@@ -20,6 +20,7 @@ export interface Extracted {
   authorAvatarUrl?: string | null;
   videoUrl?: string | null;
   videoPosterUrl?: string | null;
+  videoType?: "video" | "animated_gif" | null;
   /** True when no request for this URL got any HTTP response (network error, timeout, blocked). */
   unreachable: boolean;
 }
@@ -339,8 +340,8 @@ export async function extractUrl(url: string): Promise<Extracted> {
   if (contentType.startsWith("image/")) {
     return { kind: "image", title: decodeURIComponent(new URL(url).pathname.split("/").pop() || "Image"), description: null, content: null, imageUrl: url, imageUrls: [url], siteName: host, author: null, unreachable: false };
   }
-  if (contentType.startsWith("video/")) {
-    return { kind: "video", title: null, description: null, content: null, imageUrl: null, imageUrls: [], siteName: host, author: null, unreachable: false };
+  if (contentType.startsWith("video/") || isDirectVideoUrl(url)) {
+    return { kind: "video", title: videoTitleFromUrl(finalUrl), description: null, content: null, imageUrl: null, imageUrls: [], videoUrl: finalUrl, videoType: "video", siteName: host, author: null, unreachable: !reached };
   }
 
   const embedText = textFromEmbedHtml(oembed?.html);

@@ -68,6 +68,23 @@ const IMAGE_EXT = /\.(png|jpe?g|gif|webp|avif|svg|bmp|heic)(\?|$)/i;
 const VIDEO_EXT = /\.(mp4|webm|mov|m4v)(\?|$)/i;
 const AUDIO_EXT = /\.(mp3|m4a|wav|ogg|flac)(\?|$)/i;
 
+export function isDirectVideoUrl(url: string): boolean {
+  try {
+    return VIDEO_EXT.test(new URL(url).pathname);
+  } catch {
+    return false;
+  }
+}
+
+export function videoTitleFromUrl(url: string): string {
+  const filename = new URL(url).pathname.split("/").filter(Boolean).pop() ?? "Video";
+  let decoded = filename;
+  try {
+    decoded = decodeURIComponent(filename);
+  } catch {}
+  return decoded.replace(/\.(mp4|webm|mov|m4v)$/i, "").replace(/[-_]+/g, " ") || "Video";
+}
+
 function hostMatches(host: string, domains: string[]) {
   return domains.some((d) => host === d || host.endsWith(`.${d}`));
 }

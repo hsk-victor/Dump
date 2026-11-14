@@ -29,6 +29,7 @@ export interface Dump {
   authorAvatarUrl: string | null;
   videoUrl: string | null;
   videoPosterUrl: string | null;
+  videoType: "video" | "animated_gif" | null;
   summary: string | null;
   /** Identified subject for clips/images, e.g. {"type":"show","name":"Severance"}. JSON in the DB. */
   subject: Subject | null;
@@ -59,6 +60,7 @@ interface Row {
   author_avatar_url: string | null;
   video_url: string | null;
   video_poster_url: string | null;
+  video_type: string | null;
   summary: string | null;
   subject: string | null;
   tags: string;
@@ -92,6 +94,7 @@ CREATE TABLE IF NOT EXISTS dumps (
   author_avatar_url TEXT,
   video_url TEXT,
   video_poster_url TEXT,
+  video_type TEXT,
   summary TEXT,
   subject TEXT,
   tags TEXT NOT NULL DEFAULT '[]',
@@ -139,7 +142,7 @@ export function db(): Database.Database {
     if (!cols.some((c) => c.name === "subject")) conn.exec("ALTER TABLE dumps ADD COLUMN subject TEXT");
     if (!cols.some((c) => c.name === "provider")) conn.exec("ALTER TABLE dumps ADD COLUMN provider TEXT");
     if (!cols.some((c) => c.name === "image_urls")) conn.exec("ALTER TABLE dumps ADD COLUMN image_urls TEXT");
-    for (const name of ["author_handle", "author_avatar_url", "video_url", "video_poster_url"]) {
+    for (const name of ["author_handle", "author_avatar_url", "video_url", "video_poster_url", "video_type"]) {
       if (!cols.some((c) => c.name === name)) conn.exec(`ALTER TABLE dumps ADD COLUMN ${name} TEXT`);
     }
     globalForDb.__dumpDb = conn;
@@ -169,6 +172,7 @@ function toDump(r: Row): Dump {
     authorAvatarUrl: r.author_avatar_url,
     videoUrl: r.video_url,
     videoPosterUrl: r.video_poster_url,
+    videoType: r.video_type as Dump["videoType"],
     summary: r.summary,
     subject: safeJsonObject(r.subject),
     tags: safeJsonArray(r.tags),
@@ -223,6 +227,7 @@ const COLUMN: Record<string, string> = {
   authorAvatarUrl: "author_avatar_url",
   videoUrl: "video_url",
   videoPosterUrl: "video_poster_url",
+  videoType: "video_type",
   summary: "summary",
   subject: "subject",
   tags: "tags",

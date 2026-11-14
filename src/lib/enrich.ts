@@ -105,6 +105,7 @@ async function runEnrich(id: string): Promise<Dump | null> {
         authorAvatarUrl: ex.authorAvatarUrl ?? dump.authorAvatarUrl,
         videoUrl: ex.videoUrl ?? dump.videoUrl,
         videoPosterUrl: ex.videoPosterUrl ?? dump.videoPosterUrl,
+        videoType: ex.videoType ?? dump.videoType,
       };
     }
     const merged = { ...dump, ...fields };
