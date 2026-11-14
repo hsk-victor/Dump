@@ -51,9 +51,9 @@ it("does not keep an unverified video source after a failed fetch", async () => 
 it("stores the stable requested video URL instead of an expiring redirect target", async () => {
   const url = "https://example.com/video";
   const response = new Response(null, { headers: { "content-type": "video/mp4" } });
-  Object.defineProperty(response, "url", { value: "https://cdn.example.com/clip.mp4?expires=123" });
-  fetch.mockResolvedValue(response);
+  fetch.mockResolvedValueOnce(new Response(null, { status: 302, headers: { location: "https://cdn.example.com/clip.mp4?expires=123" } })).mockResolvedValueOnce(response);
   expect(await extractUrl(url)).toMatchObject({ kind: "video", videoUrl: url, unreachable: false });
+  expect(fetch.mock.calls[1][0]).toBe("https://cdn.example.com/clip.mp4?expires=123");
 });
 
 it("allows video bodies to stream past eight seconds after headers arrive", async () => {
