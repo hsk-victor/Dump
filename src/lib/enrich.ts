@@ -98,6 +98,7 @@ async function runEnrich(id: string): Promise<Dump | null> {
         description: truncate(ex.description, 1000) ?? dump.description,
         content: title ? ex.content : [titleFromUrl(dump.url), ex.content].filter(Boolean).join("\n") || null,
         imageUrl: ex.imageUrl ?? dump.imageUrl,
+        imageUrls: ex.imageUrls.length ? ex.imageUrls : dump.imageUrls,
         siteName: ex.siteName,
         author: ex.author,
       };

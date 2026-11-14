@@ -193,6 +193,67 @@ export function githubRef(url: string): { repo: string; ref?: string } | null {
   return { repo: `${seg[0]}/${seg[1]}`, ref: m ? `#${m[1]}` : undefined };
 }
 
+export type GithubKind = "repo" | "issue" | "pr" | "discussion" | "file" | "profile" | "page";
+
+/** What a GitHub URL actually is — decided by the path alone, never by guessed data. */
+export interface GithubInfo {
+  kind: GithubKind;
+  /** "owner/repo" when the URL names one. */
+  repo: string | null;
+  /** "#123" for issues/PRs/discussions. */
+  ref: string | null;
+  /** For /blob|tree|raw/ pages: branch and path inside the repo. */
+  filePath: string | null;
+  /** Profile login for single-segment URLs. */
+  login: string | null;
+}
+
+export function githubInfo(url: string | null): GithubInfo {
+  const none: GithubInfo = { kind: "page", repo: null, ref: null, filePath: null, login: null };
+  if (!url) return none;
+  const host = domainOf(url) ?? "";
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return none;
+  }
+  let seg: string[];
+  try {
+    seg = u.pathname.split("/").filter(Boolean).map(decodeURIComponent);
+  } catch {
+    return none;
+  }
+  if (host === "gist.github.com") {
+    return { ...none, kind: "file", repo: seg.length >= 2 ? `${seg[0]}/${seg[1].slice(0, 12)}` : null };
+  }
+  if (host !== "github.com" || seg.length === 0 || GITHUB_NON_REPO.has(seg[0].toLowerCase())) return none;
+  if (seg.length === 1) return { ...none, kind: "profile", login: seg[0] };
+  const repo = `${seg[0]}/${seg[1]}`;
+  const m = u.pathname.match(/^\/[^/]+\/[^/]+\/(issues|pull|discussions)\/(\d+)/);
+  if (m) {
+    const kind = m[1] === "issues" ? "issue" : m[1] === "pull" ? "pr" : "discussion";
+    return { ...none, kind, repo, ref: `#${m[2]}` };
+  }
+  const fm = u.pathname.match(/^\/[^/]+\/[^/]+\/(?:blob|tree|raw)\/(.+)/);
+  if (fm) {
+    const rest = seg.slice(3);
+    return { ...none, kind: "file", repo, filePath: rest.join("/") || null };
+  }
+  return { ...none, kind: "repo", repo };
+}
+
+/** Short label a GitHub save's kind gets in the card's corner tag. */
+export const GITHUB_TAG: Record<GithubKind, string | null> = {
+  repo: null,
+  issue: "Issue",
+  pr: "PR",
+  discussion: "Discussion",
+  file: "File",
+  profile: "Profile",
+  page: null,
+};
+
 /** A readable fallback title from the URL path, e.g. ".../spinach-and-feta-burgers/" -> "Spinach and feta burgers". */
 export function titleFromUrl(url: string): string | null {
   try {

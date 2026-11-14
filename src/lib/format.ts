@@ -9,3 +9,7 @@ export function timeAgo(ts: number, now = Date.now()): string {
   if (d < 7) return `${d}d ago`;
   return new Date(ts).toLocaleDateString(undefined, { month: "short", day: "numeric", year: d > 300 ? "numeric" : undefined });
 }
+
+export function shortDate(ts: number): string {
+  return new Date(ts).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}

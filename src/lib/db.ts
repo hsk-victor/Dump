@@ -21,6 +21,8 @@ export interface Dump {
   content: string | null;
   note: string | null;
   imageUrl: string | null;
+  /** Every image the page advertised, first == imageUrl (falls back to [imageUrl] for old rows). JSON in the DB. */
+  imageUrls: string[];
   siteName: string | null;
   author: string | null;
   summary: string | null;
@@ -46,6 +48,7 @@ interface Row {
   content: string | null;
   note: string | null;
   image_url: string | null;
+  image_urls: string | null;
   site_name: string | null;
   author: string | null;
   summary: string | null;
@@ -74,6 +77,7 @@ CREATE TABLE IF NOT EXISTS dumps (
   content TEXT,
   note TEXT,
   image_url TEXT,
+  image_urls TEXT,
   site_name TEXT,
   author TEXT,
   summary TEXT,
@@ -122,6 +126,7 @@ export function db(): Database.Database {
     const cols = conn.prepare("PRAGMA table_info(dumps)").all() as { name: string }[];
     if (!cols.some((c) => c.name === "subject")) conn.exec("ALTER TABLE dumps ADD COLUMN subject TEXT");
     if (!cols.some((c) => c.name === "provider")) conn.exec("ALTER TABLE dumps ADD COLUMN provider TEXT");
+    if (!cols.some((c) => c.name === "image_urls")) conn.exec("ALTER TABLE dumps ADD COLUMN image_urls TEXT");
     globalForDb.__dumpDb = conn;
   }
   return globalForDb.__dumpDb;
@@ -142,6 +147,7 @@ function toDump(r: Row): Dump {
     content: r.content,
     note: r.note,
     imageUrl: r.image_url,
+    imageUrls: imageUrls(r.image_urls, r.image_url),
     siteName: r.site_name,
     author: r.author,
     summary: r.summary,
@@ -152,6 +158,12 @@ function toDump(r: Row): Dump {
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
+}
+
+function imageUrls(json: string | null, single: string | null): string[] {
+  const urls = json ? safeJsonArray(json) : [];
+  if (urls.length) return urls;
+  return single ? [single] : [];
 }
 
 function safeJsonObject(s: string | null): Subject | null {
@@ -185,6 +197,7 @@ const COLUMN: Record<string, string> = {
   content: "content",
   note: "note",
   imageUrl: "image_url",
+  imageUrls: "image_urls",
   siteName: "site_name",
   author: "author",
   summary: "summary",
@@ -202,6 +215,7 @@ function toColumns(patch: Patch): Record<string, unknown> {
     const col = COLUMN[key];
     if (!col || value === undefined) continue;
     if (key === "tags") out[col] = JSON.stringify(value);
+    else if (key === "imageUrls") out[col] = (value as string[] | null)?.length ? JSON.stringify(value) : null;
     else if (key === "subject") out[col] = value ? JSON.stringify(value) : null;
     else if (key === "topicLocked") out[col] = value ? 1 : 0;
     else out[col] = value;

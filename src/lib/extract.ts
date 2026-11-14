@@ -11,6 +11,8 @@ export interface Extracted {
   description: string | null;
   content: string | null;
   imageUrl: string | null;
+  /** Every image the source advertised (og:image arrays, oEmbed thumbnail first). imageUrl is [0]. */
+  imageUrls: string[];
   siteName: string | null;
   author: string | null;
   /** True when no request for this URL got any HTTP response (network error, timeout, blocked). */
@@ -209,6 +211,7 @@ interface PageMeta {
   description: string | null;
   content: string | null;
   imageUrl: string | null;
+  imageUrls: string[];
   siteName: string | null;
   author: string | null;
   ogType: string | null;
@@ -250,12 +253,22 @@ export function parseHtml(html: string, baseUrl: string): PageMeta {
     .join("\n")
     .slice(0, 20000);
 
+  const imageUrls = [
+    ...new Set(
+      ["og:image", "og:image:url", "twitter:image", "twitter:image:src"]
+        .flatMap((n) => $(`meta[property="${n}"], meta[name="${n}"]`).map((_, el) => $(el).attr("content")?.trim()).get())
+        .map((v) => abs(v ?? null))
+        .filter((v): v is string => !!v),
+    ),
+  ].slice(0, 8);
+
   const ogType = meta("og:type");
   return {
     title: meta("og:title", "twitter:title") ?? ($("title").first().text().trim() || null),
     description: meta("og:description", "twitter:description", "description"),
     content: content || null,
-    imageUrl: abs(meta("og:image", "og:image:url", "twitter:image", "twitter:image:src")),
+    imageUrl: imageUrls[0] ?? null,
+    imageUrls,
     siteName: meta("og:site_name", "application-name"),
     author: meta("author", "article:author", "twitter:creator"),
     ogType: ogType ?? jsonLdType,
@@ -299,10 +312,10 @@ export async function extractUrl(url: string): Promise<Extracted> {
   }
 
   if (contentType.startsWith("image/")) {
-    return { kind: "image", title: decodeURIComponent(new URL(url).pathname.split("/").pop() || "Image"), description: null, content: null, imageUrl: url, siteName: host, author: null, unreachable: false };
+    return { kind: "image", title: decodeURIComponent(new URL(url).pathname.split("/").pop() || "Image"), description: null, content: null, imageUrl: url, imageUrls: [url], siteName: host, author: null, unreachable: false };
   }
   if (contentType.startsWith("video/")) {
-    return { kind: "video", title: null, description: null, content: null, imageUrl: null, siteName: host, author: null, unreachable: false };
+    return { kind: "video", title: null, description: null, content: null, imageUrl: null, imageUrls: [], siteName: host, author: null, unreachable: false };
   }
 
   const embedText = textFromEmbedHtml(oembed?.html);
@@ -317,18 +330,22 @@ export async function extractUrl(url: string): Promise<Extracted> {
       description: embedText,
       content: embedText,
       imageUrl: null,
+      imageUrls: [],
       siteName: "X",
       author,
       unreachable: !reached,
     };
   }
 
+  const imageUrls = [...new Set([oembed?.thumbnail_url, ...(page?.imageUrls ?? [])].filter((v): v is string => !!v))];
+
   return {
     kind,
     title: oembed?.title ?? page?.title ?? null,
     description: page?.description ?? (embedText && embedText !== oembed?.title ? embedText : null),
     content: page?.content ?? embedText,
-    imageUrl: oembed?.thumbnail_url ?? page?.imageUrl ?? null,
+    imageUrl: imageUrls[0] ?? null,
+    imageUrls,
     siteName: page?.siteName ?? oembed?.provider_name ?? host,
     author: oembed?.author_name ?? page?.author ?? null,
     unreachable: !reached,

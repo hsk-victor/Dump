@@ -454,78 +454,273 @@ button {
   height: 0.85rem;
 }
 
-/* Media-first card: the image is the card; text rides a soft scrim */
-.d-scrim {
+/* Provider roundel bottom-left + "1/N" counter top-right — the only chrome a
+   media card shows at rest. */
+.d-mmark {
   position: absolute;
-  inset: auto 0 0 0;
-  padding: 2.75rem 0.9rem 0.7rem;
-  background: linear-gradient(to top, rgb(0 0 0 / 0.6), rgb(0 0 0 / 0.28) 55%, transparent);
-  color: #fff;
-  pointer-events: none; /* the media link underneath stays clickable */
+  left: 0.55rem;
+  bottom: 0.55rem;
+  display: grid;
+  place-items: center;
+  width: 1.65rem;
+  height: 1.65rem;
+  border-radius: 999px;
+  color: var(--provider, #fff);
+  background: rgb(0 0 0 / 0.5);
+  backdrop-filter: blur(6px);
 }
-.d-scrim a,
-.d-scrim .d-meta {
+.d-mmark svg {
+  width: 0.85rem;
+  height: 0.85rem;
+}
+.d-mcount {
+  position: absolute;
+  top: 0.55rem;
+  right: 0.55rem;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #fff;
+  background: rgb(0 0 0 / 0.55);
+  backdrop-filter: blur(6px);
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  line-height: 1.2;
+  transition: opacity 0.12s var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  /* The corner belongs to card actions once they're revealed. */
+  .d-mediacard:is(:hover, :focus-within) .d-mcount {
+    opacity: 0;
+  }
+}
+
+/* Media card: the image is the card. Pure media at rest; details rise in a glass panel on hover/focus. */
+.d-mediacard {
+  container-type: inline-size;
+}
+.d-mediacard .d-media {
+  overflow: hidden;
+}
+.d-mediacard .d-media img {
+  min-height: 56cqw;
+  max-height: 175cqw; /* let tall pins stay tall, but never a column-long strip */
+  object-position: center 35%;
+  opacity: 0;
+  transition: opacity 0.22s var(--ease-out);
+}
+.d-mediacard .d-media img[data-loaded] {
+  opacity: 1;
+}
+.d-mchip {
+  position: absolute;
+  left: 0.5rem;
+  bottom: 0.5rem;
+  max-width: calc(100% - 1rem);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  height: 1.6rem;
+  padding: 0 0.6rem 0 0.5rem;
+  border-radius: 999px;
+  background: var(--raised);
+  -webkit-backdrop-filter: blur(10px) saturate(1.4);
+  backdrop-filter: blur(10px) saturate(1.4);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.12);
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--ink-2);
+  pointer-events: none;
+  transition: opacity 0.12s var(--ease-out);
+}
+.d-mpanel-prov {
+  width: 0.8rem;
+  height: 0.8rem;
+  flex-shrink: 0;
+  color: var(--provider, var(--ink-2));
+}
+.d-mchip-sorting {
+  width: 3.5rem;
+  height: 0.55rem;
+  border-radius: 999px;
+}
+.d-mpanel {
+  position: absolute;
+  left: 0.4rem;
+  right: 0.4rem;
+  bottom: 0.4rem;
+  max-height: calc(100% - 0.8rem);
+  overflow: hidden;
+  padding: 0.65rem 0.75rem 0.6rem;
+  border-radius: calc(var(--radius) - 5px);
+  background: var(--raised);
+  -webkit-backdrop-filter: blur(16px) saturate(1.5);
+  backdrop-filter: blur(16px) saturate(1.5);
+  box-shadow: 0 6px 24px -6px rgb(0 0 0 / 0.3), 0 0 0 1px var(--hairline);
+  color: var(--ink);
+  opacity: 0;
+  translate: 0 8px;
+  pointer-events: none;
+  /* Exit is quicker than entry: leaving the card shouldn't leave a ghost behind. */
+  transition: opacity 0.14s var(--ease-out), translate 0.14s var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .d-mediacard:is(:hover, :focus-within) .d-mpanel {
+    opacity: 1;
+    translate: 0 0;
+    pointer-events: auto;
+    transition-duration: 0.2s;
+  }
+  .d-mediacard:is(:hover, :focus-within) .d-mchip {
+    opacity: 0;
+  }
+  /* The panel always shows its meta row once open (Retry included); skip the row's own collapse animation. */
+  .d-mpanel .d-meta {
+    transition: none;
+  }
+  .d-mediacard:is(:hover, :focus-within, [data-open]) .d-mpanel .d-meta {
+    opacity: 1;
+    max-height: 2.5rem;
+    margin-top: 0.5rem;
+    padding-top: 0.45rem;
+    border-top-width: 1px;
+  }
+}
+/* Failed dumps keep the panel open so Retry is reachable. */
+.d-mediacard[data-open] .d-mpanel {
+  opacity: 1;
+  translate: 0 0;
   pointer-events: auto;
 }
-.d-overlay-title {
-  font-size: 0.94rem;
+.d-mediacard[data-open] .d-mchip {
+  opacity: 0;
+}
+@media (hover: none), (pointer: coarse) {
+  .d-mediacard:not([data-open]) .d-mpanel {
+    display: none;
+  }
+}
+.d-mpanel-title {
+  font-size: 0.84rem;
   font-weight: 650;
   line-height: 1.3;
-  letter-spacing: -0.012em;
-  text-shadow: 0 1px 10px rgb(0 0 0 / 0.4);
+  letter-spacing: -0.01em;
+  text-wrap: pretty;
+  overflow-wrap: anywhere;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
-.d-overlay-title a {
-  color: #fff;
+.d-mpanel-title a {
+  color: inherit;
   text-decoration: none;
 }
 @media (hover: hover) and (pointer: fine) {
-  .d-overlay-title a:hover {
+  .d-mpanel-title a:hover {
     text-decoration: underline;
     text-underline-offset: 2px;
+    text-decoration-thickness: 1px;
   }
 }
-.d-overlay-sub {
-  margin-top: 0.15rem;
+.d-mpanel-by {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+  margin-top: 0.2rem;
   font-size: 0.72rem;
-  font-weight: 600;
-  color: rgb(255 255 255 / 0.75);
+  font-weight: 550;
+  color: var(--ink-2);
+  opacity: 0.8;
 }
-.d-overlay-dek {
+.d-mpanel-dek {
   margin-top: 0.3rem;
-  font-size: 0.76rem;
+  font-size: 0.74rem;
   line-height: 1.45;
-  color: rgb(255 255 255 / 0.82);
+  color: var(--ink-2);
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
-.d-overlay-note {
-  margin-top: 0.35rem;
+.d-mpanel .d-mpanel-note {
+  margin-top: 0.4rem;
+  /* Clamped text bleeds into padding; a transparent border insets it while the tint still fills. */
+  padding-block: 0;
+  border-block: 0.4rem solid transparent;
   font-size: 0.76rem;
-  color: rgb(255 255 255 / 0.7);
+  overflow-wrap: anywhere;
   display: -webkit-box;
-  -webkit-line-clamp: 1;
+  -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
-.d-scrim .d-meta {
-  border-top-color: rgb(255 255 255 / 0.22);
-  color: rgb(255 255 255 / 0.72);
+.d-mpanel > :first-child {
+  margin-top: 0;
 }
-.d-scrim .d-sorting {
-  background: rgb(255 255 255 / 0.16);
+.d-mpanel .d-meta {
+  margin-top: 0.5rem;
+  padding-top: 0.45rem;
 }
-.d-scrim .d-retry {
-  color: #fbbf24;
+.d-mediacard .d-mpanel > .d-meta:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top-width: 0;
 }
-.d-scrim .shimmer {
-  background: linear-gradient(90deg, rgb(255 255 255 / 0.12) 0%, rgb(255 255 255 / 0.3) 50%, rgb(255 255 255 / 0.12) 100%);
-  background-size: 800px 100%;
+
+/* Video (non-YouTube): same glass chip/panel as the media card, over a 16:9 frame.
+ * The frame crops to the video ratio and carries the scrim, play badge and flag. */
+.d-vidcard .d-media {
+  aspect-ratio: 16 / 9;
+}
+.d-vidcard .d-media img {
+  min-height: 0;
+  max-height: none;
+  height: 100%;
+  object-position: center;
+  transition: opacity 0.22s var(--ease-out), scale 0.4s var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .d-vidcard:hover .d-media img[data-loaded] {
+    scale: 1.03;
+  }
+}
+.d-vph {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--provider, var(--muted));
+}
+/* Bigger than the centered .d-play (2.75rem) so the brand glyph stays visible
+   as a medallion behind the tinted play badge instead of being fully covered. */
+.d-vph .d-prov {
+  width: 4.4rem;
+  height: 4.4rem;
+}
+/* Thin bottom scrim so the chip always reads — much lighter than a full overlay. */
+.d-vscrim {
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 44%;
+  background: linear-gradient(0deg, rgb(0 0 0 / 0.34), transparent);
+  pointer-events: none;
+}
+.d-vidcard .d-play {
+  transition: scale 0.18s var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .d-vidcard:hover .d-play {
+    scale: 1.08;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .d-vidcard .d-media img,
+  .d-vidcard .d-play {
+    transition: opacity 0.15s;
+    scale: none;
+  }
 }
 .d-body {
   padding: 0.8rem 0.9rem 0.8rem;
@@ -555,21 +750,211 @@ button {
   text-transform: uppercase;
   color: var(--muted);
 }
-.d-article-row {
-  display: flex;
-  gap: 0.7rem;
-  align-items: flex-start;
-}
-.d-thumb-link {
-  flex-shrink: 0;
-  line-height: 0;
-}
 .d-thumb {
   width: 4.5rem;
   height: 4.5rem;
   object-fit: cover;
   border-radius: 10px;
   background: var(--hairline);
+}
+
+/* Article card: the thumb floats so the headline sits beside it and a long dek
+   runs full-width once it clears. Clamped blocks narrow beside a float rather than wrap under it. */
+.d-article {
+  container-type: inline-size;
+}
+.d-article-body {
+  display: flow-root;
+}
+.d-article .d-article-thumb {
+  float: inline-end;
+  margin-inline-start: 0.75rem;
+  margin-top: 0.1rem;
+  margin-bottom: 0.35rem;
+  border-radius: 8px;
+  /* Keeps white-edged og:images from bleeding into the card. */
+  outline: 1px solid var(--hairline);
+  outline-offset: -1px;
+}
+/* Narrow columns (phones, smallest card size): a side thumb would squeeze the headline
+   to a word per line, so the image stacks above it instead. */
+@container (max-width: 230px) {
+  .d-article .d-article-thumb {
+    float: none;
+    display: block;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 16 / 9;
+    margin: 0 0 0.55rem;
+  }
+}
+.d-article .d-article-title {
+  -webkit-line-clamp: 3;
+  overflow-wrap: break-word;
+  text-wrap: pretty;
+}
+.d-article .d-article-dek {
+  margin-top: 0.4rem;
+  -webkit-line-clamp: 3;
+  overflow-wrap: break-word;
+  text-wrap: pretty;
+}
+.d-article .d-annotation,
+.d-article .d-meta {
+  clear: both;
+}
+.d-article .d-annotation {
+  overflow-wrap: break-word;
+}
+/* The headline link covers the whole card; hover actions (z-index 2) and Retry stay on top. */
+.d-article .d-headline a::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+.d-article .d-retry {
+  position: relative;
+  z-index: 1;
+}
+.d-article .d-headline a {
+  text-decoration-line: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  text-decoration-color: transparent;
+  transition: text-decoration-color 0.15s var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .d-article:hover .d-headline a {
+    text-decoration-color: color-mix(in srgb, currentColor 25%, transparent);
+  }
+}
+.d-article .d-headline a:focus-visible {
+  outline: none;
+}
+.d-article:has(.d-headline a:focus-visible) {
+  outline: 2px solid color-mix(in srgb, var(--ink) 55%, transparent);
+  outline-offset: 2px;
+}
+
+/* link — a bookmark, not a preview: favicon + blue underlined title + muted
+   domain. The headline link covers the whole card (same stretch as .d-article). */
+.d-link {
+  --link: #2563eb;
+}
+[data-mode="dark"] .d-link {
+  --link: #7ea2f5;
+}
+.d-link-body {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  padding: 0.62rem 0.8rem;
+}
+.d-linkmark {
+  display: inline-grid;
+  width: 1rem;
+  height: 1rem;
+  margin-top: 0.09rem;
+  flex-shrink: 0;
+}
+.d-linkmark-letter,
+.d-linkmark-img {
+  grid-area: 1 / 1;
+  width: 100%;
+  height: 100%;
+  border-radius: 3px;
+}
+.d-linkmark-letter {
+  display: grid;
+  place-items: center;
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+}
+.d-linkmark-img {
+  opacity: 0;
+  transition: opacity 0.18s var(--ease-out);
+}
+.d-linkmark-img[data-loaded] {
+  opacity: 1;
+}
+.d-link-text {
+  flex: 1;
+  min-width: 0;
+}
+.d-link-title {
+  font-size: 0.84rem;
+  font-weight: 600;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  text-wrap: pretty;
+}
+.d-link-title a {
+  color: var(--link);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+  text-decoration-color: color-mix(in srgb, var(--link) 42%, transparent);
+  transition: text-decoration-color 0.15s var(--ease-out);
+}
+.d-link-title a::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+.d-link .d-retry {
+  position: relative;
+  z-index: 1;
+}
+@media (hover: hover) and (pointer: fine) {
+  .d-link:hover .d-link-title a {
+    text-decoration-color: var(--link);
+  }
+}
+.d-link-title a:focus-visible {
+  outline: none;
+}
+.d-link:has(.d-link-title a:focus-visible) {
+  outline: 2px solid color-mix(in srgb, var(--link) 55%, transparent);
+  outline-offset: 2px;
+}
+.d-link-domain {
+  display: block;
+  margin-top: 0.1rem;
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.d-link-shimmer {
+  flex: 1;
+}
+.d-link-shimmer .shimmer {
+  display: block;
+  width: 62%;
+  height: 0.55rem;
+  border-radius: 4px;
+}
+.d-link .d-tomb {
+  flex: 1;
+  margin-top: 0;
+  padding: 0.3rem 0.5rem;
+}
+.d-link .d-annotation {
+  margin: -0.15rem 0.8rem 0.5rem;
+}
+.d-link .d-meta {
+  margin-left: 0.8rem;
+  margin-right: 0.8rem;
 }
 
 /* Platform-native chrome */
@@ -579,123 +964,37 @@ button {
   color: var(--muted);
 }
 
-/* X — embedded tweet */
-.d-tw {
-  padding: 0.9rem 0.95rem 0.6rem;
-}
-.d-tw-head {
-  display: flex;
-  align-items: center;
-  gap: 0.55rem;
-  color: inherit;
-  text-decoration: none;
-}
-.d-tw-avatar {
-  display: grid;
-  place-items: center;
-  width: 2.4rem;
-  height: 2.4rem;
-  border-radius: 999px;
-  flex-shrink: 0;
+/* X — shares the Post card chrome (.d-post); X's mark is black, so its avatar
+   stays ink-solid instead of the provider/topic gradient. */
+.d-post[data-provider="x"] .d-avatar {
   background: var(--ink);
   color: var(--surface);
-  font-size: 0.85rem;
-  font-weight: 700;
 }
-.d-tw-avatar .d-prov {
-  width: 1.1rem;
-  height: 1.1rem;
+.d-post[data-provider="x"] .d-avatar .d-prov {
   color: var(--surface);
 }
-.d-tw-name {
-  display: block;
-  font-size: 0.92rem;
-  font-weight: 700;
-  line-height: 1.25;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.d-tw-handle {
-  display: block;
-  font-size: 0.78rem;
-  color: var(--muted);
-}
-.d-tw-logo {
-  margin-left: auto;
-  width: 1.25rem;
-  height: 1.25rem;
-  flex-shrink: 0;
-  color: var(--ink);
-}
-.d-tw-text {
+
+/* Unavailable post — a deleted tweet or a failed fetch with no text left. */
+.d-tomb {
   margin-top: 0.55rem;
-  font-size: 0.95rem;
-  line-height: 1.45;
-  white-space: pre-line;
-  display: -webkit-box;
-  -webkit-line-clamp: 10;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-.d-tw-media {
-  display: block;
-  margin-top: 0.65rem;
-  border-radius: 14px;
-  overflow: hidden;
-  line-height: 0;
-}
-.d-tw-img {
-  width: 100%;
-  max-height: 18rem;
-  object-fit: cover;
-}
-.d-tw-actions {
-  display: flex;
-  justify-content: space-between;
-  margin-top: 0.7rem;
-  padding: 0 0.3rem;
-}
-.d-tw-act {
-  display: inline-flex;
+  padding: 0.7rem 0.8rem;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--ink) 5%, transparent);
   color: var(--muted);
-}
-.d-tw-act .d-glyph {
-  width: 1.05rem;
-  height: 1.05rem;
-}
-.d-tw .d-meta {
-  margin-top: 0.65rem;
+  font-size: 0.84rem;
+  font-weight: 550;
+  text-align: center;
 }
 
-/* reddit — vote rail + r/sub · u/author · ago + headline */
-.d-rd {
-  display: flex;
-}
-.d-rd-votes {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.15rem;
-  width: 2.1rem;
-  flex-shrink: 0;
-  padding-top: 0.8rem;
-  background: color-mix(in srgb, var(--ink) 5%, transparent);
-}
-.d-rd-arrow {
-  width: 1.15rem;
-  height: 1.15rem;
-  color: var(--muted);
-}
+/* reddit — r/sub roundel kicker + u/author · ago, headline, text, framed media */
 .d-rd-body {
-  flex: 1;
   min-width: 0;
-  padding: 0.75rem 0.9rem 0.7rem 0.7rem;
+  padding: 0.75rem 0.85rem 0.5rem;
 }
 .d-rd-top {
   display: flex;
   align-items: center;
-  gap: 0.45rem;
+  gap: 0.4rem;
   margin-bottom: 0.35rem;
   min-width: 0;
 }
@@ -714,26 +1013,35 @@ button {
   height: 0.8rem;
 }
 .d-rd-sub {
-  font-size: 0.78rem;
+  font-size: 0.76rem;
   font-weight: 700;
   color: inherit;
   text-decoration: none;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  flex-shrink: 0;
+  max-width: 60%;
 }
 .d-rd-by {
-  font-size: 0.7rem;
+  min-width: 0;
+  font-size: 0.68rem;
   color: var(--muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .d-rd-title {
-  font-size: 0.95rem;
+  font-size: 0.92rem;
   font-weight: 650;
   line-height: 1.3;
-  margin-bottom: 0.15rem;
+  letter-spacing: -0.012em;
+  margin-bottom: 0.1rem;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 .d-rd-title a {
   color: inherit;
@@ -744,52 +1052,109 @@ button {
   .d-rd-sub:hover {
     text-decoration: underline;
     text-underline-offset: 2px;
+    text-decoration-thickness: 1px;
   }
 }
-
-/* Hacker News — compact item like the HN list: orange Y mark, headline, domain */
-.d-hn {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  padding: 0.75rem 0.9rem;
-  color: inherit;
-  text-decoration: none;
-}
-.d-hn-mark {
-  display: grid;
-  place-items: center;
-  width: 1.9rem;
-  height: 1.9rem;
-  border-radius: 7px;
-  flex-shrink: 0;
-  background: var(--provider, #ff6600);
-  color: #fff;
-}
-.d-hn-mark .d-prov {
-  width: 1.1rem;
-  height: 1.1rem;
-}
-.d-hn-title {
+.d-rd-text {
+  margin-top: 0.3rem;
+  font-size: 0.84rem;
+  line-height: 1.5;
+  color: var(--ink-2);
+  white-space: pre-line;
+  overflow-wrap: anywhere;
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 5;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  font-size: 0.9rem;
-  font-weight: 650;
-  line-height: 1.3;
 }
-.d-hn-site {
+.d-rd-media {
+  position: relative;
   display: block;
-  margin-top: 0.1rem;
-  font-size: 0.72rem;
-  color: var(--muted);
+  margin-top: 0.6rem;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--hairline);
+  line-height: 0;
 }
-.d-rd-sub {
-  flex-shrink: 0;
+.d-rd-media img {
+  display: block;
+  width: 100%;
+  max-height: 15rem;
+  object-fit: cover;
 }
-.d-rd-by {
-  min-width: 0;
+.d-rd-media .d-play {
+  width: 2.2rem;
+  height: 2.2rem;
+}
+.d-rd-media .d-play svg {
+  width: 0.95rem;
+  height: 0.95rem;
+}
+
+/* Hacker News — flat Y-orange top rail, mono micro-kicker (:\ HACKER_NEWS),   */
+/* headline as a stretched link over the whole card. No fabricated stats.      */
+.d-hn {
+  container-type: inline-size;
+  background: color-mix(in srgb, var(--provider, #ff6600) 10%, var(--surface));
+}
+.d-hn::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--provider, #ff6600);
+}
+.d-hn-kicker {
+  font-family: ui-monospace, "SFMono-Regular", "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  letter-spacing: 0.02em;
+}
+.d-hn-ps {
+  color: var(--provider, #ff6600);
+}
+.d-hn-tag {
+  color: var(--provider, #ff6600);
+}
+/* Headline link covers the whole card (same pattern as the article card). */
+.d-hn .d-headline {
+  -webkit-line-clamp: 3;
+  overflow-wrap: anywhere;
+  text-wrap: pretty;
+}
+.d-hn .d-headline a::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+.d-hn .d-retry {
+  position: relative;
+  z-index: 1;
+}
+.d-hn .d-headline a {
+  text-decoration-line: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  text-decoration-color: transparent;
+  transition: text-decoration-color 0.15s var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .d-hn:hover .d-headline a {
+    text-decoration-color: color-mix(in srgb, var(--provider, currentColor) 45%, transparent);
+  }
+}
+.d-hn .d-headline a:focus-visible {
+  outline: none;
+}
+.d-hn:has(.d-headline a:focus-visible) {
+  outline: 2px solid color-mix(in srgb, var(--ink) 55%, transparent);
+  outline-offset: 2px;
+}
+.d-hn .d-dek {
+  -webkit-line-clamp: 3;
+  overflow-wrap: break-word;
+  text-wrap: pretty;
 }
 
 /* video platforms — thumbnail then channel-avatar row, like the platform's own card */
@@ -858,119 +1223,139 @@ button {
   margin: 0.1rem 0.9rem 0.7rem;
 }
 
-/* instagram — gradient-ring avatar, square media, action bar, caption */
-.d-ig-head {
-  display: flex;
-  align-items: center;
-  gap: 0.55rem;
-  padding: 0.6rem 0.9rem;
-  color: inherit;
-  text-decoration: none;
+/* instagram — media-card shell ("gallery"): pure media at rest, IG roundel +
+   1/N at the corners, caption/byline/note/meta in the glass panel. Two URL
+   shapes: /p/ posts keep their natural ratio; /reel/ reels frame at 9:16 with a
+   film flag. Login-walled fetches leave URL-only dumps — a quiet tile stands in
+   for media so sparse saves still read intentional. */
+.d-igcard .d-media img {
+  max-height: 165cqw;
 }
-.d-ig-ring {
-  display: block;
-  width: 2.05rem;
-  height: 2.05rem;
-  padding: 2px;
-  border-radius: 999px;
-  flex-shrink: 0;
-  background: linear-gradient(45deg, #feda75, #fa7e1e, #d62976, #962fbf, #4f5bd5);
+.d-igreel .d-media:not(.d-ig-empty) {
+  aspect-ratio: 9 / 16;
 }
-.d-ig-avatar {
+.d-igreel .d-media:not(.d-ig-empty) img {
+  min-height: 0;
+  max-height: none;
+  height: 100%;
+}
+/* Reel flag: film glyph where a photo post shows nothing. */
+.d-ig-flag {
+  position: absolute;
+  top: 0.55rem;
+  left: 0.55rem;
   display: grid;
   place-items: center;
-  width: 100%;
-  height: 100%;
+  width: 1.65rem;
+  height: 1.65rem;
   border-radius: 999px;
-  border: 2px solid var(--surface);
-  background: var(--ink);
-  color: var(--surface);
-  font-size: 0.7rem;
-  font-weight: 700;
+  color: #fff;
+  background: rgb(0 0 0 / 0.5);
+  backdrop-filter: blur(6px);
 }
-.d-ig-name {
-  font-size: 0.84rem;
-  font-weight: 650;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.d-ig-flag svg {
+  width: 0.85rem;
+  height: 0.85rem;
 }
-.d-ig-dots {
-  margin-left: auto;
-  width: 1.1rem;
-  height: 1.1rem;
-  color: var(--ink);
+.d-ig-empty {
+  display: grid;
+  place-items: center;
+  gap: 0.45rem;
+  padding: 1.6rem 0.8rem;
+  background: color-mix(in srgb, var(--ink) 3.5%, transparent);
+  text-align: center;
 }
-.d-ig-media {
+.d-ig-mark {
+  display: grid;
+  place-items: center;
+  width: 2.3rem;
+  height: 2.3rem;
+  border-radius: 999px;
+  color: #fff;
+  background: linear-gradient(45deg, #feda75, #fa7e1e, #d62976, #962fbf, #4f5bd5);
+}
+.d-ig-mark svg {
+  width: 1.2rem;
+  height: 1.2rem;
+}
+.d-ig-empty-name {
   display: block;
-  line-height: 0;
-}
-.d-ig-img {
-  display: block;
-  width: 100%;
-  max-height: 22rem;
-  object-fit: cover;
-}
-.d-ig-actions {
-  display: flex;
-  gap: 0.85rem;
-  padding: 0.55rem 0.9rem 0.1rem;
-}
-.d-ig-actions .d-glyph {
-  width: 1.25rem;
-  height: 1.25rem;
-  color: var(--ink);
-}
-.d-ig-actions .d-ig-heart {
-  color: #ed4956;
-}
-.d-ig-actions .d-ig-save {
-  margin-left: auto;
-}
-.d-ig-caption {
-  padding: 0.15rem 0.9rem 0.2rem;
-  font-size: 0.82rem;
-  line-height: 1.4;
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-.d-ig-subject {
-  margin: 0.15rem 0.9rem 0.1rem;
   font-size: 0.78rem;
   font-weight: 650;
-  color: var(--ink);
+  color: var(--ink-2);
 }
-article.d-ig .d-meta,
-.d-ig .d-meta {
-  margin-left: 0.9rem;
-  margin-right: 0.9rem;
+.d-ig-empty-sub {
+  display: block;
+  font-size: 0.68rem;
+  color: var(--muted);
+  overflow-wrap: anywhere;
 }
 
-/* music — dark player tile like the service's own card */
-.d-mus {
-  background: #171a1e;
-  color: #fff;
-}
-.d-mus-row {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.75rem 0.9rem;
+/* music — the card is a frosted-glass player widget, sized by its content
+   (no forced ratio). The glass is the design element: strictly neutral, no
+   provider tint. Art at the side when the dump has art; transport + progress
+   are decorative (the card links out). Note + meta sit in a frosted panel
+   inside the tile on hover. */
+.d-mus-widget {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas:
+    "art face"
+    "art prog";
+  gap: 0.55rem 0.8rem;
+  height: 100%;
+  padding: 0.75rem;
+  border-radius: var(--radius);
   color: inherit;
   text-decoration: none;
+  background: rgb(127 127 127 / 0.1);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.5),
+    inset 0 0 0 1px rgb(0 0 0 / 0.08);
+  transition: box-shadow 0.18s var(--ease-out), scale 0.12s var(--ease-out);
+}
+[data-mode="dark"] .d-mus-widget {
+  background: rgb(255 255 255 / 0.07);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.1),
+    inset 0 0 0 1px rgb(255 255 255 / 0.08);
+}
+.d-mus-widget--noart {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas:
+    "face"
+    "prog";
+}
+@media (hover: hover) and (pointer: fine) {
+  .d-mus-widget:hover {
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.5),
+      inset 0 0 0 1px rgb(0 0 0 / 0.1),
+      0 6px 18px rgb(0 0 0 / 0.1);
+  }
+  [data-mode="dark"] .d-mus-widget:hover {
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.1),
+      inset 0 0 0 1px rgb(255 255 255 / 0.14),
+      0 6px 18px rgb(0 0 0 / 0.35);
+  }
+}
+.d-mus-widget:active {
+  scale: 0.98;
 }
 .d-mus-art {
   position: relative;
-  width: 4.2rem;
-  height: 4.2rem;
-  border-radius: 8px;
+  grid-area: art;
+  align-self: center;
+  aspect-ratio: 1 / 1;
+  width: 4.4rem;
+  border-radius: 10px;
   overflow: hidden;
-  flex-shrink: 0;
   display: grid;
   place-items: center;
-  background: color-mix(in srgb, var(--provider, #3a3f45) 25%, #26292e);
+  background: var(--hairline);
+  box-shadow: 0 3px 10px rgb(0 0 0 / 0.22);
 }
 .d-mus-img {
   position: absolute;
@@ -978,6 +1363,23 @@ article.d-ig .d-meta,
   width: 100%;
   height: 100%;
   object-fit: cover;
+  opacity: 0;
+  transition: opacity 0.22s var(--ease-out);
+}
+.d-mus-img[data-loaded] {
+  opacity: 1;
+}
+.d-mus-face {
+  grid-area: face;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.4rem;
+  padding-top: 0.15rem;
+  /* Clear the provider glyph + hover actions in the top-right corner. */
+  padding-right: 1.15rem;
+  transition: opacity 0.15s var(--ease-out);
 }
 .d-mus-text {
   display: flex;
@@ -985,137 +1387,211 @@ article.d-ig .d-meta,
   gap: 0.15rem;
 }
 .d-mus-title {
-  font-size: 0.95rem;
+  font-size: 0.85rem;
   font-weight: 700;
-  line-height: 1.3;
-  color: #fff;
+  line-height: 1.28;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  overflow-wrap: anywhere;
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
 .d-mus-sub {
-  font-size: 0.76rem;
-  color: rgb(255 255 255 / 0.6);
+  font-size: 0.72rem;
+  color: var(--muted);
+  overflow-wrap: anywhere;
   display: -webkit-box;
   -webkit-line-clamp: 1;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
-.d-mus-play {
-  margin-left: auto;
-  display: grid;
-  place-items: center;
-  width: 2.6rem;
-  height: 2.6rem;
+.d-mus-transport {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--ink);
+}
+.d-mus-transport svg {
+  width: 1rem;
+  height: 1rem;
+  opacity: 0.75;
+}
+.d-mus-transport-pause {
+  width: 1.3rem;
+  height: 1.3rem;
+}
+.d-mus-prog {
+  grid-area: prog;
+  position: relative;
+  align-self: end;
+  height: 4px;
   border-radius: 999px;
-  flex-shrink: 0;
-  color: #121212;
-  background: var(--provider, #1db954);
+  background: rgb(127 127 127 / 0.28);
+  overflow: hidden;
+  transition: opacity 0.15s var(--ease-out);
 }
-.d-mus-play svg {
-  width: 1.1rem;
-  height: 1.1rem;
-  margin-left: 2px;
+.d-mus-prog-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 35%;
+  border-radius: inherit;
+  background: var(--ink);
+  opacity: 0.55;
+  transform-origin: left;
+  animation: d-mus-fill 0.7s var(--ease-out);
 }
-.d-mus-note {
-  margin: 0 0.9rem 0.2rem;
-  font-size: 0.76rem;
-  line-height: 1.4;
-  color: rgb(255 255 255 / 0.65);
+@keyframes d-mus-fill {
+  from { transform: scaleX(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .d-mus-prog-fill {
+    animation: none;
+  }
+}
+.d-mus-src {
+  position: absolute;
+  top: 0.65rem;
+  right: 0.7rem;
+  width: 0.95rem;
+  height: 0.95rem;
+  color: var(--ink);
+  opacity: 0.4;
+  transition: opacity 0.15s var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  /* On hover the corner belongs to the card actions (like .d-mchip fading) and
+     the details panel takes over — the player chrome would sit under both. */
+  .d-mus:is(:hover, :focus-within) .d-mus-src,
+  .d-mus:is(:hover, :focus-within) .d-mus-face,
+  .d-mus:is(:hover, :focus-within) .d-mus-prog {
+    opacity: 0;
+  }
+}
+@media (hover: none), (pointer: coarse) {
+  .d-mus-src {
+    display: none;
+  }
+}
+/* Note + meta: a small frosted panel inside the tile, revealed on hover —
+   same mechanics as .d-mpanel on the media/video cards. */
+.d-mus-panel {
+  position: absolute;
+  z-index: 1;
+  left: 0.45rem;
+  right: 0.45rem;
+  bottom: 0.45rem;
+  max-height: calc(100% - 0.9rem);
+  overflow: hidden;
+  padding: 0.55rem 0.7rem 0.5rem;
+  border-radius: calc(var(--radius) - 5px);
+  background: var(--raised);
+  -webkit-backdrop-filter: blur(16px) saturate(1.5);
+  backdrop-filter: blur(16px) saturate(1.5);
+  box-shadow: 0 6px 24px -6px rgb(0 0 0 / 0.3), 0 0 0 1px var(--hairline);
+  color: var(--ink);
+  opacity: 0;
+  translate: 0 8px;
+  pointer-events: none;
+  transition: opacity 0.14s var(--ease-out), translate 0.14s var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .d-mus:is(:hover, :focus-within) .d-mus-panel {
+    opacity: 1;
+    translate: 0 0;
+    pointer-events: auto;
+    transition-duration: 0.2s;
+  }
+  .d-mus-panel .d-meta {
+    transition: none;
+  }
+  .d-mus:is(:hover, :focus-within, [data-open]) .d-mus-panel .d-meta {
+    opacity: 1;
+    max-height: 2.5rem;
+    margin-top: 0;
+    padding-top: 0;
+    border-top-width: 0;
+  }
+}
+/* Failed dumps keep the panel open so Retry stays reachable — and the player
+   chrome (and provider glyph) stand down so the title isn't duplicated. */
+.d-mus[data-open] .d-mus-panel {
+  opacity: 1;
+  translate: 0 0;
+  pointer-events: auto;
+}
+.d-mus[data-open] .d-mus-face,
+.d-mus[data-open] .d-mus-prog,
+.d-mus[data-open] .d-mus-src {
+  opacity: 0;
+}
+@media (hover: none), (pointer: coarse) {
+  .d-mus:not([data-open]) .d-mus-panel {
+    display: none;
+  }
+}
+.d-mus-panel .d-mus-ptitle {
+  margin: 0 0 0.3rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  overflow-wrap: anywhere;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
-.d-mus-foot {
-  display: flex;
-  align-items: center;
-  gap: 0.55rem;
-  padding: 0 0.9rem 0.7rem;
+.d-mus-panel .d-mus-note {
+  margin: 0 0 0.3rem;
+  font-size: 0.76rem;
+  line-height: 1.4;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
-.d-mus-foot .d-meta {
-  flex: 1;
-  min-width: 0;
+.d-mus-panel .d-meta {
   margin-top: 0;
-  padding-top: 0.45rem;
-  border-top-color: rgb(255 255 255 / 0.14);
-  color: rgb(255 255 255 / 0.55);
-}
-.d-mus-foot .d-meta .d-retry {
-  color: #fbbf24;
-}
-.d-mus-prov {
-  width: 1.05rem;
-  height: 1.05rem;
-  color: var(--provider, #fff);
-}
-/* Brand-tinted placeholder bars when a track has no artwork */
-.d-wave {
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  height: 1.3rem;
-}
-.d-wave i {
-  width: 3px;
-  border-radius: 2px;
-  background: var(--provider, var(--topic));
-  opacity: 0.85;
-}
-.d-wave i:nth-child(1) { height: 40%; }
-.d-wave i:nth-child(2) { height: 80%; }
-.d-wave i:nth-child(3) { height: 100%; }
-.d-wave i:nth-child(4) { height: 60%; }
-.d-wave i:nth-child(5) { height: 35%; }
-.d-mus .d-actions select,
-.d-mus .d-actions button {
-  background: rgb(255 255 255 / 0.12);
-  color: #fff;
 }
 
-/* GitHub card: the mark + owner/repo headline */
-.d-gh {
-  display: flex;
-  align-items: center;
-  gap: 0.55rem;
-  color: inherit;
-  text-decoration: none;
+/* GitHub card: media-first — the generated og:image is the card. The only new
+   chrome is the type tag top-right naming the page kind (ISSUE #N / PR #N /
+   FILE / PROFILE); everything else reuses .d-mediacard/.d-mpanel. */
+/* The og:image is a fixed 2:1 banner — drop .d-mediacard's min-height so the
+   frame hugs the art instead of cover-cropping/zooming it into 56cqw. */
+.d-ghcard .d-media img {
+  min-height: 0;
 }
-.d-gh-mark {
-  display: grid;
-  place-items: center;
-  width: 1.9rem;
-  height: 1.9rem;
-  border-radius: 8px;
-  flex-shrink: 0;
-  color: var(--surface);
-  background: var(--ink);
-}
-.d-gh-mark .d-prov {
-  width: 1.15rem;
-  height: 1.15rem;
-}
-[data-mode="dark"] .d-gh-mark {
-  color: var(--bg);
-}
-.d-gh-repo {
-  font-size: 0.92rem;
-  font-weight: 650;
-  letter-spacing: -0.01em;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.d-gh-ref {
-  color: var(--ink-2);
-  font-weight: 550;
+.d-gh-tag {
+  position: absolute;
+  top: 0.55rem;
+  right: 0.55rem;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #fff;
+  background: rgb(0 0 0 / 0.55);
+  backdrop-filter: blur(6px);
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  line-height: 1.2;
+  transition: opacity 0.12s var(--ease-out);
 }
 @media (hover: hover) and (pointer: fine) {
-  .d-gh:hover .d-gh-repo {
-    text-decoration: underline;
-    text-underline-offset: 2px;
+  /* The corner belongs to card actions once they're revealed (same as .d-mcount). */
+  .d-ghcard:is(:hover, :focus-within) .d-gh-tag {
+    opacity: 0;
   }
+}
+.d-gh-tag-inline {
+  color: var(--muted);
+  font-weight: 600;
 }
 .d-headline {
   font-size: 0.94rem;
@@ -1217,50 +1693,60 @@ article.d-ig .d-meta,
   background: color-mix(in srgb, var(--topic) 9%, transparent);
 }
 
-/* Posts */
+/* Posts — embed look: avatar + name + handle header, provider mark, framed
+   media as a grid when a post carries several images. */
 .d-post {
-  padding: 0.9rem 0.95rem 0.8rem;
+  padding: 0.85rem 0.95rem 0.55rem;
 }
 .d-post-head {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
-  margin-bottom: 0.6rem;
+  gap: 0.55rem;
+  margin-bottom: 0.55rem;
+  color: inherit;
+  text-decoration: none;
 }
 .d-post-head > .d-prov {
   margin-left: auto;
-  width: 0.95rem;
-  height: 0.95rem;
-  color: var(--provider, var(--ink));
+  width: 1.05rem;
+  height: 1.05rem;
+  color: var(--provider, var(--muted));
   flex-shrink: 0;
-}
-.d-avatar .d-prov {
-  width: 0.85rem;
-  height: 0.85rem;
-  color: #fff;
 }
 .d-avatar {
   display: grid;
   place-items: center;
-  width: 2.2rem;
-  height: 2.2rem;
+  width: 2.3rem;
+  height: 2.3rem;
   border-radius: 999px;
   flex-shrink: 0;
-  font-size: 0.75rem;
+  font-size: 0.78rem;
   font-weight: 700;
   color: #fff;
-  background: linear-gradient(140deg, color-mix(in srgb, var(--topic) 75%, #fff), var(--topic));
+  background: linear-gradient(140deg, color-mix(in srgb, var(--provider, var(--topic)) 75%, #fff), var(--provider, var(--topic)));
+}
+.d-avatar .d-prov,
+.d-avatar .d-glyph {
+  width: 1rem;
+  height: 1rem;
+  color: #fff;
 }
 .d-author-name {
   display: block;
-  font-size: 0.84rem;
+  font-size: 0.88rem;
   font-weight: 700;
-  line-height: 1.2;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .d-author-site {
   display: block;
-  font-size: 0.74rem;
+  font-size: 0.73rem;
   color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .d-post-headline {
   margin: 0.1rem 0 0.35rem;
@@ -1274,12 +1760,13 @@ article.d-ig .d-meta,
   overflow: hidden;
 }
 .d-post-text {
-  font-size: 0.875rem;
+  font-size: 0.9rem;
   line-height: 1.5;
   color: var(--ink-2);
   white-space: pre-line;
+  overflow-wrap: anywhere;
   display: -webkit-box;
-  -webkit-line-clamp: 8;
+  -webkit-line-clamp: 9;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
@@ -1290,22 +1777,191 @@ article.d-ig .d-meta,
   max-height: 18rem;
   object-fit: cover;
 }
-
-/* Notes */
-.d-card[data-kind="note"] {
-  background: color-mix(in srgb, var(--topic) 8%, var(--surface));
+.d-post-gallery {
+  position: relative;
+  display: block;
+  margin-top: 0.6rem;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--hairline);
+  line-height: 0;
 }
-.d-note-text {
-  font-size: 0.95rem;
+.d-post-gallery img {
+  display: block;
+  width: 100%;
+  max-height: 16rem;
+  object-fit: cover;
+}
+.d-post-count {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #fff;
+  background: rgb(0 0 0 / 0.55);
+  backdrop-filter: blur(6px);
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  line-height: 1.2;
+}
+.d-post .d-meta {
+  margin-top: 0.6rem;
+}
+.d-post .d-annotation {
+  margin-top: 0.6rem;
+}
+
+/* Notes — index card: a catalog header (uppercase title + date) over ruled
+   writing lines, with a red margin rule on the leading edge. Card stock stays
+   plain — the topic tint lives in the meta row, not the paper. */
+.d-card[data-kind="note"] {
+  --note-rule: color-mix(in srgb, var(--ink) 9%, transparent);
+  --note-margin: color-mix(in srgb, #e11d48 38%, transparent);
+  background: var(--surface);
+}
+.d-note-body {
+  position: relative;
+  padding: 0.8rem 0.9rem;
+  /* Room for the margin rule; flips to the right side for RTL notes. */
+  padding-inline-start: 2.05rem;
+}
+.d-note-body::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  inset-inline-start: 1.45rem;
+  width: 1px;
+  background: var(--note-margin);
+  pointer-events: none;
+}
+.d-note-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding-bottom: 0.45rem;
+  margin-bottom: 0.55rem;
+  border-bottom: 1.5px solid var(--note-rule);
+}
+.d-note-title {
+  min-width: 0;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.d-note-date {
+  flex-shrink: 0;
+  font-size: 0.68rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+/* Ruled lines repeat at the text's line-height so they read as writing lines.
+   The -0.256em offset puts each rule on the text baseline (half-leading +
+   font ascent ≈ 1.244em below the block top, measured on Plus Jakarta Sans). */
+.d-note-lines {
+  font-size: 0.88rem;
   line-height: 1.5;
-  font-weight: 500;
-  letter-spacing: -0.01em;
+  color: var(--ink-2);
   white-space: pre-line;
+  overflow-wrap: anywhere;
   display: -webkit-box;
   -webkit-line-clamp: 10;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent calc(1.5em - 1px),
+    var(--note-rule) calc(1.5em - 1px),
+    var(--note-rule) 1.5em
+  );
+  background-position: 0 -0.256em;
 }
+.d-card[data-kind="note"] .d-annotation {
+  margin-inline-start: -0.5rem;
+  margin-inline-end: 0;
+}
+
+/* ── Saved for the future card-style customization feature (do not delete) ──
+   Runner-up note variant "Sticky" — physical memo: warm paper, masking tape.
+   From the note prototype; class names are the prototype's pn-* set and would
+   need translating to d-* if revived.
+
+.d-card.pn-sticky {
+  --pn-ink: #463a12;
+  --pn-ink-2: #6b5c24;
+  --pn-line: rgb(120 95 20 / 0.14);
+  background: linear-gradient(175deg, #fceeac 0%, #f9e48c 55%, #f5d973 100%);
+  color: var(--pn-ink);
+}
+[data-mode="dark"] .d-card.pn-sticky {
+  --pn-ink: #efe3ae;
+  --pn-ink-2: #cbbc7d;
+  --pn-line: rgb(240 220 140 / 0.12);
+  background: linear-gradient(175deg, #56481b 0%, #483a14 60%, #3d3110 100%);
+}
+.pn-sticky-body {
+  position: relative;
+  padding: 1.35rem 1rem 0.85rem;
+}
+The tape strip: frosted so the paper shows through, slightly rotated.
+.pn-sticky-body::before {
+  content: "";
+  position: absolute;
+  top: 0.3rem;
+  left: 50%;
+  translate: -50% 0;
+  rotate: -1.6deg;
+  width: 34%;
+  min-width: 3.5rem;
+  height: 0.85rem;
+  border-radius: 2px;
+  background: rgb(255 255 255 / 0.38);
+  box-shadow: 0 1px 2px rgb(90 70 10 / 0.18), inset 0 0 0 1px rgb(255 255 255 / 0.25);
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+  pointer-events: none;
+}
+[data-mode="dark"] .pn-sticky-body::before {
+  background: rgb(255 245 200 / 0.12);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.3), inset 0 0 0 1px rgb(255 240 180 / 0.12);
+}
+.pn-sticky .pn-text {
+  font-size: 0.95rem;
+  line-height: 1.55;
+  font-weight: 550;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 11;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.pn-sticky .d-annotation {
+  background: rgb(255 255 255 / 0.4);
+  color: var(--pn-ink-2);
+}
+[data-mode="dark"] .pn-sticky .d-annotation {
+  background: rgb(0 0 0 / 0.22);
+  color: var(--pn-ink-2);
+}
+.pn-sticky .d-meta {
+  border-top-color: var(--pn-line);
+  color: var(--pn-ink-2);
+}
+.pn-sticky .d-sorting {
+  background: var(--pn-line);
+  color: var(--pn-ink-2);
+}
+*/
 
 /* Hover actions */
 .d-actions {
@@ -1334,18 +1990,56 @@ article.d-ig .d-meta,
 .d-card:focus-within .d-actions {
   opacity: 1;
 }
-@media (hover: none) {
-  /* No hover on touch: keep card actions reachable instead of stuck-open. */
-  .d-actions {
+@media (hover: none), (pointer: coarse) {
+  /* No hover on touch: actions never cover a card at rest. Media cards reveal
+     them with the details panel (tap-to-reveal sets data-open; failed dumps pin
+     it open); every other card docks them beside the always-visible meta row —
+     with space reserved — instead of floating them over its top-right corner. */
+  .d-mediacard:not([data-open]) .d-actions,
+  .d-mus:not([data-open]) .d-actions {
+    opacity: 0;
+  }
+  .d-mediacard:is([data-open], :focus-within) .d-actions,
+  .d-mus:is([data-open], :focus-within) .d-actions {
     opacity: 1;
   }
+  .d-card:not(.d-mediacard):not(.d-mus) .d-actions {
+    opacity: 1;
+    top: auto;
+    bottom: 0.4rem;
+    right: 0.55rem;
+  }
+  .d-card:not(.d-mediacard):not(.d-mus) .d-meta {
+    padding-right: 4.9rem;
+  }
+  /* Same corner rule as desktop hover: once actions are revealed they own the
+     top-right — the counter/tag there steps aside. */
+  .d-mediacard[data-open] .d-mcount,
+  .d-ghcard[data-open] .d-gh-tag {
+    opacity: 0;
+  }
 }
-.d-actions select {
-  max-width: 5.5rem;
+/* The Move trigger is a base-ui Menu.Trigger (a <button>) — undo the square
+   icon-button sizing .d-actions button gives it and match the old select look. */
+.d-actions .d-move {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  width: auto;
+  height: auto;
+  max-width: 6rem;
   padding: 0.2rem 0.3rem;
+  font: inherit;
+  color: inherit;
   background: transparent;
   cursor: pointer;
   outline: none;
+}
+.d-move-caret {
+  width: 0.5rem;
+  height: 0.5rem;
+  flex-shrink: 0;
+  opacity: 0.7;
 }
 .d-actions button {
   width: 1.4rem;
@@ -1360,10 +2054,43 @@ article.d-ig .d-meta,
     color: #dc2626;
     background: rgb(220 38 38 / 0.1);
   }
+  /* Delete stays red-on-hover; Move takes a neutral wash instead. */
+  .d-actions .d-move:hover {
+    color: var(--ink);
+    background: color-mix(in srgb, var(--ink) 8%, transparent);
+  }
 }
-.d-actions option {
-  background: var(--surface);
+
+/* Move menu popup — same frosted material as .d-mpanel. */
+.d-menu {
+  min-width: 7rem;
+  padding: 0.25rem;
+  border-radius: calc(var(--radius) - 5px);
+  background: var(--raised);
+  -webkit-backdrop-filter: blur(16px) saturate(1.5);
+  backdrop-filter: blur(16px) saturate(1.5);
+  box-shadow: 0 6px 24px -6px rgb(0 0 0 / 0.3), 0 0 0 1px var(--hairline);
   color: var(--ink);
+  font-size: 0.78rem;
+  z-index: 50;
+  outline: none;
+  transition: opacity 0.14s var(--ease-out), translate 0.14s var(--ease-out);
+}
+.d-menu[data-starting-style],
+.d-menu[data-ending-style] {
+  opacity: 0;
+  translate: 0 -4px;
+}
+.d-menu-item {
+  padding: 0.35rem 0.5rem;
+  border-radius: 6px;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  outline: none;
+}
+.d-menu-item[data-highlighted] {
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
 }
 
 /* ── Dock composer ── */
@@ -1620,7 +2347,6 @@ article.d-ig .d-meta,
 @media (pointer: coarse) {
   .d-search input,
   .d-dock-input,
-  .d-actions select,
   .d-kind-select {
     font-size: 16px;
   }
@@ -1644,6 +2370,10 @@ article.d-ig .d-meta,
     animation: none;
   }
   .d-card[data-removing] {
+    translate: none;
+  }
+  .d-mpanel,
+  .d-mediacard:is(:hover, :focus-within) .d-mpanel {
     translate: none;
   }
   .d-meta {
