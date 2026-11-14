@@ -368,25 +368,84 @@ function RedditCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
   );
 }
 
-/** hackernews — compact item like the HN list: orange Y block, headline, "(site)". */
+/* What an HN item fetch yields: "<story> | Hacker News" — no author, points, or
+   comments, so the card keeps only what is real: title, item type, age, id. */
+const HN_PREFIX = /^(Ask|Show|Launch|Tell) HN:\s*/i;
+const HN_JOB = /\bis hiring\b|\(YC [A-Z]\d{2}\)|\(YC [FW]\d{2}\)/i;
+
+function hnItem(rawTitle: string | null | undefined) {
+  const raw = (rawTitle ?? "")
+    .replace(/\s*\|\s*Hacker News\s*$/, "")
+    .replace(/\.{3}\s*$/, "…")
+    .trim();
+  const m = raw.match(HN_PREFIX);
+  if (m) {
+    const lead = m[1][0].toUpperCase() + m[1].slice(1).toLowerCase();
+    return { kind: m[1].toLowerCase(), tag: `${lead}_HN`.toUpperCase(), raw, rest: raw.slice(m[0].length) || raw };
+  }
+  if (HN_JOB.test(raw)) return { kind: "job", tag: "JOB", raw, rest: raw };
+  return { kind: "story", tag: "STORY", raw, rest: raw };
+}
+
+function hnId(url: string | null) {
+  return url?.match(/[?&]id=(\d+)/)?.[1] ?? null;
+}
+
+/** Fallback when the fetch left nothing but the URL (titleFromUrl → domain). */
+function hnFallback(dump: Dump, domainish: string | null) {
+  if (domainish && domainish !== dump.domain && domainish !== dump.url) return domainish;
+  const id = hnId(dump.url);
+  return id ? `Item #${id}` : "Hacker News";
+}
+
+/** hackernews — flat Y-orange rail + mono kicker (:\ HACKER_NEWS, type tag),    *
+ *  headline as a stretched link over the whole card. */
 function HnCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
-  const headline = bits.title ?? dump.url;
-  const showSite = headline !== "news.ycombinator.com" && headline !== dump.domain;
+  const item = hnItem(bits.title);
+  const sparse = !item.raw || item.raw === dump.domain || item.raw === dump.url;
+  const headline = sparse ? hnFallback(dump, item.raw) : item.kind === "story" || item.kind === "job" ? item.raw : item.rest;
   const text = dump.description ?? dump.summary;
+  const body = text && text !== headline ? text : null;
+  const dead = dump.status === "failed" && sparse && !body;
+  const empty = bits.processing && sparse;
   return (
-    <article {...bits.cardProps} className="d-card group">
+    <article {...bits.cardProps} className="d-card d-hn group">
       {bits.actions}
       <div className="d-body">
-        <a href={bits.href ?? undefined} target="_blank" rel="noreferrer" className="d-hn">
-          <span className="d-hn-mark"><ProviderIcon provider="hackernews" /></span>
-          <span className="min-w-0">
-            <span className="d-hn-title">{headline}</span>
-            {showSite && <span className="d-hn-site">news.ycombinator.com</span>}
+        <div className="d-kicker d-hn-kicker" dir="auto">
+          <ProviderIcon provider="hackernews" className="d-prov d-kicker-prov" />
+          <span className="min-w-0 truncate">
+            <span className="d-hn-ps">:\</span>Hacker_News{!sparse && item.kind !== "story" && <span className="d-hn-tag">&thinsp;{item.tag}</span>}
           </span>
-        </a>
-        {text && text !== headline && <p className="d-dek">{text}</p>}
-        {dump.note && <p className="d-annotation">{dump.note}</p>}
-        {bits.meta}
+        </div>
+        {empty ? (
+          shimmerLines()
+        ) : dead ? (
+          <p className="d-tomb">This item doesn&rsquo;t exist.</p>
+        ) : (
+          <>
+            <h3 className="d-headline" dir="auto">
+              {bits.href ? (
+                <a href={bits.href} target="_blank" rel="noreferrer">
+                  {headline}
+                </a>
+              ) : (
+                headline
+              )}
+            </h3>
+            {body && (
+              <p className="d-dek" dir="auto">
+                {body}
+              </p>
+            )}
+          </>
+        )}
+        {dump.note && (
+          <p className="d-annotation" dir="auto">
+            {dump.note}
+          </p>
+        )}
+        {bits.bareMeta}
       </div>
     </article>
   );

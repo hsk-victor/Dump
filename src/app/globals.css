@@ -969,43 +969,69 @@ button {
   height: 0.95rem;
 }
 
-/* Hacker News — compact item like the HN list: orange Y mark, headline, domain */
+/* Hacker News — flat Y-orange top rail, mono micro-kicker (:\ HACKER_NEWS),   */
+/* headline as a stretched link over the whole card. No fabricated stats.      */
 .d-hn {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  padding: 0.75rem 0.9rem;
-  color: inherit;
-  text-decoration: none;
+  container-type: inline-size;
 }
-.d-hn-mark {
-  display: grid;
-  place-items: center;
-  width: 1.9rem;
-  height: 1.9rem;
-  border-radius: 7px;
-  flex-shrink: 0;
+.d-hn::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
   background: var(--provider, #ff6600);
-  color: #fff;
 }
-.d-hn-mark .d-prov {
-  width: 1.1rem;
-  height: 1.1rem;
+.d-hn-kicker {
+  font-family: ui-monospace, "SFMono-Regular", "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  letter-spacing: 0.02em;
 }
-.d-hn-title {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  font-size: 0.9rem;
-  font-weight: 650;
-  line-height: 1.3;
+.d-hn-ps {
+  color: var(--provider, #ff6600);
 }
-.d-hn-site {
-  display: block;
-  margin-top: 0.1rem;
-  font-size: 0.72rem;
-  color: var(--muted);
+.d-hn-tag {
+  color: var(--provider, #ff6600);
+}
+/* Headline link covers the whole card (same pattern as the article card). */
+.d-hn .d-headline {
+  -webkit-line-clamp: 3;
+  overflow-wrap: anywhere;
+  text-wrap: pretty;
+}
+.d-hn .d-headline a::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+.d-hn .d-retry {
+  position: relative;
+  z-index: 1;
+}
+.d-hn .d-headline a {
+  text-decoration-line: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  text-decoration-color: transparent;
+  transition: text-decoration-color 0.15s var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .d-hn:hover .d-headline a {
+    text-decoration-color: color-mix(in srgb, var(--provider, currentColor) 45%, transparent);
+  }
+}
+.d-hn .d-headline a:focus-visible {
+  outline: none;
+}
+.d-hn:has(.d-headline a:focus-visible) {
+  outline: 2px solid color-mix(in srgb, var(--ink) 55%, transparent);
+  outline-offset: 2px;
+}
+.d-hn .d-dek {
+  -webkit-line-clamp: 3;
+  overflow-wrap: break-word;
+  text-wrap: pretty;
 }
 
 /* video platforms — thumbnail then channel-avatar row, like the platform's own card */
