@@ -5,7 +5,7 @@ import { Menu } from "@base-ui/react/menu";
 import type { Dump } from "@/lib/db";
 import { SUBJECT_MIN_CONFIDENCE, subjectLine, TOPICS, kindMeta, providerMeta, topicMeta } from "@/lib/taxonomy";
 import { timeAgo } from "@/lib/format";
-import { githubRef, titleFromUrl } from "@/lib/detect";
+import { GITHUB_TAG, githubInfo, type GithubInfo, titleFromUrl } from "@/lib/detect";
 
 interface Props {
   dump: Dump;
@@ -156,17 +156,36 @@ function PlayBadge() {
 
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-/** PR/issue titles come back like "Fix bug · Pull Request #12 · owner/repo"; strip the repo tail. */
-function githubDek(dump: Dump, repo: string | null): string | null {
-  let t = dump.title ?? "";
-  if (repo) {
-    const esc = escapeRe(repo);
+/** GitHub titles come back like "GitHub - owner/repo: Desc" or
+ *  "Fix bug · Pull Request #12 · owner/repo"; strip the site boilerplate. */
+function githubTitle(dump: Dump, info: GithubInfo): string | null {
+  let t = (dump.title ?? "").trim();
+  if (info.repo) {
+    const esc = escapeRe(info.repo);
     t = t
       .replace(new RegExp(`^GitHub\\s*-\\s*${esc}:\\s*`, "i"), "")
+      .replace(new RegExp(`\\s*·\\s*(?:Issue|Pull Request|Discussion)\\s*#\\d+\\s*·\\s*${esc}\\s*$`, "i"), "")
       .replace(new RegExp(`\\s*·\\s*${esc}\\s*(?:·\\s*GitHub)?$`, "i"), "")
       .trim();
   }
-  return t && t !== repo ? t : dump.description;
+  if (info.kind === "profile" && info.login) {
+    t = t.replace(new RegExp(`^${escapeRe(info.login)}\\s*-\\s*Overview\\s*$`, "i"), info.login).trim();
+  }
+  // Nothing left but the provider's own echo of the URL — not a title.
+  if (!t || /^github\s*-\s*/i.test(t) || (info.repo && t.toLowerCase() === info.repo.toLowerCase())) return null;
+  return t;
+}
+
+/** Descriptions carry GitHub boilerplate too: "Contribute to owner/repo
+ *  development by creating an account on GitHub." and "… - login" on profiles. */
+function githubDek(dump: Dump, info: GithubInfo): string | null {
+  let d = (dump.description ?? dump.summary ?? "").trim();
+  if (!d) return null;
+  d = d
+    .replace(/\s*Contribute to [\w./-]+ development by creating an account on GitHub\.\s*$/i, "")
+    .replace(/\s*-\s*[\w.-]+\s*$/i, (m) => (info.kind === "profile" ? "" : m))
+    .trim();
+  return d || null;
 }
 
 interface CardBits {
@@ -451,23 +470,112 @@ function HnCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
   );
 }
 
-/** github — mark + owner/repo (+ ref), description; og:image backdrop only if present. */
+/** github — media-first, like the media cards: GitHub's generated og:image (repo
+ *  name, description, stats) IS the card at rest; a type tag names the page kind
+ *  (Issue/PR/File/Profile) and a glass panel with title + meta rises on hover.
+ *  No image → quiet kicker + headline body; dead saves get a tombstone. */
 function GithubCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
-  const gh = dump.url ? githubRef(dump.url) : null;
-  const dek = githubDek(dump, gh?.repo ?? null);
+  const info = githubInfo(dump.url);
+  const title = githubTitle(dump, info);
+  const dek = githubDek(dump, info);
+  const tag = GITHUB_TAG[info.kind];
+  const dead = dump.status === "failed";
+  // Issues/PRs/discussions carry a real title; for repos, files and profiles the
+  // image already says it — the panel names the thing instead.
+  const titled = info.kind === "issue" || info.kind === "pr" || info.kind === "discussion";
+  const label = (titled ? title : info.filePath ?? info.repo ?? info.login ?? title) ?? info.repo ?? info.login ?? "GitHub";
+  const panelDek = dek && dek !== label ? dek : null;
+  const tagLabel = `${tag ?? ""}${tag && info.ref ? ` ${info.ref}` : ""}`;
+
+  if (bits.showMedia) {
+    return (
+      <article {...bits.cardProps} className="d-card d-mediacard d-ghcard group" data-open={dead || undefined}>
+        {bits.actions}
+        <a href={bits.href ?? undefined} target="_blank" rel="noreferrer" className="d-media" aria-label={label}>
+          <FadeImg dump={dump} bits={bits} alt={titled ? (title ?? "") : ""} />
+          <MediaMark dump={dump} />
+          {tag && <span className="d-gh-tag">{tagLabel}</span>}
+        </a>
+        {bits.processing && (
+          <span className="d-mchip" aria-hidden>
+            <span className="d-mchip-sorting shimmer" />
+          </span>
+        )}
+        <div className="d-mpanel">
+          {dead ? (
+            <p className="d-tomb">This GitHub page doesn&rsquo;t exist.</p>
+          ) : (
+            <>
+              <h3 className="d-mpanel-title" dir="auto">
+                {bits.href ? (
+                  <a href={bits.href} target="_blank" rel="noreferrer">
+                    {label}
+                  </a>
+                ) : (
+                  label
+                )}
+              </h3>
+              {panelDek && (
+                <p className="d-mpanel-dek" dir="auto">
+                  {panelDek}
+                </p>
+              )}
+            </>
+          )}
+          {dump.note && (
+            <p className="d-mpanel-note" dir="auto">
+              {dump.note}
+            </p>
+          )}
+          {bits.meta}
+        </div>
+      </article>
+    );
+  }
+
   return (
     <article {...bits.cardProps} className="d-card group">
       {bits.actions}
       <div className="d-body">
-        <a className="d-gh" href={bits.href ?? undefined} target="_blank" rel="noreferrer">
-          <span className="d-gh-mark"><ProviderIcon provider="github" /></span>
-          <span className="d-gh-repo min-w-0">
-            {gh?.repo ?? bits.title ?? "GitHub"}
-            {gh?.ref && <span className="d-gh-ref"> · {gh.ref}</span>}
+        <div className="d-kicker" dir="auto">
+          <ProviderIcon provider="github" className="d-prov d-kicker-prov" />
+          <span className="min-w-0 truncate">
+            GitHub
+            {tag && (
+              <span className="d-gh-tag-inline">
+                {" "}
+                · {tagLabel}
+              </span>
+            )}
           </span>
-        </a>
-        {dek && <p className="d-dek">{dek}</p>}
-        {dump.note && <p className="d-annotation">{dump.note}</p>}
+        </div>
+        {bits.processing ? (
+          shimmerLines()
+        ) : dead ? (
+          <p className="d-tomb">This GitHub page doesn&rsquo;t exist.</p>
+        ) : (
+          <>
+            <h3 className="d-headline" dir="auto">
+              {bits.href ? (
+                <a href={bits.href} target="_blank" rel="noreferrer">
+                  {label}
+                </a>
+              ) : (
+                label
+              )}
+            </h3>
+            {dek && (
+              <p className="d-dek" dir="auto">
+                {dek}
+              </p>
+            )}
+          </>
+        )}
+        {dump.note && (
+          <p className="d-annotation" dir="auto">
+            {dump.note}
+          </p>
+        )}
         {bits.meta}
       </div>
     </article>
