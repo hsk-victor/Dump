@@ -36,12 +36,13 @@ export function syndicationUrl(url: string): string | null {
 
 export function parseSyndication(tweet: SyndicationTweet): Extracted | null {
   if (!tweet.text || !tweet.user?.screen_name) return null;
-  let text = tweet.text;
+  let text = tweet.text.replace(/&(?:#(?:[xX][\da-fA-F]+|\d+)|[a-zA-Z][a-zA-Z\d]*);/g, (entity) =>
+    cheerio.load(`<span data-value="${entity}"></span>`, null, false)("span").attr("data-value") ?? entity,
+  );
   for (const media of tweet.entities?.media ?? []) text = text.split(media.url).join("");
   for (const link of tweet.entities?.urls ?? []) {
     text = text.split(link.url).join(link.expanded_url ?? link.display_url ?? link.url);
   }
-  text = cheerio.load(text.replace(/</g, "&lt;"), null, false).text();
   text = text.replace(/\s+pic\.(?:twitter|x)\.com\/\S+\s*$/i, "").trim();
   const images = tweet.photos?.map((p) => p.url) ?? tweet.mediaDetails?.filter((m) => m.type === "photo").map((m) => m.media_url_https) ?? [];
   const video = tweet.mediaDetails?.find((m) => m.type === "video" || m.type === "animated_gif");

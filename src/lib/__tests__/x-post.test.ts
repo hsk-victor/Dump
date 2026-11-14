@@ -21,12 +21,22 @@ const tweet: SyndicationTweet = {
 };
 
 describe("X syndication", () => {
-  it("decodes HTML entities after link replacement without interpreting literal markup", () => {
+  it("decodes HTML entities without interpreting literal markup", () => {
     const post = parseSyndication({
       ...tweet,
       text: "Tips &amp; tricks &gt; &lt; &quot;quoted&quot; &#39; &#x1F680; <script>text</script>\nhttps://t.co/site https://t.co/media",
     });
     expect(post?.description).toBe("Tips & tricks > < \"quoted\" ' 🚀 <script>text</script>\nhttp://gatheros.co");
+    expect(post?.content).toBe(post?.description);
+  });
+  it("leaves expanded URLs untouched and only decodes semicolon-terminated entities in tweet text", () => {
+    const expanded = "https://example.com/?a=1&copy=2&copy;=3&amp;=4";
+    const post = parseSyndication({
+      ...tweet,
+      text: "Tips &amp; tricks &copy; &copy=2 &amp &notreal; &#39 &#x41\nhttps://t.co/site https://t.co/media",
+      entities: { ...tweet.entities, urls: [{ url: "https://t.co/site", expanded_url: expanded }] },
+    });
+    expect(post?.description).toBe(`Tips & tricks © &copy=2 &amp &notreal; &#39 &#x41\n${expanded}`);
     expect(post?.content).toBe(post?.description);
   });
   it("uses the react-tweet token algorithm for X status URLs", () => {
