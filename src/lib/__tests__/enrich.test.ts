@@ -17,6 +17,7 @@ vi.mock("../llm", () => ({
 
 const db = await import("../db");
 const { enrichDump, resortAll } = await import("../enrich");
+const { createFromText } = await import("../create");
 
 const page = (over: Record<string, unknown> = {}) => ({
   kind: "article",
@@ -44,11 +45,35 @@ const severance = (over: Record<string, unknown> = {}) => ({
 });
 
 describe("enrichDump", () => {
+  it.each([
+    ["preview-a", undefined, "Fetched page title"],
+    ["preview-b", "Bookmarklet title", "Bookmarklet title"],
+    ["preview-c", "preview c", "preview c"],
+  ])("uses the fetched page title unless a title was supplied: %s", async (filename, title, expected) => {
+    const d = createFromText(`https://example.com/${filename}.mp4`, { title });
+    extractUrl.mockResolvedValue(page({ title: "Fetched page title", videoUrl: null, videoType: null }));
+    await enrichDump(d.id);
+    expect(db.getDump(d.id)).toMatchObject({ kind: "article", title: expected, videoUrl: null, status: "ready" });
+  });
+
+  it.each([false, true])("does not store a filename title when extraction has no title (unreachable: %s)", async (unreachable) => {
+    const d = createFromText(`https://example.com/untitled-${unreachable}.mp4`);
+    extractUrl.mockResolvedValue(page({ title: null, videoUrl: null, unreachable }));
+    await enrichDump(d.id);
+    expect(db.getDump(d.id)).toMatchObject({ title: null, status: unreachable ? "failed" : "ready" });
+  });
+
+  it("clears a provisional video URL when extraction identifies a page instead", async () => {
+    const d = db.createDump({ kind: "video", url: "https://example.com/preview.mp4", videoUrl: "https://example.com/preview.mp4", videoType: "video" });
+    extractUrl.mockResolvedValue(page({ videoUrl: null, videoType: null, imageUrl: "https://example.com/preview.jpg", imageUrls: ["https://example.com/preview.jpg"] }));
+    await enrichDump(d.id);
+    expect(db.getDump(d.id)).toMatchObject({ kind: "article", videoUrl: null, videoType: null, imageUrl: "https://example.com/preview.jpg", status: "ready" });
+  });
   it("persists X identity, video and gallery fields", async () => {
     const d = db.createDump({ kind: "post", url: "https://x.com/user/status/123" });
-    extractUrl.mockResolvedValue(page({ kind: "post", description: "First line.\n\nSecond line.", author: "Name", authorHandle: "user", authorAvatarUrl: "avatar", videoUrl: "video.mp4", videoPosterUrl: "poster.jpg", imageUrl: "1.jpg", imageUrls: ["1.jpg", "2.jpg"] }));
+    extractUrl.mockResolvedValue(page({ kind: "post", description: "First line.\n\nSecond line.", author: "Name", authorHandle: "user", authorAvatarUrl: "avatar", videoUrl: "video.mp4", videoPosterUrl: "poster.jpg", videoType: "animated_gif", imageUrl: "1.jpg", imageUrls: ["1.jpg", "2.jpg"] }));
     await enrichDump(d.id);
-    expect(db.getDump(d.id)).toMatchObject({ description: "First line.\n\nSecond line.", author: "Name", authorHandle: "user", authorAvatarUrl: "avatar", videoUrl: "video.mp4", videoPosterUrl: "poster.jpg", imageUrls: ["1.jpg", "2.jpg"] });
+    expect(db.getDump(d.id)).toMatchObject({ description: "First line.\n\nSecond line.", author: "Name", authorHandle: "user", authorAvatarUrl: "avatar", videoUrl: "video.mp4", videoPosterUrl: "poster.jpg", videoType: "animated_gif", imageUrls: ["1.jpg", "2.jpg"] });
   });
   beforeEach(() => {
     extractUrl.mockReset();

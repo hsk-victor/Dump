@@ -64,6 +64,7 @@ export function parseSyndication(tweet: SyndicationTweet): Extracted | null {
     imageUrls: images,
     videoUrl: selected?.url ?? null,
     videoPosterUrl: video?.media_url_https ?? null,
+    videoType: video?.type === "animated_gif" ? "animated_gif" : video ? "video" : null,
     siteName: "X",
     unreachable: false,
   };
