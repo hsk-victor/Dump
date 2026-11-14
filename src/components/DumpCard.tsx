@@ -560,30 +560,54 @@ function IgCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
   );
 }
 
-/** spotify/soundcloud/applemusic/bandcamp — a dark music tile like the service's own player card. */
+/** spotify/soundcloud/applemusic/bandcamp — a frosted player widget in the feed's glass language.
+ *  The player chrome is decorative: the card opens the source link. Cover art only when the
+ *  dump actually has art — a bare audio file collapses to text + transport + progress. */
 function MusicCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
   const provider = providerMeta(dump.provider);
   const sub = dump.author ?? (bits.dek !== bits.title ? bits.dek : null) ?? provider?.label;
+  const title = bits.title ?? provider?.label ?? "Audio";
   return (
     <article {...bits.cardProps} className="d-card d-mus group">
       {bits.actions}
-      <a href={bits.href ?? undefined} target="_blank" rel="noreferrer" className="d-mus-row">
-        <span className="d-mus-art">
-          {bits.showMedia ? (
-            <Img dump={dump} bits={bits} className="d-mus-img" />
+      <a
+        href={bits.href ?? undefined}
+        target="_blank"
+        rel="noreferrer"
+        className={`d-mus-widget${bits.showMedia ? "" : " d-mus-widget--noart"}`}
+        aria-label={title}
+      >
+        {bits.showMedia && (
+          <span className="d-mus-art">
+            <FadeImg dump={dump} bits={bits} className="d-mus-img" alt={title} />
+          </span>
+        )}
+        <span className="d-mus-face min-w-0">
+          {bits.processing && !bits.title ? (
+            shimmerLines()
           ) : (
-            <span className="d-wave" aria-hidden><i /><i /><i /><i /><i /></span>
+            <>
+              <span className="d-mus-text min-w-0">
+                <span className="d-mus-title" dir="auto">{title}</span>
+                {sub && <span className="d-mus-sub" dir="auto">{sub}</span>}
+              </span>
+              {!bits.processing && (
+                <span className="d-mus-transport" aria-hidden>
+                  <svg viewBox="0 0 24 24"><path fill="currentColor" d="M6 5h2.4v14H6zM18 5.5v13L8.4 12z" /></svg>
+                  <svg viewBox="0 0 24 24" className="d-mus-transport-pause"><path fill="currentColor" d="M7.5 5h3v14h-3zM13.5 5h3v14h-3z" /></svg>
+                  <svg viewBox="0 0 24 24"><path fill="currentColor" d="M15.6 5H18v14h-2.4zM6 5.5v13L15.6 12z" /></svg>
+                </span>
+              )}
+            </>
           )}
         </span>
-        <span className="d-mus-text min-w-0">
-          <span className="d-mus-title">{bits.title ?? provider?.label ?? "Audio"}</span>
-          {sub && <span className="d-mus-sub">{sub}</span>}
-        </span>
-        <span className="d-mus-play" aria-hidden>
-          <svg viewBox="0 0 24 24"><path fill="currentColor" d="M8 5.5v13l11-6.5z" /></svg>
-        </span>
+        {!bits.processing && (
+          <span className="d-mus-prog" aria-hidden>
+            <span className="d-mus-prog-fill" />
+          </span>
+        )}
       </a>
-      {dump.note && <p className="d-mus-note">{dump.note}</p>}
+      {dump.note && <p className="d-mus-note" dir="auto">{dump.note}</p>}
       <div className="d-mus-foot">
         <ProviderIcon provider={dump.provider} className="d-prov d-mus-prov" />
         {bits.meta}

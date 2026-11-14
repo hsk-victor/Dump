@@ -1189,29 +1189,60 @@ article.d-ig .d-meta,
   margin-right: 0.9rem;
 }
 
-/* music — dark player tile like the service's own card */
-.d-mus {
-  background: #171a1e;
-  color: #fff;
-}
-.d-mus-row {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.75rem 0.9rem;
+/* music — frosted player widget in the feed's glass language: provider-tinted
+   translucent tile, cover art at the side when the dump has art, decorative
+   transport + progress (the card links out; nothing plays). */
+.d-mus-widget {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.7rem 0.75rem;
+  margin: 0.5rem;
+  padding: 0.7rem 0.75rem 0.6rem;
+  border-radius: 13px;
   color: inherit;
   text-decoration: none;
+  background: color-mix(in srgb, var(--provider, var(--hairline)) 15%, var(--surface));
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.35),
+    inset 0 0 0 1px color-mix(in srgb, var(--provider, #000) 12%, transparent);
+  transition: box-shadow 0.18s var(--ease-out), scale 0.12s var(--ease-out);
+}
+[data-mode="dark"] .d-mus-widget {
+  background: color-mix(in srgb, var(--provider, var(--hairline)) 22%, var(--surface));
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.08),
+    inset 0 0 0 1px color-mix(in srgb, var(--provider, #fff) 10%, transparent);
+}
+.d-mus-widget--noart {
+  grid-template-columns: 1fr;
+}
+@media (hover: hover) and (pointer: fine) {
+  .d-mus-widget:hover {
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.35),
+      inset 0 0 0 1px color-mix(in srgb, var(--provider, #000) 22%, transparent),
+      0 4px 14px color-mix(in srgb, var(--provider, #000) 16%, transparent);
+  }
+  [data-mode="dark"] .d-mus-widget:hover {
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.08),
+      inset 0 0 0 1px color-mix(in srgb, var(--provider, #fff) 18%, transparent),
+      0 4px 14px color-mix(in srgb, var(--provider, #000) 20%, transparent);
+  }
+}
+.d-mus-widget:active {
+  scale: 0.98;
 }
 .d-mus-art {
   position: relative;
-  width: 4.2rem;
-  height: 4.2rem;
-  border-radius: 8px;
+  width: 4.4rem;
+  height: 4.4rem;
+  border-radius: 10px;
   overflow: hidden;
-  flex-shrink: 0;
   display: grid;
   place-items: center;
-  background: color-mix(in srgb, var(--provider, #3a3f45) 25%, #26292e);
+  background: color-mix(in srgb, var(--provider, var(--hairline)) 20%, var(--hairline));
+  box-shadow: 0 3px 10px rgb(0 0 0 / 0.28);
 }
 .d-mus-img {
   position: absolute;
@@ -1219,51 +1250,93 @@ article.d-ig .d-meta,
   width: 100%;
   height: 100%;
   object-fit: cover;
+  opacity: 0;
+  transition: opacity 0.22s var(--ease-out);
+}
+.d-mus-img[data-loaded] {
+  opacity: 1;
+}
+.d-mus-face {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.35rem;
 }
 .d-mus-text {
   display: flex;
   flex-direction: column;
-  gap: 0.15rem;
+  gap: 0.12rem;
 }
 .d-mus-title {
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   font-weight: 700;
-  line-height: 1.3;
-  color: #fff;
+  line-height: 1.28;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  overflow-wrap: anywhere;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
 .d-mus-sub {
-  font-size: 0.76rem;
-  color: rgb(255 255 255 / 0.6);
+  font-size: 0.73rem;
+  color: var(--muted);
+  overflow-wrap: anywhere;
   display: -webkit-box;
   -webkit-line-clamp: 1;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
-.d-mus-play {
-  margin-left: auto;
-  display: grid;
-  place-items: center;
-  width: 2.6rem;
-  height: 2.6rem;
-  border-radius: 999px;
-  flex-shrink: 0;
-  color: #121212;
-  background: var(--provider, #1db954);
+.d-mus-transport {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  color: var(--ink);
 }
-.d-mus-play svg {
-  width: 1.1rem;
-  height: 1.1rem;
-  margin-left: 2px;
+.d-mus-transport svg {
+  width: 1rem;
+  height: 1rem;
+  opacity: 0.8;
+}
+.d-mus-transport-pause {
+  width: 1.35rem;
+  height: 1.35rem;
+}
+.d-mus-prog {
+  grid-column: 1 / -1;
+  position: relative;
+  height: 4px;
+  border-radius: 999px;
+  background: rgb(0 0 0 / 0.12);
+  overflow: hidden;
+}
+[data-mode="dark"] .d-mus-prog {
+  background: rgb(255 255 255 / 0.14);
+}
+.d-mus-prog-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 35%;
+  border-radius: inherit;
+  background: var(--provider, var(--ink));
+  transform-origin: left;
+  animation: d-mus-fill 0.7s var(--ease-out);
+}
+@keyframes d-mus-fill {
+  from { transform: scaleX(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .d-mus-prog-fill {
+    animation: none;
+  }
 }
 .d-mus-note {
-  margin: 0 0.9rem 0.2rem;
+  margin: 0 0.9rem 0.25rem;
   font-size: 0.76rem;
   line-height: 1.4;
-  color: rgb(255 255 255 / 0.65);
+  color: var(--muted);
+  overflow-wrap: anywhere;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -1279,40 +1352,18 @@ article.d-ig .d-meta,
   flex: 1;
   min-width: 0;
   margin-top: 0;
-  padding-top: 0.45rem;
-  border-top-color: rgb(255 255 255 / 0.14);
-  color: rgb(255 255 255 / 0.55);
 }
-.d-mus-foot .d-meta .d-retry {
-  color: #fbbf24;
+@media (hover: hover) and (pointer: fine) {
+  .d-mus-foot .d-meta {
+    border-top-width: 0;
+    padding-top: 0;
+  }
 }
 .d-mus-prov {
   width: 1.05rem;
   height: 1.05rem;
-  color: var(--provider, #fff);
-}
-/* Brand-tinted placeholder bars when a track has no artwork */
-.d-wave {
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  height: 1.3rem;
-}
-.d-wave i {
-  width: 3px;
-  border-radius: 2px;
-  background: var(--provider, var(--topic));
-  opacity: 0.85;
-}
-.d-wave i:nth-child(1) { height: 40%; }
-.d-wave i:nth-child(2) { height: 80%; }
-.d-wave i:nth-child(3) { height: 100%; }
-.d-wave i:nth-child(4) { height: 60%; }
-.d-wave i:nth-child(5) { height: 35%; }
-.d-mus .d-actions select,
-.d-mus .d-actions button {
-  background: rgb(255 255 255 / 0.12);
-  color: #fff;
+  flex-shrink: 0;
+  color: var(--provider, var(--muted));
 }
 
 /* GitHub card: the mark + owner/repo headline */
