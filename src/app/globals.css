@@ -973,6 +973,7 @@ button {
 /* headline as a stretched link over the whole card. No fabricated stats.      */
 .d-hn {
   container-type: inline-size;
+  background: color-mix(in srgb, var(--provider, #ff6600) 10%, var(--surface));
 }
 .d-hn::before {
   content: "";
