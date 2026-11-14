@@ -44,6 +44,12 @@ const severance = (over: Record<string, unknown> = {}) => ({
 });
 
 describe("enrichDump", () => {
+  it("persists X identity, video and gallery fields", async () => {
+    const d = db.createDump({ kind: "post", url: "https://x.com/user/status/123" });
+    extractUrl.mockResolvedValue(page({ kind: "post", description: "First line.\n\nSecond line.", author: "Name", authorHandle: "user", authorAvatarUrl: "avatar", videoUrl: "video.mp4", videoPosterUrl: "poster.jpg", imageUrl: "1.jpg", imageUrls: ["1.jpg", "2.jpg"] }));
+    await enrichDump(d.id);
+    expect(db.getDump(d.id)).toMatchObject({ description: "First line.\n\nSecond line.", author: "Name", authorHandle: "user", authorAvatarUrl: "avatar", videoUrl: "video.mp4", videoPosterUrl: "poster.jpg", imageUrls: ["1.jpg", "2.jpg"] });
+  });
   beforeEach(() => {
     extractUrl.mockReset();
     classifyWithAi.mockReset().mockResolvedValue(null);

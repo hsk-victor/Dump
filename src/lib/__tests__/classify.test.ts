@@ -2,6 +2,10 @@ import { describe, expect, it } from "vitest";
 import { classifyHeuristic } from "../classify";
 
 describe("classifyHeuristic", () => {
+  it("does not turn domains or dotted run-on words into tags", () => {
+    const { tags } = classifyHeuristic({ description: "bookmarks.no pic.twitter.com this.gatheros https://gatheros.co" });
+    expect(tags.some((tag) => tag.includes("."))).toBe(false);
+  });
   it.each([
     [{ title: "The best creamy garlic pasta recipe", description: "Ready in 20 minutes with simple ingredients" }, "food"],
     [{ url: "https://github.com/vercel/next.js", domain: "github.com", title: "vercel/next.js: The React Framework" }, "tech"],

@@ -255,14 +255,11 @@ function FadeImg({ dump, bits, className, alt = "" }: { dump: Dump; bits: CardBi
 
 /* ============================ platform-native cards ============================ */
 
-/** x — shares the Post card chrome (avatar + name + byline header, provider
- *  mark, framed media with 1/N counter); the tweet text is the content. X
- *  oEmbed rarely returns media or avatars, so the card is designed text-first;
- *  a dead tweet renders a tombstone instead of empty chrome. */
+/** x — native post chrome with inline media; dead tweets retain their tombstone. */
 function XCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
   const [failedIdx, setFailedIdx] = useState<ReadonlySet<number>>(new Set());
   const author = postAuthor(dump);
-  const raw = dump.author?.replace(/^@/, "");
+  const raw = (dump.authorHandle ?? dump.author)?.replace(/^@/, "");
   // oEmbed author_name can be a display name ("Jane Doe"), not a handle — only @-ify real handles.
   const handle = raw && /^[\w.]{1,30}$/.test(raw) ? `@${raw}` : null;
   const byline = (handle && handle !== author ? handle : null) ?? "X";
@@ -271,13 +268,17 @@ function XCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
   const headline =
     bits.title && !bits.processing && bits.title !== postText && !attributionName(dump.title, dump) ? bits.title : null;
   const allImages = dump.imageUrls.length ? dump.imageUrls : dump.imageUrl ? [dump.imageUrl] : [];
-  const shownIdx = allImages.findIndex((_, i) => !failedIdx.has(i));
   const images = allImages.filter((_, i) => !failedIdx.has(i));
   return (
     <article {...bits.cardProps} className="d-card d-post group">
       {bits.actions}
       <a href={bits.href ?? undefined} target="_blank" rel="noreferrer" className="d-post-head">
-        <span className="d-avatar">{author ? initials(author) : <ProviderIcon provider="x" />}</span>
+        <span className="d-avatar">
+          {dump.authorAvatarUrl ? (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img src={dump.authorAvatarUrl} alt="" referrerPolicy="no-referrer" onError={(e) => { e.currentTarget.hidden = true; }} />
+          ) : author ? initials(author) : <ProviderIcon provider="x" />}
+        </span>
         <span className="min-w-0">
           <span className="d-author-name" dir="auto">{author ?? "Post"}</span>
           <span className="d-author-site" dir="auto">{byline}</span>
@@ -294,11 +295,15 @@ function XCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
           {text && <p className="d-post-text" dir="auto">{text}</p>}
         </>
       )}
+      {dump.videoUrl && (
+        <video className="d-post-video" src={`/api/dumps/${dump.id}/video`} poster={dump.videoPosterUrl ?? undefined} controls playsInline preload="none" aria-label={`Video by ${author ?? "X author"}`} />
+      )}
       {images.length > 0 && (
-        <a href={bits.href ?? undefined} target="_blank" rel="noreferrer" className="d-post-gallery">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={images[0]} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setFailedIdx((s) => new Set(s).add(shownIdx))} />
-          {images.length > 1 && <span className="d-post-count">1/{images.length}</span>}
+        <a href={bits.href ?? undefined} target="_blank" rel="noreferrer" className={`d-post-gallery${images.length > 1 ? " d-post-grid" : ""}`}>
+          {allImages.map((src, i) => !failedIdx.has(i) && (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img key={src} src={src} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setFailedIdx((s) => new Set(s).add(i))} />
+          ))}
         </a>
       )}
       {dump.note && <p className="d-annotation" dir="auto">{dump.note}</p>}

@@ -232,7 +232,7 @@ function extractTags(input: ClassifyInput, topicHits?: Map<string, number>): str
   const tags: string[] = [];
   const add = (t: string) => {
     const clean = t.toLowerCase().replace(/^#/, "").trim();
-    if (clean.length >= 2 && clean.length <= 30 && !tags.includes(clean)) tags.push(clean);
+    if (clean.length >= 2 && clean.length <= 30 && !clean.includes(".") && !tags.includes(clean)) tags.push(clean);
   };
 
   const all = [input.title, input.note, input.description, input.content].filter(Boolean).join(" ");
@@ -248,7 +248,7 @@ function extractTags(input: ClassifyInput, topicHits?: Map<string, number>): str
   // Frequent meaningful words from the title/description fill remaining slots.
   const freq = new Map<string, number>();
   for (const tok of tokenize([input.title, input.description, input.note].filter(Boolean).join(" "))) {
-    if (tok.length < 4 || STOPWORDS.has(tok) || /^\d+$/.test(tok) || tok.startsWith("#")) continue;
+    if (tok.length < 4 || tok.includes(".") || STOPWORDS.has(tok) || /^\d+$/.test(tok) || tok.startsWith("#")) continue;
     freq.set(tok, (freq.get(tok) ?? 0) + 1);
   }
   [...freq.entries()]
