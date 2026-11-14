@@ -36,7 +36,7 @@ function safeImageUrl(u: string | null | undefined): string | null {
  * which a server-side fetch often can't get — e.g. Instagram and TikTok serve login walls to bots).
  */
 export function createFromText(raw: string, opts?: CreateOptions | string | null): Created {
-  if (/(?:^|\s)blob:/i.test(raw.trim())) {
+  if (/(?:^|\s)blob:https?:\/\//i.test(raw.trim())) {
     throw new InputError("That's a temporary in-browser video address — copy the post's link instead.");
   }
   const o: CreateOptions = typeof opts === "string" || opts == null ? { title: opts } : opts;
