@@ -1189,21 +1189,21 @@ article.d-ig .d-meta,
   margin-right: 0.9rem;
 }
 
-/* music — the whole card is a square frosted-glass player widget. The glass
-   is the design element: strictly neutral, no provider tint. Art at the side
-   when the dump has art; transport + progress are decorative (the card links
-   out). Note + meta sit in a frosted panel inside the tile on hover. */
-.d-mus {
-  aspect-ratio: 1 / 1;
-}
+/* music — the card is a frosted-glass player widget, sized by its content
+   (no forced ratio). The glass is the design element: strictly neutral, no
+   provider tint. Art at the side when the dump has art; transport + progress
+   are decorative (the card links out). Note + meta sit in a frosted panel
+   inside the tile on hover. */
 .d-mus-widget {
   position: relative;
   display: grid;
-  grid-template-columns: 44% 1fr;
-  grid-template-rows: 1fr auto;
-  gap: 0.6rem 0.7rem;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas:
+    "art face"
+    "art prog";
+  gap: 0.55rem 0.8rem;
   height: 100%;
-  padding: 0.8rem;
+  padding: 0.75rem;
   border-radius: var(--radius);
   color: inherit;
   text-decoration: none;
@@ -1220,7 +1220,10 @@ article.d-ig .d-meta,
     inset 0 0 0 1px rgb(255 255 255 / 0.08);
 }
 .d-mus-widget--noart {
-  grid-template-columns: 1fr;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas:
+    "face"
+    "prog";
 }
 @media (hover: hover) and (pointer: fine) {
   .d-mus-widget:hover {
@@ -1241,9 +1244,10 @@ article.d-ig .d-meta,
 }
 .d-mus-art {
   position: relative;
+  grid-area: art;
   align-self: center;
   aspect-ratio: 1 / 1;
-  width: 100%;
+  width: 4.4rem;
   border-radius: 10px;
   overflow: hidden;
   display: grid;
@@ -1264,6 +1268,7 @@ article.d-ig .d-meta,
   opacity: 1;
 }
 .d-mus-face {
+  grid-area: face;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -1312,7 +1317,7 @@ article.d-ig .d-meta,
   height: 1.3rem;
 }
 .d-mus-prog {
-  grid-column: 1 / -1;
+  grid-area: prog;
   position: relative;
   align-self: end;
   height: 4px;
