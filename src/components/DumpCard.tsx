@@ -1005,40 +1005,89 @@ function NoteCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
   );
 }
 
-/** link — favicon kicker + title + description; hero image when one exists. */
-function LinkCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
+/** The URL as a readable address: host + path, query dropped unless it's the whole story. */
+function linkAddress(dump: Dump): string | null {
+  if (!dump.url) return null;
+  try {
+    const u = new URL(dump.url);
+    const path = u.pathname.replace(/\/$/, "");
+    const shown = u.host + (path === "" ? "" : decodeURIComponent(path));
+    return shown === dump.domain ? null : shown;
+  } catch {
+    return dump.url;
+  }
+}
+
+/** Favicon chip: a letter squircle under the favicon-service image, which fades
+ *  in on top — the letter stays behind when a site has no icon. */
+function LinkMark({ dump }: { dump: Dump }) {
+  const [bad, setBad] = useState(false);
+  const [loaded, setLoaded] = useState(false);
   return (
-    <article {...bits.cardProps} className="d-card group">
-      {bits.actions}
-      {bits.showMedia && (
-        <a href={bits.href ?? undefined} target="_blank" rel="noreferrer" className="d-media">
-          <Img dump={dump} bits={bits} className="" alt={bits.title ?? ""} />
-          {dump.kind === "video" && <PlayBadge />}
-          <Flag dump={dump} />
-        </a>
+    <span className="d-linkmark" aria-hidden>
+      <span className="d-linkmark-letter">{dump.domain?.[0]?.toUpperCase() ?? "·"}</span>
+      {dump.domain && !bad && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          className="d-linkmark-img"
+          src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(dump.domain)}&sz=64`}
+          alt=""
+          loading="lazy"
+          data-loaded={loaded || undefined}
+          onLoad={() => setLoaded(true)}
+          onError={() => setBad(true)}
+        />
       )}
-      <div className="d-body">
-        {(bits.site || dump.domain || providerHasIcon(dump.provider)) && (
-          <div className="d-kicker">
-            <SiteMark dump={dump} />
-            <span className="min-w-0 truncate">{bits.site ?? providerMeta(dump.provider)?.label ?? dump.domain}</span>
+    </span>
+  );
+}
+
+/** link — the fallback: a bookmark, not a preview. You save a link to find it
+ *  again, so the card is just favicon + title + domain — the title is a classic
+ *  blue underlined hyperlink and the card itself is the way out to the page. */
+function LinkCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
+  // Bare-URL dumps title to the domain — show host+path instead so the card
+  // still reads like an address, and don't print the domain twice.
+  const titleIsDomain = bits.title != null && bits.title === dump.domain;
+  const headline = titleIsDomain ? linkAddress(dump) ?? bits.title : bits.title;
+  const empty = bits.processing && !headline;
+  const dead = dump.status === "failed" && !headline;
+  return (
+    <article {...bits.cardProps} className="d-card d-link group">
+      {bits.actions}
+      <div className="d-link-body">
+        <LinkMark dump={dump} />
+        {empty ? (
+          <span className="d-link-shimmer">
+            <span className="shimmer" />
+          </span>
+        ) : dead ? (
+          <p className="d-tomb">This page doesn&rsquo;t exist.</p>
+        ) : (
+          <div className="d-link-text">
+            <h3 className="d-link-title" dir="auto">
+              {bits.href ? (
+                <a href={bits.href} target="_blank" rel="noreferrer">
+                  {headline ?? dump.domain ?? dump.url}
+                </a>
+              ) : (
+                headline ?? dump.domain ?? dump.url ?? "Link"
+              )}
+            </h3>
+            {dump.domain && !titleIsDomain && (
+              <span className="d-link-domain" dir="ltr">
+                {dump.domain}
+              </span>
+            )}
           </div>
         )}
-        {bits.processing && !bits.title ? (
-          shimmerLines()
-        ) : (
-          <>
-            {(bits.title || bits.site || dump.url) && (
-              <h3 className="d-headline">
-                {bits.href ? <a href={bits.href} target="_blank" rel="noreferrer">{bits.title ?? bits.site ?? dump.url}</a> : bits.title ?? bits.site ?? dump.url}
-              </h3>
-            )}
-            {bits.dek && <p className="d-dek">{bits.dek}</p>}
-          </>
-        )}
-        {dump.note && <p className="d-annotation">{dump.note}</p>}
-        {bits.meta}
       </div>
+      {dump.note && (
+        <p className="d-annotation" dir="auto">
+          {dump.note}
+        </p>
+      )}
+      {bits.bareMeta}
     </article>
   );
 }

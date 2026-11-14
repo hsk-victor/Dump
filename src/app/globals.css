@@ -835,6 +835,126 @@ button {
   outline-offset: 2px;
 }
 
+/* link — a bookmark, not a preview: favicon + blue underlined title + muted
+   domain. The headline link covers the whole card (same stretch as .d-article). */
+.d-link {
+  --link: #2563eb;
+}
+[data-mode="dark"] .d-link {
+  --link: #7ea2f5;
+}
+.d-link-body {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  padding: 0.62rem 0.8rem;
+}
+.d-linkmark {
+  display: inline-grid;
+  width: 1rem;
+  height: 1rem;
+  margin-top: 0.09rem;
+  flex-shrink: 0;
+}
+.d-linkmark-letter,
+.d-linkmark-img {
+  grid-area: 1 / 1;
+  width: 100%;
+  height: 100%;
+  border-radius: 3px;
+}
+.d-linkmark-letter {
+  display: grid;
+  place-items: center;
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+}
+.d-linkmark-img {
+  opacity: 0;
+  transition: opacity 0.18s var(--ease-out);
+}
+.d-linkmark-img[data-loaded] {
+  opacity: 1;
+}
+.d-link-text {
+  flex: 1;
+  min-width: 0;
+}
+.d-link-title {
+  font-size: 0.84rem;
+  font-weight: 600;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  text-wrap: pretty;
+}
+.d-link-title a {
+  color: var(--link);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+  text-decoration-color: color-mix(in srgb, var(--link) 42%, transparent);
+  transition: text-decoration-color 0.15s var(--ease-out);
+}
+.d-link-title a::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+.d-link .d-retry {
+  position: relative;
+  z-index: 1;
+}
+@media (hover: hover) and (pointer: fine) {
+  .d-link:hover .d-link-title a {
+    text-decoration-color: var(--link);
+  }
+}
+.d-link-title a:focus-visible {
+  outline: none;
+}
+.d-link:has(.d-link-title a:focus-visible) {
+  outline: 2px solid color-mix(in srgb, var(--link) 55%, transparent);
+  outline-offset: 2px;
+}
+.d-link-domain {
+  display: block;
+  margin-top: 0.1rem;
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.d-link-shimmer {
+  flex: 1;
+}
+.d-link-shimmer .shimmer {
+  display: block;
+  width: 62%;
+  height: 0.55rem;
+  border-radius: 4px;
+}
+.d-link .d-tomb {
+  flex: 1;
+  margin-top: 0;
+  padding: 0.3rem 0.5rem;
+}
+.d-link .d-annotation {
+  margin: -0.15rem 0.8rem 0.5rem;
+}
+.d-link .d-meta {
+  margin-left: 0.8rem;
+  margin-right: 0.8rem;
+}
+
 /* Platform-native chrome */
 .d-glyph {
   width: 1.05rem;
