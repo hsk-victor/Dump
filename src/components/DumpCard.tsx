@@ -560,15 +560,16 @@ function IgCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
   );
 }
 
-/** spotify/soundcloud/applemusic/bandcamp — a frosted player widget in the feed's glass language.
- *  The player chrome is decorative: the card opens the source link. Cover art only when the
- *  dump actually has art — a bare audio file collapses to text + transport + progress. */
+/** spotify/soundcloud/applemusic/bandcamp — a square frosted-glass player widget: the card IS
+ *  the widget. The player chrome is decorative (the card opens the source link). Cover art only
+ *  when the dump actually has art — a bare audio file collapses to text + transport + progress.
+ *  Note + meta live in a frosted panel inside the tile, revealed on hover like Media/Video. */
 function MusicCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
   const provider = providerMeta(dump.provider);
   const sub = dump.author ?? (bits.dek !== bits.title ? bits.dek : null) ?? provider?.label;
   const title = bits.title ?? provider?.label ?? "Audio";
   return (
-    <article {...bits.cardProps} className="d-card d-mus group">
+    <article {...bits.cardProps} className="d-card d-mus group" data-open={dump.status === "failed" || undefined}>
       {bits.actions}
       <a
         href={bits.href ?? undefined}
@@ -606,8 +607,8 @@ function MusicCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
         )}
         <ProviderIcon provider={dump.provider} className="d-prov d-mus-src" />
       </a>
-      {dump.note && <p className="d-mus-note" dir="auto">{dump.note}</p>}
-      <div className="d-mus-foot">
+      <div className="d-mus-panel">
+        {dump.note && <p className="d-mus-note" dir="auto">{dump.note}</p>}
         {bits.meta}
       </div>
     </article>

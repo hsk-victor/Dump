@@ -1189,19 +1189,22 @@ article.d-ig .d-meta,
   margin-right: 0.9rem;
 }
 
-/* music — a square frosted-glass player widget. The glass is the design
-   element: strictly neutral, no provider tint. Art at the side when the
-   dump has art; transport + progress are decorative (the card links out). */
+/* music — the whole card is a square frosted-glass player widget. The glass
+   is the design element: strictly neutral, no provider tint. Art at the side
+   when the dump has art; transport + progress are decorative (the card links
+   out). Note + meta sit in a frosted panel inside the tile on hover. */
+.d-mus {
+  aspect-ratio: 1 / 1;
+}
 .d-mus-widget {
   position: relative;
   display: grid;
   grid-template-columns: 44% 1fr;
   grid-template-rows: 1fr auto;
   gap: 0.6rem 0.7rem;
-  aspect-ratio: 1 / 1;
-  margin: 0.5rem;
-  padding: 0.75rem;
-  border-radius: 13px;
+  height: 100%;
+  padding: 0.8rem;
+  border-radius: var(--radius);
   color: inherit;
   text-decoration: none;
   background: rgb(127 127 127 / 0.1);
@@ -1238,7 +1241,7 @@ article.d-ig .d-meta,
 }
 .d-mus-art {
   position: relative;
-  align-self: start;
+  align-self: center;
   aspect-ratio: 1 / 1;
   width: 100%;
   border-radius: 10px;
@@ -1337,15 +1340,77 @@ article.d-ig .d-meta,
 }
 .d-mus-src {
   position: absolute;
-  top: 0.6rem;
-  right: 0.65rem;
+  top: 0.65rem;
+  right: 0.7rem;
   width: 0.95rem;
   height: 0.95rem;
   color: var(--ink);
   opacity: 0.4;
+  transition: opacity 0.15s var(--ease-out);
 }
-.d-mus-note {
-  margin: 0 0.9rem 0.25rem;
+@media (hover: hover) and (pointer: fine) {
+  /* The corner belongs to the card actions on hover — like .d-mchip. */
+  .d-mus:is(:hover, :focus-within) .d-mus-src {
+    opacity: 0;
+  }
+}
+@media (hover: none), (pointer: coarse) {
+  .d-mus-src {
+    display: none;
+  }
+}
+/* Note + meta: a small frosted panel inside the tile, revealed on hover —
+   same mechanics as .d-mpanel on the media/video cards. */
+.d-mus-panel {
+  position: absolute;
+  z-index: 1;
+  left: 0.45rem;
+  right: 0.45rem;
+  bottom: 0.45rem;
+  max-height: calc(100% - 0.9rem);
+  overflow: hidden;
+  padding: 0.55rem 0.7rem 0.5rem;
+  border-radius: calc(var(--radius) - 5px);
+  background: var(--raised);
+  -webkit-backdrop-filter: blur(16px) saturate(1.5);
+  backdrop-filter: blur(16px) saturate(1.5);
+  box-shadow: 0 6px 24px -6px rgb(0 0 0 / 0.3), 0 0 0 1px var(--hairline);
+  color: var(--ink);
+  opacity: 0;
+  translate: 0 8px;
+  pointer-events: none;
+  transition: opacity 0.14s var(--ease-out), translate 0.14s var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .d-mus:is(:hover, :focus-within) .d-mus-panel {
+    opacity: 1;
+    translate: 0 0;
+    pointer-events: auto;
+    transition-duration: 0.2s;
+  }
+  .d-mus-panel .d-meta {
+    transition: none;
+  }
+  .d-mus:is(:hover, :focus-within, [data-open]) .d-mus-panel .d-meta {
+    opacity: 1;
+    max-height: 2.5rem;
+    margin-top: 0;
+    padding-top: 0;
+    border-top-width: 0;
+  }
+}
+.d-mus[data-open] .d-mus-panel {
+  opacity: 1;
+  translate: 0 0;
+  pointer-events: auto;
+}
+@media (hover: none), (pointer: coarse) {
+  .d-mus:not([data-open]) .d-mus-panel {
+    display: none;
+  }
+}
+.d-mus-panel .d-mus-note {
+  margin: 0 0 0.3rem;
   font-size: 0.76rem;
   line-height: 1.4;
   color: var(--muted);
@@ -1355,22 +1420,8 @@ article.d-ig .d-meta,
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
-.d-mus-foot {
-  display: flex;
-  align-items: center;
-  gap: 0.55rem;
-  padding: 0 0.9rem 0.7rem;
-}
-.d-mus-foot .d-meta {
-  flex: 1;
-  min-width: 0;
+.d-mus-panel .d-meta {
   margin-top: 0;
-}
-@media (hover: hover) and (pointer: fine) {
-  .d-mus-foot .d-meta {
-    border-top-width: 0;
-    padding-top: 0;
-  }
 }
 
 /* GitHub card: the mark + owner/repo headline */
