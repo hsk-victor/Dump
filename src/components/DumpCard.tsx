@@ -608,6 +608,9 @@ function MusicCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
         <ProviderIcon provider={dump.provider} className="d-prov d-mus-src" />
       </a>
       <div className="d-mus-panel">
+        {!(bits.processing && !bits.title) && (
+          <p className="d-mus-ptitle" dir="auto">{title}</p>
+        )}
         {dump.note && <p className="d-mus-note" dir="auto">{dump.note}</p>}
         {bits.meta}
       </div>

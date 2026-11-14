@@ -1269,11 +1269,15 @@ article.d-ig .d-meta,
 }
 .d-mus-face {
   grid-area: face;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   justify-content: center;
   gap: 0.4rem;
   padding-top: 0.15rem;
+  /* Clear the provider glyph + hover actions in the top-right corner. */
+  padding-right: 1.15rem;
+  transition: opacity 0.15s var(--ease-out);
 }
 .d-mus-text {
   display: flex;
@@ -1324,6 +1328,7 @@ article.d-ig .d-meta,
   border-radius: 999px;
   background: rgb(127 127 127 / 0.28);
   overflow: hidden;
+  transition: opacity 0.15s var(--ease-out);
 }
 .d-mus-prog-fill {
   position: absolute;
@@ -1354,8 +1359,11 @@ article.d-ig .d-meta,
   transition: opacity 0.15s var(--ease-out);
 }
 @media (hover: hover) and (pointer: fine) {
-  /* The corner belongs to the card actions on hover — like .d-mchip. */
-  .d-mus:is(:hover, :focus-within) .d-mus-src {
+  /* On hover the corner belongs to the card actions (like .d-mchip fading) and
+     the details panel takes over — the player chrome would sit under both. */
+  .d-mus:is(:hover, :focus-within) .d-mus-src,
+  .d-mus:is(:hover, :focus-within) .d-mus-face,
+  .d-mus:is(:hover, :focus-within) .d-mus-prog {
     opacity: 0;
   }
 }
@@ -1404,15 +1412,35 @@ article.d-ig .d-meta,
     border-top-width: 0;
   }
 }
+/* Failed dumps keep the panel open so Retry stays reachable — and the player
+   chrome (and provider glyph) stand down so the title isn't duplicated. */
 .d-mus[data-open] .d-mus-panel {
   opacity: 1;
   translate: 0 0;
   pointer-events: auto;
 }
+.d-mus[data-open] .d-mus-face,
+.d-mus[data-open] .d-mus-prog,
+.d-mus[data-open] .d-mus-src {
+  opacity: 0;
+}
 @media (hover: none), (pointer: coarse) {
   .d-mus:not([data-open]) .d-mus-panel {
     display: none;
   }
+}
+.d-mus-panel .d-mus-ptitle {
+  margin: 0 0 0.3rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 .d-mus-panel .d-mus-note {
   margin: 0 0 0.3rem;
