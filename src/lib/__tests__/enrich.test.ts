@@ -44,6 +44,12 @@ const severance = (over: Record<string, unknown> = {}) => ({
 });
 
 describe("enrichDump", () => {
+  it("clears a provisional video URL when extraction identifies a page instead", async () => {
+    const d = db.createDump({ kind: "video", url: "https://example.com/preview.mp4", videoUrl: "https://example.com/preview.mp4", videoType: "video" });
+    extractUrl.mockResolvedValue(page({ videoUrl: null, videoType: null, imageUrl: "https://example.com/preview.jpg", imageUrls: ["https://example.com/preview.jpg"] }));
+    await enrichDump(d.id);
+    expect(db.getDump(d.id)).toMatchObject({ kind: "article", videoUrl: null, videoType: null, imageUrl: "https://example.com/preview.jpg", status: "ready" });
+  });
   it("persists X identity, video and gallery fields", async () => {
     const d = db.createDump({ kind: "post", url: "https://x.com/user/status/123" });
     extractUrl.mockResolvedValue(page({ kind: "post", description: "First line.\n\nSecond line.", author: "Name", authorHandle: "user", authorAvatarUrl: "avatar", videoUrl: "video.mp4", videoPosterUrl: "poster.jpg", videoType: "animated_gif", imageUrl: "1.jpg", imageUrls: ["1.jpg", "2.jpg"] }));

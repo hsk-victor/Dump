@@ -26,11 +26,26 @@ it("keeps unreachable posts retryable if both sources fail", async () => {
 });
 
 it.each([
-  ["https://example.com/Spring%20flowers.mp4", "application/octet-stream", "Spring flowers"],
+  ["https://example.com/Spring%20flowers.mp4", "video/mp4", "Spring flowers"],
   ["https://example.com/clip", "video/webm", "clip"],
-])("extracts inline video sources from file extensions or content type: %s", async (url, contentType, title) => {
+])("extracts inline video sources with a video content type: %s", async (url, contentType, title) => {
   fetch.mockResolvedValue(new Response(null, { headers: { "content-type": contentType } }));
   expect(await extractUrl(url)).toMatchObject({ kind: "video", title, videoUrl: url, videoType: "video", unreachable: false });
+});
+
+it("extracts the page preview when an mp4 URL serves HTML", async () => {
+  fetch.mockResolvedValue(new Response('<title>A preview page</title><meta property="og:type" content="article"><meta property="og:image" content="https://example.com/preview.jpg">', { headers: { "content-type": "text/html" } }));
+  expect(await extractUrl("https://example.com/preview.mp4")).toMatchObject({ kind: "article", title: "A preview page", imageUrl: "https://example.com/preview.jpg", videoUrl: null, videoType: null, unreachable: false });
+});
+
+it.each(["application/octet-stream", ""])("does not assume a video from its extension without a video content type: %s", async (contentType) => {
+  fetch.mockResolvedValue(new Response(null, { headers: { "content-type": contentType } }));
+  expect(await extractUrl("https://example.com/clip.mp4")).toMatchObject({ kind: "link", videoUrl: null, unreachable: false });
+});
+
+it("does not keep an unverified video source after a failed fetch", async () => {
+  fetch.mockRejectedValue(new Error("network"));
+  expect(await extractUrl("https://example.com/clip.mp4")).toMatchObject({ kind: "link", videoUrl: null, unreachable: true });
 });
 
 it("stores the stable requested video URL instead of an expiring redirect target", async () => {
