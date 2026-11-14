@@ -1983,10 +1983,33 @@ The tape strip: frosted so the paper shows through, slightly rotated.
 .d-card:focus-within .d-actions {
   opacity: 1;
 }
-@media (hover: none) {
-  /* No hover on touch: keep card actions reachable instead of stuck-open. */
-  .d-actions {
+@media (hover: none), (pointer: coarse) {
+  /* No hover on touch: actions never cover a card at rest. Media cards reveal
+     them with the details panel (tap-to-reveal sets data-open; failed dumps pin
+     it open); every other card docks them beside the always-visible meta row —
+     with space reserved — instead of floating them over its top-right corner. */
+  .d-mediacard:not([data-open]) .d-actions,
+  .d-mus:not([data-open]) .d-actions {
+    opacity: 0;
+  }
+  .d-mediacard:is([data-open], :focus-within) .d-actions,
+  .d-mus:is([data-open], :focus-within) .d-actions {
     opacity: 1;
+  }
+  .d-card:not(.d-mediacard):not(.d-mus) .d-actions {
+    opacity: 1;
+    top: auto;
+    bottom: 0.4rem;
+    right: 0.55rem;
+  }
+  .d-card:not(.d-mediacard):not(.d-mus) .d-meta {
+    padding-right: 4.9rem;
+  }
+  /* Same corner rule as desktop hover: once actions are revealed they own the
+     top-right — the counter/tag there steps aside. */
+  .d-mediacard[data-open] .d-mcount,
+  .d-ghcard[data-open] .d-gh-tag {
+    opacity: 0;
   }
 }
 /* The Move trigger is a base-ui Menu.Trigger (a <button>) — undo the square

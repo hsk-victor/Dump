@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type MouseEvent, type ReactNode } from "react";
 import { Menu } from "@base-ui/react/menu";
 import type { Dump } from "@/lib/db";
 import { SUBJECT_MIN_CONFIDENCE, subjectLine, TOPICS, kindMeta, providerMeta, topicMeta } from "@/lib/taxonomy";
@@ -200,6 +200,8 @@ interface CardBits {
   showMedia: boolean;
   setImgFailed: (v: boolean) => void;
   processing: boolean;
+  /** Touch tap-to-reveal: first tap on a media card's face opens its panel (data-open). */
+  revealed: boolean;
   cardProps: Record<string, unknown>;
 }
 
@@ -489,7 +491,7 @@ function GithubCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
 
   if (bits.showMedia) {
     return (
-      <article {...bits.cardProps} className="d-card d-mediacard d-ghcard group" data-open={dead || undefined}>
+      <article {...bits.cardProps} className="d-card d-mediacard d-ghcard group" data-open={dead || bits.revealed || undefined}>
         {bits.actions}
         <a href={bits.href ?? undefined} target="_blank" rel="noreferrer" className="d-media" aria-label={label}>
           <FadeImg dump={dump} bits={bits} alt={titled ? (title ?? "") : ""} />
@@ -629,7 +631,7 @@ function VideoCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
     [dump.author?.trim(), providerMeta(dump.provider)?.label].filter(Boolean).join(" · ") ||
     (dump.url ? bits.site : null);
   return (
-    <article {...bits.cardProps} className="d-card d-mediacard d-vidcard group" data-open={dump.status === "failed" || undefined}>
+    <article {...bits.cardProps} className="d-card d-mediacard d-vidcard group" data-open={dump.status === "failed" || bits.revealed || undefined}>
       {bits.actions}
       <a href={bits.href ?? undefined} target="_blank" rel="noreferrer" className="d-media d-vmedia" aria-label={t.title ?? byline ?? "Open video"}>
         {bits.showMedia ? (
@@ -695,7 +697,7 @@ function mediaText(dump: Dump, bits: CardBits) {
 function MediaCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
   const t = mediaText(dump, bits);
   return (
-    <article {...bits.cardProps} className="d-card d-mediacard group" data-open={dump.status === "failed" || undefined}>
+    <article {...bits.cardProps} className="d-card d-mediacard group" data-open={dump.status === "failed" || bits.revealed || undefined}>
       {bits.actions}
       <a href={bits.href ?? undefined} target="_blank" rel="noreferrer" className="d-media" aria-label={t.title ?? t.byline ?? "Open image"}>
         <FadeImg dump={dump} bits={bits} alt={t.title ?? ""} />
@@ -758,7 +760,7 @@ function IgCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
     <article
       {...bits.cardProps}
       className={`d-card d-mediacard d-igcard${shape === "reel" ? " d-igreel" : ""} group`}
-      data-open={dump.status === "failed" || undefined}
+      data-open={dump.status === "failed" || bits.revealed || undefined}
     >
       {bits.actions}
       {bits.showMedia ? (
@@ -837,7 +839,7 @@ function MusicCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
   const sub = dump.author ?? (bits.dek !== bits.title ? bits.dek : null) ?? provider?.label;
   const title = bits.title ?? provider?.label ?? "Audio";
   return (
-    <article {...bits.cardProps} className="d-card d-mus group" data-open={dump.status === "failed" || undefined}>
+    <article {...bits.cardProps} className="d-card d-mus group" data-open={dump.status === "failed" || bits.revealed || undefined}>
       {bits.actions}
       <a
         href={bits.href ?? undefined}
@@ -1096,6 +1098,34 @@ function LinkCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
 
 export default function DumpCard({ dump, fresh, removing, onTopic, onDelete, onRetry }: Props) {
   const [imgFailed, setImgFailed] = useState(false);
+  const [revealed, setRevealed] = useState(false);
+  const cardRef = useRef<HTMLElement | null>(null);
+
+  /* A tap outside an open media card closes its panel again. */
+  useEffect(() => {
+    if (!revealed) return;
+    const onDown = (e: PointerEvent) => {
+      if (cardRef.current && !cardRef.current.contains(e.target as Node)) setRevealed(false);
+    };
+    document.addEventListener("pointerdown", onDown, true);
+    return () => document.removeEventListener("pointerdown", onDown, true);
+  }, [revealed]);
+
+  /* Tap-to-reveal on coarse pointers, detected with the same capability query
+   * the CSS gates on — matchMedia("(hover: none), (pointer: coarse)"). First
+   * tap on a media card's face link opens the panel instead of navigating;
+   * the second tap follows the link (links inside the open panel navigate
+   * directly). Failed dumps keep their always-open panel, so this never runs
+   * for them. e.detail === 0 lets keyboard-initiated clicks navigate. */
+  const onCardClick = (e: MouseEvent<HTMLElement>) => {
+    if (revealed || dump.status === "failed" || e.detail === 0) return;
+    const card = e.currentTarget;
+    if (!card.classList.contains("d-mediacard") && !card.classList.contains("d-mus")) return;
+    if (!window.matchMedia("(hover: none), (pointer: coarse)").matches) return;
+    if (!(e.target as HTMLElement).closest("a.d-media, a.d-mus-widget")) return;
+    e.preventDefault();
+    setRevealed(true);
+  };
   const topic = topicMeta(dump.topic);
   const kind = dump.kind;
   const provider = providerMeta(dump.provider);
@@ -1167,11 +1197,14 @@ export default function DumpCard({ dump, fresh, removing, onTopic, onDelete, onR
     showMedia,
     setImgFailed,
     processing,
+    revealed,
     cardProps: {
       "data-kind": kind,
       "data-provider": dump.provider ?? undefined,
       "data-fresh": fresh || undefined,
       "data-removing": removing || undefined,
+      ref: cardRef,
+      onClick: onCardClick,
       style: { "--topic": topic.color, "--provider": provider && "color" in provider ? provider.color : undefined } as CSSProperties,
     },
   };
