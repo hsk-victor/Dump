@@ -1686,21 +1686,155 @@ button {
   margin-top: 0.6rem;
 }
 
-/* Notes */
+/* Notes — index card: a catalog header (uppercase title + date) over ruled
+   writing lines, with a red margin rule on the leading edge. Card stock stays
+   plain — the topic tint lives in the meta row, not the paper. */
 .d-card[data-kind="note"] {
-  background: color-mix(in srgb, var(--topic) 8%, var(--surface));
+  --note-rule: color-mix(in srgb, var(--ink) 9%, transparent);
+  --note-margin: color-mix(in srgb, #e11d48 38%, transparent);
+  background: var(--surface);
 }
-.d-note-text {
-  font-size: 0.95rem;
+.d-note-body {
+  position: relative;
+  padding: 0.8rem 0.9rem;
+  /* Room for the margin rule; flips to the right side for RTL notes. */
+  padding-inline-start: 2.05rem;
+}
+.d-note-body::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  inset-inline-start: 1.45rem;
+  width: 1px;
+  background: var(--note-margin);
+  pointer-events: none;
+}
+.d-note-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding-bottom: 0.45rem;
+  margin-bottom: 0.55rem;
+  border-bottom: 1.5px solid var(--note-rule);
+}
+.d-note-title {
+  min-width: 0;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.d-note-date {
+  flex-shrink: 0;
+  font-size: 0.68rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+/* Ruled lines repeat at the text's line-height so they read as writing lines.
+   The -0.256em offset puts each rule on the text baseline (half-leading +
+   font ascent ≈ 1.244em below the block top, measured on Plus Jakarta Sans). */
+.d-note-lines {
+  font-size: 0.88rem;
   line-height: 1.5;
-  font-weight: 500;
-  letter-spacing: -0.01em;
+  color: var(--ink-2);
   white-space: pre-line;
+  overflow-wrap: anywhere;
   display: -webkit-box;
   -webkit-line-clamp: 10;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent calc(1.5em - 1px),
+    var(--note-rule) calc(1.5em - 1px),
+    var(--note-rule) 1.5em
+  );
+  background-position: 0 -0.256em;
 }
+.d-card[data-kind="note"] .d-annotation {
+  margin-inline-start: -0.5rem;
+  margin-inline-end: 0;
+}
+
+/* ── Saved for the future card-style customization feature (do not delete) ──
+   Runner-up note variant "Sticky" — physical memo: warm paper, masking tape.
+   From the note prototype; class names are the prototype's pn-* set and would
+   need translating to d-* if revived.
+
+.d-card.pn-sticky {
+  --pn-ink: #463a12;
+  --pn-ink-2: #6b5c24;
+  --pn-line: rgb(120 95 20 / 0.14);
+  background: linear-gradient(175deg, #fceeac 0%, #f9e48c 55%, #f5d973 100%);
+  color: var(--pn-ink);
+}
+[data-mode="dark"] .d-card.pn-sticky {
+  --pn-ink: #efe3ae;
+  --pn-ink-2: #cbbc7d;
+  --pn-line: rgb(240 220 140 / 0.12);
+  background: linear-gradient(175deg, #56481b 0%, #483a14 60%, #3d3110 100%);
+}
+.pn-sticky-body {
+  position: relative;
+  padding: 1.35rem 1rem 0.85rem;
+}
+The tape strip: frosted so the paper shows through, slightly rotated.
+.pn-sticky-body::before {
+  content: "";
+  position: absolute;
+  top: 0.3rem;
+  left: 50%;
+  translate: -50% 0;
+  rotate: -1.6deg;
+  width: 34%;
+  min-width: 3.5rem;
+  height: 0.85rem;
+  border-radius: 2px;
+  background: rgb(255 255 255 / 0.38);
+  box-shadow: 0 1px 2px rgb(90 70 10 / 0.18), inset 0 0 0 1px rgb(255 255 255 / 0.25);
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+  pointer-events: none;
+}
+[data-mode="dark"] .pn-sticky-body::before {
+  background: rgb(255 245 200 / 0.12);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.3), inset 0 0 0 1px rgb(255 240 180 / 0.12);
+}
+.pn-sticky .pn-text {
+  font-size: 0.95rem;
+  line-height: 1.55;
+  font-weight: 550;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 11;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.pn-sticky .d-annotation {
+  background: rgb(255 255 255 / 0.4);
+  color: var(--pn-ink-2);
+}
+[data-mode="dark"] .pn-sticky .d-annotation {
+  background: rgb(0 0 0 / 0.22);
+  color: var(--pn-ink-2);
+}
+.pn-sticky .d-meta {
+  border-top-color: var(--pn-line);
+  color: var(--pn-ink-2);
+}
+.pn-sticky .d-sorting {
+  background: var(--pn-line);
+  color: var(--pn-ink-2);
+}
+*/
 
 /* Hover actions */
 .d-actions {

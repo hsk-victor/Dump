@@ -4,7 +4,7 @@ import { useState, type CSSProperties, type ReactNode } from "react";
 import { Menu } from "@base-ui/react/menu";
 import type { Dump } from "@/lib/db";
 import { SUBJECT_MIN_CONFIDENCE, subjectLine, TOPICS, kindMeta, providerMeta, topicMeta } from "@/lib/taxonomy";
-import { timeAgo } from "@/lib/format";
+import { timeAgo, shortDate } from "@/lib/format";
 import { GITHUB_TAG, githubInfo, type GithubInfo, titleFromUrl } from "@/lib/detect";
 
 interface Props {
@@ -942,6 +942,69 @@ function ArticleCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
   );
 }
 
+const NOTE_RTL_RE = /[\u0591-\u07FF\u08A0-\u08FF\uFB1D-\uFDFF\uFE70-\uFEFC]/;
+const NOTE_LTR_RE = /[A-Za-z\u00C0-\u024F\u1E00-\u1EFF]/;
+
+/** First-strong-character direction. dir="auto" can't be used on the note body:
+ *  it skips children carrying their own dir attribute, so the margin rule would
+ *  never flip for an RTL note whose header contains a Latin date. */
+function noteDir(text: string): "rtl" | "ltr" {
+  for (const ch of text) {
+    if (NOTE_RTL_RE.test(ch)) return "rtl";
+    if (NOTE_LTR_RE.test(ch)) return "ltr";
+  }
+  return "ltr";
+}
+
+/** The text under the catalog header: the title already shows the first line,
+ *  so drop it from the ruled text to avoid printing it twice. */
+function noteBody(dump: Dump): string | null {
+  const content = dump.content ?? "";
+  const title = dump.title;
+  if (title && content.startsWith(title)) return content.slice(title.length).trimStart() || null;
+  return content || null;
+}
+
+/** note — an index card: a catalog header (uppercase title + date) over ruled
+ *  writing lines, with a red margin rule on the leading edge. Plain card stock —
+ *  the topic tint stays in the meta row, not the paper. User text only: no URL,
+ *  no provider, nothing to link to. */
+function NoteCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
+  const body = noteBody(dump);
+  return (
+    <article {...bits.cardProps} className="d-card group">
+      {bits.actions}
+      <div className="d-note-body" dir={noteDir(dump.title ?? dump.content ?? "")}>
+        {bits.processing && !bits.title ? (
+          shimmerLines()
+        ) : (
+          <>
+            <div className="d-note-head">
+              <span className="d-note-title" dir="auto">
+                {bits.title ?? "Note"}
+              </span>
+              <time className="d-note-date" dateTime={new Date(dump.createdAt).toISOString()}>
+                {shortDate(dump.createdAt)}
+              </time>
+            </div>
+            {body && (
+              <p className="d-note-lines" dir="auto">
+                {body}
+              </p>
+            )}
+          </>
+        )}
+        {dump.note && (
+          <p className="d-annotation" dir="auto">
+            {dump.note}
+          </p>
+        )}
+        {bits.meta}
+      </div>
+    </article>
+  );
+}
+
 /** link — favicon kicker + title + description; hero image when one exists. */
 function LinkCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
   return (
@@ -1064,18 +1127,7 @@ export default function DumpCard({ dump, fresh, removing, onTopic, onDelete, onR
     },
   };
 
-  if (kind === "note") {
-    return (
-      <article {...bits.cardProps} className="d-card group">
-        {actions}
-        <div className="d-body">
-          {processing && !title ? shimmerLines() : <p className="d-note-text">{dump.content ?? title}</p>}
-          {dump.note && <p className="d-annotation">{dump.note}</p>}
-          {meta}
-        </div>
-      </article>
-    );
-  }
+  if (kind === "note") return <NoteCard dump={dump} bits={bits} />;
   if (dump.provider === "x") return <XCard dump={dump} bits={bits} />;
   if (dump.provider === "reddit") return <RedditCard dump={dump} bits={bits} />;
   if (dump.provider === "hackernews") return <HnCard dump={dump} bits={bits} />;
