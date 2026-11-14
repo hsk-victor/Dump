@@ -11,7 +11,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   if (url.protocol !== "https:" || url.hostname !== "video.twimg.com") return new Response("Unsupported video", { status: 400 });
   try {
     const range = req.headers.get("range");
-    const upstream = await fetchWithTimeout(video, { headers: range ? { range } : {} });
+    const upstream = await fetchWithTimeout(video, { headers: range ? { range } : {}, headersOnlyTimeout: true });
     if (!upstream.ok) {
       await upstream.body?.cancel();
       return new Response("Video unavailable", { status: upstream.status === 416 ? 416 : 502 });

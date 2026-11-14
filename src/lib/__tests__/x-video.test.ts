@@ -19,7 +19,7 @@ it("streams stored X video with range headers without forwarding the browser ref
   expect(response.status).toBe(206);
   expect(response.headers.get("content-range")).toBe("bytes 0-3/10");
   expect(await response.text()).toBe("data");
-  expect(fetchWithTimeout).toHaveBeenCalledWith("https://video.twimg.com/video.mp4", { headers: { range: "bytes=0-3" } });
+  expect(fetchWithTimeout).toHaveBeenCalledWith("https://video.twimg.com/video.mp4", { headers: { range: "bytes=0-3" }, headersOnlyTimeout: true });
 });
 
 it("returns 404 for missing video", async () => {

@@ -104,16 +104,23 @@ function guardedLookup(hostname: string, options: dns.LookupOptions, callback: L
 
 const dispatcher = new Agent({ connect: { lookup: guardedLookup as never } });
 
-export async function fetchWithTimeout(url: string, init: { headers?: Record<string, string> } = {}): Promise<Response> {
+export async function fetchWithTimeout(url: string, init: { headers?: Record<string, string>; headersOnlyTimeout?: boolean } = {}): Promise<Response> {
   let current = url;
   for (let hop = 0; hop < 5; hop++) {
     assertPublicUrl(current);
-    const res = (await undiciFetch(current, {
-      dispatcher,
-      redirect: "manual",
-      signal: AbortSignal.timeout(TIMEOUT_MS),
-      headers: { "user-agent": UA, "accept-language": "en;q=0.9,*;q=0.5", ...(init.headers ?? {}) },
-    })) as unknown as Response;
+    const controller = init.headersOnlyTimeout ? new AbortController() : null;
+    const timer = controller ? setTimeout(() => controller.abort(), TIMEOUT_MS) : null;
+    let res: Response;
+    try {
+      res = (await undiciFetch(current, {
+        dispatcher,
+        redirect: "manual",
+        signal: controller?.signal ?? AbortSignal.timeout(TIMEOUT_MS),
+        headers: { "user-agent": UA, "accept-language": "en;q=0.9,*;q=0.5", ...(init.headers ?? {}) },
+      })) as unknown as Response;
+    } finally {
+      if (timer !== null) clearTimeout(timer);
+    }
     const location = res.headers.get("location");
     if (res.status >= 300 && res.status < 400 && location) {
       res.body?.cancel().catch(() => {});
