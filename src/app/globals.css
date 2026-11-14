@@ -693,9 +693,11 @@ button {
   place-items: center;
   color: var(--provider, var(--muted));
 }
+/* Bigger than the centered .d-play (2.75rem) so the brand glyph stays visible
+   as a medallion behind the tinted play badge instead of being fully covered. */
 .d-vph .d-prov {
-  width: 2.6rem;
-  height: 2.6rem;
+  width: 4.4rem;
+  height: 4.4rem;
 }
 /* Thin bottom scrim so the chip always reads — much lighter than a full overlay. */
 .d-vscrim {
