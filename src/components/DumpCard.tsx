@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type CSSProperties, type MouseEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type MouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { Menu } from "@base-ui/react/menu";
 import type { Dump } from "@/lib/db";
 import { SUBJECT_MIN_CONFIDENCE, subjectLine, TOPICS, kindMeta, providerMeta, topicMeta } from "@/lib/taxonomy";
@@ -255,6 +255,51 @@ function FadeImg({ dump, bits, className, alt = "" }: { dump: Dump; bits: CardBi
 
 /* ============================ platform-native cards ============================ */
 
+function XVideo({ dump, author }: { dump: Dump; author: string | null }) {
+  const animated = dump.videoType === "animated_gif";
+  const video = useRef<HTMLVideoElement>(null);
+  const [reducedMotion, setReducedMotion] = useState(true);
+  const [playing, setPlaying] = useState(false);
+  useEffect(() => {
+    const preference = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const update = () => {
+      setReducedMotion(preference.matches);
+      if (animated && preference.matches) video.current?.pause();
+      else if (animated) void video.current?.play().catch(() => {});
+    };
+    update();
+    preference.addEventListener("change", update);
+    return () => preference.removeEventListener("change", update);
+  }, [animated]);
+  return (
+    <div className="d-post-video-frame">
+      <video
+        ref={video}
+        className="d-post-video"
+        src={`/api/dumps/${dump.id}/video`}
+        poster={dump.videoPosterUrl ?? undefined}
+        controls={!animated}
+        autoPlay={animated && !reducedMotion}
+        muted={animated}
+        loop={animated}
+        playsInline
+        preload={animated && !reducedMotion ? "auto" : "none"}
+        onPlay={() => setPlaying(true)}
+        onPause={() => setPlaying(false)}
+        aria-label={`${animated ? "Animation" : "Video"} by ${author ?? "X author"}`}
+      />
+      {animated && reducedMotion && (
+        <button className="d-animation-toggle" aria-label={playing ? "Pause animation" : "Play animation"} onClick={() => {
+          if (video.current?.paused) void video.current.play().catch(() => {});
+          else video.current?.pause();
+        }}>
+          {!playing && <PlayBadge />}
+        </button>
+      )}
+    </div>
+  );
+}
+
 /** x — native post chrome with inline media; dead tweets retain their tombstone. */
 function XCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
   const [failedIdx, setFailedIdx] = useState<ReadonlySet<number>>(new Set());
@@ -296,7 +341,7 @@ function XCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
         </>
       )}
       {dump.videoUrl && (
-        <video className="d-post-video" src={`/api/dumps/${dump.id}/video`} poster={dump.videoPosterUrl ?? undefined} controls playsInline preload="none" aria-label={`Video by ${author ?? "X author"}`} />
+        <XVideo dump={dump} author={author} />
       )}
       {images.length > 0 && (
         <a href={bits.href ?? undefined} target="_blank" rel="noreferrer" className={`d-post-gallery${images.length > 1 ? " d-post-grid" : ""}`}>
@@ -669,14 +714,20 @@ function YouTubeCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
  *  loom, dailymotion, plain links) gets the cinema layout: like the media card, the thumbnail is
  *  the card — pure media at rest, title/byline/dek/note/meta rise in a glass panel on hover/focus. */
 function VideoCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
-  if (dump.provider === "youtube") return <YouTubeCard dump={dump} bits={bits} />;
+  if (dump.provider === "youtube" && !dump.videoUrl) return <YouTubeCard dump={dump} bits={bits} />;
   const t = mediaText(dump, bits);
   const byline =
     [dump.author?.trim(), providerMeta(dump.provider)?.label].filter(Boolean).join(" · ") ||
     (dump.url ? bits.site : null);
   return (
-    <article {...bits.cardProps} className="d-card d-mediacard d-vidcard group" data-open={dump.status === "failed" || bits.revealed || undefined}>
+    <article {...bits.cardProps} className={`d-card d-mediacard d-vidcard group${dump.videoUrl ? " d-inline-video" : ""}`} data-open={dump.status === "failed" || bits.revealed || undefined}>
       {bits.actions}
+      {dump.videoUrl ? (
+        <div className="d-media d-vmedia">
+          <video src={dump.videoUrl} poster={dump.videoPosterUrl ?? undefined} controls playsInline preload="metadata" aria-label={t.title ?? "Video"} />
+          <MediaMark dump={dump} />
+        </div>
+      ) : (
       <a href={bits.href ?? undefined} target="_blank" rel="noreferrer" className="d-media d-vmedia" aria-label={t.title ?? byline ?? "Open video"}>
         {bits.showMedia ? (
           <FadeImg dump={dump} bits={bits} alt={t.title ?? ""} />
@@ -689,6 +740,7 @@ function VideoCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
         <PlayBadge />
         <MediaMark dump={dump} />
       </a>
+      )}
       {bits.processing && (
         <span className="d-mchip" aria-hidden>
           <span className="d-mchip-sorting shimmer" />
@@ -1155,6 +1207,12 @@ export default function DumpCard({ dump, fresh, removing, onTopic, onDelete, onR
     return () => document.removeEventListener("pointerdown", onDown, true);
   }, [revealed]);
 
+  const onCardPointerDown = (e: ReactPointerEvent<HTMLElement>) => {
+    if (revealed || dump.status === "failed") return;
+    if (!window.matchMedia("(hover: none), (pointer: coarse)").matches) return;
+    if ((e.target as HTMLElement).closest(".d-inline-video .d-media")) setRevealed(true);
+  };
+
   /* Tap-to-reveal on coarse pointers, detected with the same capability query
    * the CSS gates on — matchMedia("(hover: none), (pointer: coarse)"). First
    * tap on a media card's face link opens the panel instead of navigating;
@@ -1249,11 +1307,13 @@ export default function DumpCard({ dump, fresh, removing, onTopic, onDelete, onR
       "data-removing": removing || undefined,
       ref: cardRef,
       onClick: onCardClick,
+      onPointerDownCapture: onCardPointerDown,
       style: { "--topic": topic.color, "--provider": provider && "color" in provider ? provider.color : undefined } as CSSProperties,
     },
   };
 
   if (kind === "note") return <NoteCard dump={dump} bits={bits} />;
+  if (kind === "video" && dump.videoUrl) return <VideoCard dump={dump} bits={bits} />;
   if (dump.provider === "x") return <XCard dump={dump} bits={bits} />;
   if (dump.provider === "reddit") return <RedditCard dump={dump} bits={bits} />;
   if (dump.provider === "hackernews") return <HnCard dump={dump} bits={bits} />;
