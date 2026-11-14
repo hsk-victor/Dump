@@ -67,6 +67,7 @@ const GLYPHS = {
   share: "M21 12l-8-7v4C7 9 3.5 13.5 2.5 19c2.5-3.5 6-5 10.5-5v4l8-6z",
   bookmark: "M6 3h12a1 1 0 011 1v17l-7-4.5L5 21V4a1 1 0 011-1z",
   dots: "M2 12a2 2 0 1 1 4 0 2 2 0 0 1-4 0zm8 0a2 2 0 1 1 4 0 2 2 0 0 1-4 0zm8 0a2 2 0 1 1 4 0 2 2 0 0 1-4 0z",
+  film: "M18 4l2 4h-3l-2-4h-2l2 4h-3l-2-4H8l2 4H7L5 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4h-4z",
   person: "M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z",
 };
 
@@ -555,34 +556,97 @@ function MediaCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
   );
 }
 
-/** instagram — the IG grid post: square-ish media, action bar (heart/comment/share/bookmark), caption. */
+/** instagram — shares the media-card shell: pure media at rest, the provider
+ *  roundel + 1/N counter at the corners, and caption/byline/note/meta rising in
+ *  a glass panel on hover/focus. The URL picks the shape — /p/ posts keep their
+ *  natural ratio; /reel/ reels frame at 9:16 with a film flag + play badge.
+ *  Server fetches hit Instagram's login wall, so URL-only dumps collapse to a
+ *  quiet "saved" tile that still names the shape and shortcode. */
 function IgCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
+  const shape = dump.url && /instagram\.com\/reels?\//.test(dump.url) ? "reel" : "post";
+  const shortcode = dump.url?.match(/instagram\.com\/(?:p|reels?)\/([^/?#]+)/)?.[1] ?? null;
   const author = postAuthor(dump);
-  const caption = dump.description ?? dump.summary ?? bits.title;
-  const headline = bits.title && bits.title !== caption && !attributionName(dump.title, dump) ? bits.title : null;
+  const raw = author?.replace(/^@/, "");
+  // Only @-ify a real handle — a display name or an "… on Instagram" title isn't one.
+  const handle = raw && /^[\w.]{1,30}$/.test(raw) ? `@${raw}` : null;
+  const byline = [handle, "Instagram"].filter(Boolean).join(" · ");
+  const caption = dump.description?.trim() || dump.summary?.trim() || null;
+  // Sparse dumps only have a URL-derived title ("instagram.com") — not a caption.
+  const urlTitle = !bits.title || bits.title === dump.domain || bits.title === dump.url;
+  const headline = !urlTitle && bits.title !== caption && !attributionName(dump.title, dump) ? bits.title : null;
+  const title = headline ?? caption;
+  const dek = headline && caption && caption !== headline ? caption : null;
+  const dead = dump.status === "failed" && !title;
   return (
-    <article {...bits.cardProps} className="d-card group">
+    <article
+      {...bits.cardProps}
+      className={`d-card d-mediacard d-igcard${shape === "reel" ? " d-igreel" : ""} group`}
+      data-open={dump.status === "failed" || undefined}
+    >
       {bits.actions}
-      <a href={bits.href ?? undefined} target="_blank" rel="noreferrer" className="d-ig-head">
-        <span className="d-ig-ring"><span className="d-ig-avatar">{author ? initials(author) : <ProviderIcon provider="instagram" />}</span></span>
-        <span className="d-ig-name min-w-0">{author ?? "Instagram"}</span>
-        <Glyph name="dots" className="d-ig-dots" />
-      </a>
       {bits.showMedia ? (
-        <a href={bits.href ?? undefined} target="_blank" rel="noreferrer" className="d-ig-media">
-          <Img dump={dump} bits={bits} className="d-ig-img" />
+        <a
+          href={bits.href ?? undefined}
+          target="_blank"
+          rel="noreferrer"
+          className="d-media"
+          aria-label={title ?? byline ?? "Open on Instagram"}
+        >
+          <FadeImg dump={dump} bits={bits} alt={title ?? ""} />
+          {shape === "reel" && (
+            <span className="d-ig-flag" title="Reel">
+              <Glyph name="film" />
+            </span>
+          )}
+          {(shape === "reel" || dump.kind === "video") && <PlayBadge />}
+          <MediaMark dump={dump} />
         </a>
-      ) : null}
-      <div className="d-ig-actions" aria-hidden>
-        <Glyph name="heart" className="d-glyph d-ig-heart" />
-        <Glyph name="comment" className="d-glyph" />
-        <Glyph name="share" className="d-glyph" />
-        <Glyph name="bookmark" className="d-glyph d-ig-save" />
+      ) : (
+        <a href={bits.href ?? undefined} target="_blank" rel="noreferrer" className="d-media d-ig-empty" aria-label="Open on Instagram">
+          <span className="d-ig-mark" aria-hidden>
+            <ProviderIcon provider="instagram" />
+          </span>
+          <span>
+            <span className="d-ig-empty-name">Instagram {shape === "reel" ? "reel" : "post"}</span>
+            {shortcode && <span className="d-ig-empty-sub">/{shape === "reel" ? "reel" : "p"}/{shortcode}</span>}
+          </span>
+        </a>
+      )}
+      {bits.processing && (
+        <span className="d-mchip" aria-hidden>
+          <span className="d-mchip-sorting shimmer" />
+        </span>
+      )}
+      <div className="d-mpanel">
+        {bits.processing && !title ? (
+          shimmerLines()
+        ) : dead ? (
+          <p className="d-tomb">This post doesn&rsquo;t exist.</p>
+        ) : (
+          <>
+            {title && (
+              <h3 className="d-mpanel-title" dir="auto">
+                {bits.href ? (
+                  <a href={bits.href} target="_blank" rel="noreferrer">
+                    {title}
+                  </a>
+                ) : (
+                  title
+                )}
+              </h3>
+            )}
+            <p className="d-mpanel-by">
+              <ProviderIcon provider="instagram" className="d-mpanel-prov" />
+              <span className="min-w-0 truncate" dir="auto">
+                {byline}
+              </span>
+            </p>
+            {dek && <p className="d-mpanel-dek" dir="auto">{dek}</p>}
+            {dump.note && <p className="d-annotation d-mpanel-note" dir="auto">{dump.note}</p>}
+          </>
+        )}
+        {bits.meta}
       </div>
-      {caption && <p className="d-ig-caption">{author && <strong>{author} </strong>}{caption}</p>}
-      {headline && <p className="d-ig-subject">{headline}</p>}
-      {dump.note && <p className="d-annotation">{dump.note}</p>}
-      {bits.meta}
     </article>
   );
 }
