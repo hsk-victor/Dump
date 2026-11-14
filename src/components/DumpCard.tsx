@@ -221,9 +221,13 @@ function Img({ dump, bits, className, alt = "" }: { dump: Dump; bits: CardBits; 
   );
 }
 
-/** Image that fades in once decoded — unless it was already cached, so revisits don't flicker. */
+/** Image that fades in once decoded — unless it was already cached, so revisits don't flicker.
+ *  Falls back through imageUrls on error; the card only goes media-less when every candidate fails. */
 function FadeImg({ dump, bits, className, alt = "" }: { dump: Dump; bits: CardBits; className?: string; alt?: string }) {
   const [loaded, setLoaded] = useState(false);
+  const [failedIdx, setFailedIdx] = useState<ReadonlySet<number>>(new Set());
+  const all = dump.imageUrls.length ? dump.imageUrls : dump.imageUrl ? [dump.imageUrl] : [];
+  const srcIdx = all.findIndex((_, i) => !failedIdx.has(i));
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img
@@ -231,13 +235,20 @@ function FadeImg({ dump, bits, className, alt = "" }: { dump: Dump; bits: CardBi
         if (el?.complete && el.naturalWidth) setLoaded(true);
       }}
       className={className}
-      src={dump.imageUrl!}
+      src={(srcIdx >= 0 ? all[srcIdx] : dump.imageUrl)!}
       alt={alt}
       loading="lazy"
       referrerPolicy="no-referrer"
       data-loaded={loaded || undefined}
       onLoad={() => setLoaded(true)}
-      onError={() => bits.setImgFailed(true)}
+      onError={() => {
+        setLoaded(false);
+        if (srcIdx >= 0 && srcIdx < all.length - 1) {
+          setFailedIdx((s) => new Set(s).add(srcIdx));
+        } else {
+          bits.setImgFailed(true);
+        }
+      }}
     />
   );
 }
@@ -256,10 +267,12 @@ function XCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
   const handle = raw && /^[\w.]{1,30}$/.test(raw) ? `@${raw}` : null;
   const byline = (handle && handle !== author ? handle : null) ?? "X";
   const postText = dump.description ?? dump.summary;
-  const text = postText && postText !== bits.title ? postText : null;
+  const text = postText || null;
   const headline =
     bits.title && !bits.processing && bits.title !== postText && !attributionName(dump.title, dump) ? bits.title : null;
-  const images = (dump.imageUrls.length ? dump.imageUrls : dump.imageUrl ? [dump.imageUrl] : []).filter((_, i) => !failedIdx.has(i));
+  const allImages = dump.imageUrls.length ? dump.imageUrls : dump.imageUrl ? [dump.imageUrl] : [];
+  const shownIdx = allImages.findIndex((_, i) => !failedIdx.has(i));
+  const images = allImages.filter((_, i) => !failedIdx.has(i));
   return (
     <article {...bits.cardProps} className="d-card d-post group">
       {bits.actions}
@@ -284,7 +297,7 @@ function XCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
       {images.length > 0 && (
         <a href={bits.href ?? undefined} target="_blank" rel="noreferrer" className="d-post-gallery">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={images[0]} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setFailedIdx((s) => new Set(s).add(0))} />
+          <img src={images[0]} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setFailedIdx((s) => new Set(s).add(shownIdx))} />
           {images.length > 1 && <span className="d-post-count">1/{images.length}</span>}
         </a>
       )}
@@ -306,7 +319,9 @@ function PostCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
   const byline = (handle && handle !== author ? handle : null) ?? bits.site ?? provider?.label ?? dump.domain ?? "Post";
   const postText = dump.description ?? dump.summary ?? dump.title;
   const headline = bits.title && bits.title !== postText && !attributionName(dump.title, dump) ? bits.title : null;
-  const images = (dump.imageUrls.length ? dump.imageUrls : dump.imageUrl ? [dump.imageUrl] : []).filter((_, i) => !failedIdx.has(i));
+  const allImages = dump.imageUrls.length ? dump.imageUrls : dump.imageUrl ? [dump.imageUrl] : [];
+  const shownIdx = allImages.findIndex((_, i) => !failedIdx.has(i));
+  const images = allImages.filter((_, i) => !failedIdx.has(i));
   return (
     <article {...bits.cardProps} className="d-card d-post group">
       {bits.actions}
@@ -327,7 +342,7 @@ function PostCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
       {images.length > 0 && (
         <a href={bits.href ?? undefined} target="_blank" rel="noreferrer" className="d-post-gallery">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={images[0]} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setFailedIdx((s) => new Set(s).add(0))} />
+          <img src={images[0]} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setFailedIdx((s) => new Set(s).add(shownIdx))} />
           {images.length > 1 && <span className="d-post-count">1/{images.length}</span>}
         </a>
       )}
@@ -346,7 +361,9 @@ function RedditCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
   const author = dump.author?.replace(/^u\//, "");
   const headline = bits.title ?? bits.site;
   const text = dump.description ?? dump.summary;
-  const images = (dump.imageUrls.length ? dump.imageUrls : dump.imageUrl ? [dump.imageUrl] : []).filter((_, i) => !failedIdx.has(i));
+  const allImages = dump.imageUrls.length ? dump.imageUrls : dump.imageUrl ? [dump.imageUrl] : [];
+  const shownIdx = allImages.findIndex((_, i) => !failedIdx.has(i));
+  const images = allImages.filter((_, i) => !failedIdx.has(i));
   const dead = dump.status === "failed" && !text;
   return (
     <article {...bits.cardProps} className="d-card d-rd group">
@@ -377,7 +394,7 @@ function RedditCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
         {images.length > 0 && (
           <a href={bits.href ?? undefined} target="_blank" rel="noreferrer" className="d-rd-media">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={images[0]} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setFailedIdx((s) => new Set(s).add(0))} />
+            <img src={images[0]} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setFailedIdx((s) => new Set(s).add(shownIdx))} />
             {dump.kind === "video" && <PlayBadge />}
             {images.length > 1 && <span className="d-post-count">1/{images.length}</span>}
           </a>
@@ -505,7 +522,18 @@ function GithubCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
         )}
         <div className="d-mpanel">
           {dead ? (
-            <p className="d-tomb">This GitHub page doesn&rsquo;t exist.</p>
+            <>
+              <h3 className="d-mpanel-title" dir="auto">
+                {bits.href ? (
+                  <a href={bits.href} target="_blank" rel="noreferrer">
+                    {label}
+                  </a>
+                ) : (
+                  label
+                )}
+              </h3>
+              <p className="d-tomb">This GitHub page doesn&rsquo;t exist.</p>
+            </>
           ) : (
             <>
               <h3 className="d-mpanel-title" dir="auto">
@@ -554,7 +582,18 @@ function GithubCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
         {bits.processing ? (
           shimmerLines()
         ) : dead ? (
-          <p className="d-tomb">This GitHub page doesn&rsquo;t exist.</p>
+          <>
+            <h3 className="d-headline" dir="auto">
+              {bits.href ? (
+                <a href={bits.href} target="_blank" rel="noreferrer">
+                  {label}
+                </a>
+              ) : (
+                label
+              )}
+            </h3>
+            <p className="d-tomb">This GitHub page doesn&rsquo;t exist.</p>
+          </>
         ) : (
           <>
             <h3 className="d-headline" dir="auto">
