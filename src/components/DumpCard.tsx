@@ -67,6 +67,7 @@ const GLYPHS = {
   share: "M21 12l-8-7v4C7 9 3.5 13.5 2.5 19c2.5-3.5 6-5 10.5-5v4l8-6z",
   bookmark: "M6 3h12a1 1 0 011 1v17l-7-4.5L5 21V4a1 1 0 011-1z",
   dots: "M2 12a2 2 0 1 1 4 0 2 2 0 0 1-4 0zm8 0a2 2 0 1 1 4 0 2 2 0 0 1-4 0zm8 0a2 2 0 1 1 4 0 2 2 0 0 1-4 0z",
+  person: "M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z",
 };
 
 function Glyph({ name, className = "d-glyph" }: { name: keyof typeof GLYPHS; className?: string }) {
@@ -239,31 +240,48 @@ function XCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
   );
 }
 
-/** threads/bluesky/mastodon/linkedin/facebook — social post: avatar, author, brand mark, text, media. */
+/** threads/bluesky/mastodon/linkedin/facebook — embed look: avatar + name + handle
+ *  header, provider mark, text, framed media (a 2×2-capable grid for multiple). */
 function PostCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
+  const [failedIdx, setFailedIdx] = useState<ReadonlySet<number>>(new Set());
   const provider = providerMeta(dump.provider);
   const author = postAuthor(dump);
+  const raw = dump.author?.replace(/^@/, "");
+  // oEmbed author_name can be a display name ("Jane Doe"), not a handle — only @-ify real handles.
+  const handle = raw && /^[\w.@]{1,40}$/.test(raw) ? `@${raw}` : null;
+  const byline = (handle && handle !== author ? handle : null) ?? bits.site ?? provider?.label ?? dump.domain ?? "Post";
   const postText = dump.description ?? dump.summary ?? dump.title;
   const headline = bits.title && bits.title !== postText && !attributionName(dump.title, dump) ? bits.title : null;
+  const images = (dump.imageUrls.length ? dump.imageUrls : dump.imageUrl ? [dump.imageUrl] : []).filter((_, i) => !failedIdx.has(i));
   return (
     <article {...bits.cardProps} className="d-card d-post group">
       {bits.actions}
       <a href={bits.href ?? undefined} target="_blank" rel="noreferrer" className="d-post-head">
-        <span className="d-avatar">{author ? initials(author) : <ProviderIcon provider={dump.provider} />}</span>
+        <span className="d-avatar">{author ? initials(author) : dump.provider ? <ProviderIcon provider={dump.provider} /> : <Glyph name="person" />}</span>
         <span className="min-w-0">
-          <span className="d-author-name">{author ?? provider?.label ?? "Post"}</span>
-          <span className="d-author-site">{bits.site ?? provider?.label ?? "Post"}</span>
+          <span className="d-author-name" dir="auto">{author ?? provider?.label ?? "Post"}</span>
+          <span className="d-author-site" dir="auto">{byline}</span>
         </span>
         <ProviderIcon provider={dump.provider} className="d-prov d-post-prov" />
       </a>
       {bits.processing && !postText ? shimmerLines() : (
         <>
-          {headline && <p className="d-post-headline">{headline}</p>}
-          {postText && <p className="d-post-text">{postText}</p>}
+          {headline && <p className="d-post-headline" dir="auto">{headline}</p>}
+          {postText && <p className="d-post-text" dir="auto">{postText}</p>}
         </>
       )}
-      {bits.showMedia && <Img dump={dump} bits={bits} className="d-post-media" />}
-      {dump.note && <p className="d-annotation">{dump.note}</p>}
+      {images.length > 0 && (
+        <a href={bits.href ?? undefined} target="_blank" rel="noreferrer" className={`d-post-gallery d-post-g${Math.min(images.length, 4)}`}>
+          {images.slice(0, 4).map((src, i) => (
+            <span key={src} className="d-post-gi">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={src} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setFailedIdx((s) => new Set(s).add(i))} />
+              {i === 3 && images.length > 4 && <span className="d-post-more">+{images.length - 4}</span>}
+            </span>
+          ))}
+        </a>
+      )}
+      {dump.note && <p className="d-annotation" dir="auto">{dump.note}</p>}
       {bits.meta}
     </article>
   );

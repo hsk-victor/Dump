@@ -24,6 +24,7 @@ const page = (over: Record<string, unknown> = {}) => ({
   description: "Dinner in 20 minutes with garlic and parmesan",
   content: null,
   imageUrl: null,
+  imageUrls: [],
   siteName: "Example",
   author: null,
   unreachable: false,
