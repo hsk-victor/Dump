@@ -5,9 +5,9 @@ import { providerFromUrl, titleFromUrl } from "./detect";
 import { classifyWithAi, identifySubject } from "./llm";
 import { SUBJECT_MIN_CONFIDENCE, type Subject } from "./taxonomy";
 
-function truncate(s: string | null | undefined, n: number) {
+function truncate(s: string | null | undefined, n: number, preserveLines = false) {
   if (!s) return null;
-  const clean = s.replace(/\s+/g, " ").trim();
+  const clean = s.replace(preserveLines ? /[^\S\n]+/g : /\s+/g, " ").trim();
   return clean.length > n ? `${clean.slice(0, n - 1).trimEnd()}…` : clean;
 }
 
@@ -95,12 +95,16 @@ async function runEnrich(id: string): Promise<Dump | null> {
         provider: providerFromUrl(dump.url),
         title,
         // A bookmarklet-sent og:description/og:image survives a page fetch that got nothing.
-        description: truncate(ex.description, 1000) ?? dump.description,
+        description: truncate(ex.description, 1000, providerFromUrl(dump.url) === "x") ?? dump.description,
         content: title ? ex.content : [titleFromUrl(dump.url), ex.content].filter(Boolean).join("\n") || null,
         imageUrl: ex.imageUrl ?? dump.imageUrl,
         imageUrls: ex.imageUrls.length ? ex.imageUrls : dump.imageUrls,
         siteName: ex.siteName,
         author: ex.author,
+        authorHandle: ex.authorHandle ?? dump.authorHandle,
+        authorAvatarUrl: ex.authorAvatarUrl ?? dump.authorAvatarUrl,
+        videoUrl: ex.videoUrl ?? dump.videoUrl,
+        videoPosterUrl: ex.videoPosterUrl ?? dump.videoPosterUrl,
       };
     }
     const merged = { ...dump, ...fields };

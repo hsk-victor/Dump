@@ -4,6 +4,7 @@ import net from "node:net";
 import { Agent, fetch as undiciFetch } from "undici";
 import { domainOf, kindFromUrl } from "./detect";
 import type { Kind } from "./taxonomy";
+import { parseSyndication, syndicationUrl, type SyndicationTweet } from "./x-post";
 
 export interface Extracted {
   kind: Kind;
@@ -15,6 +16,10 @@ export interface Extracted {
   imageUrls: string[];
   siteName: string | null;
   author: string | null;
+  authorHandle?: string | null;
+  authorAvatarUrl?: string | null;
+  videoUrl?: string | null;
+  videoPosterUrl?: string | null;
   /** True when no request for this URL got any HTTP response (network error, timeout, blocked). */
   unreachable: boolean;
 }
@@ -99,7 +104,7 @@ function guardedLookup(hostname: string, options: dns.LookupOptions, callback: L
 
 const dispatcher = new Agent({ connect: { lookup: guardedLookup as never } });
 
-async function fetchWithTimeout(url: string, init: { headers?: Record<string, string> } = {}): Promise<Response> {
+export async function fetchWithTimeout(url: string, init: { headers?: Record<string, string> } = {}): Promise<Response> {
   let current = url;
   for (let hop = 0; hop < 5; hop++) {
     assertPublicUrl(current);
@@ -201,8 +206,9 @@ async function fetchOEmbed(url: string): Promise<{ data: OEmbed | null; reached:
 function textFromEmbedHtml(html: string | undefined): string | null {
   if (!html) return null;
   const $ = cheerio.load(html);
+  $("br").replaceWith("\n");
   const p = $("blockquote p").first().text() || $("blockquote").first().text() || $.root().text();
-  const text = p.replace(/\s+/g, " ").trim();
+  const text = p.replace(/[^\S\n]+/g, " ").trim();
   return text || null;
 }
 
@@ -288,6 +294,18 @@ function kindFromMeta(meta: PageMeta, wordCount: number): Kind | null {
 
 /** Fetches whatever we can learn about a URL: oEmbed for social/video sites, then the page's own metadata. */
 export async function extractUrl(url: string): Promise<Extracted> {
+  const endpoint = syndicationUrl(url);
+  if (endpoint) {
+    try {
+      const response = await fetchWithTimeout(endpoint, { headers: { accept: "application/json" } });
+      if (response.ok) {
+        const post = parseSyndication(JSON.parse(await readLimited(response)) as SyndicationTweet);
+        if (post) return post;
+      } else response.body?.cancel().catch(() => {});
+    } catch {
+      // Fall back to oEmbed when syndication is unavailable.
+    }
+  }
   const urlKind = kindFromUrl(url);
   const host = domainOf(url) ?? "";
   const oembedResult = await fetchOEmbed(url);
