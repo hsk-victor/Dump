@@ -265,7 +265,7 @@ function XVideo({ dump, author }: { dump: Dump; author: string | null }) {
     const update = () => {
       setReducedMotion(preference.matches);
       if (animated && preference.matches) video.current?.pause();
-      else if (animated) void video.current?.play().catch(() => {});
+      else if (animated) void video.current?.play().catch(() => setPlaying(false));
     };
     update();
     preference.addEventListener("change", update);
@@ -284,14 +284,15 @@ function XVideo({ dump, author }: { dump: Dump; author: string | null }) {
         loop={animated}
         playsInline
         preload={animated && !reducedMotion ? "auto" : "none"}
-        onPlay={() => setPlaying(true)}
+        onPlaying={() => setPlaying(true)}
         onPause={() => setPlaying(false)}
+        onError={() => setPlaying(false)}
         aria-label={`${animated ? "Animation" : "Video"} by ${author ?? "X author"}`}
       />
-      {animated && reducedMotion && (
+      {animated && (reducedMotion || !playing) && (
         <button className="d-animation-toggle" aria-label={playing ? "Pause animation" : "Play animation"} onClick={() => {
-          if (video.current?.paused) void video.current.play().catch(() => {});
-          else video.current?.pause();
+          if (playing) video.current?.pause();
+          else void video.current?.play().catch(() => setPlaying(false));
         }}>
           {!playing && <PlayBadge />}
         </button>
