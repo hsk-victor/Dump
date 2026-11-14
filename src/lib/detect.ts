@@ -275,6 +275,7 @@ export const GITHUB_TAG: Record<GithubKind, string | null> = {
 export function titleFromUrl(url: string): string | null {
   try {
     const u = new URL(url);
+    if (isDirectVideoUrl(url)) return videoTitleFromUrl(url);
     const segments = u.pathname.split("/").filter(Boolean).map((s) => decodeURIComponent(s));
     const slug = [...segments].reverse().find((s) => /[a-z]/i.test(s) && /[-_ ]/.test(s) && s.length > 6);
     if (!slug) return domainOf(url);

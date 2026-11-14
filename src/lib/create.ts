@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import { domainOf, isDirectVideoUrl, kindFromUrl, parseInput, providerFromUrl, videoTitleFromUrl } from "./detect";
+import { domainOf, isDirectVideoUrl, kindFromUrl, parseInput, providerFromUrl } from "./detect";
 import { bumpDump, createDump, findByUrl, updateDump, UPLOAD_DIR, type Dump } from "./db";
 import { noteTitle } from "./enrich";
 
@@ -66,7 +66,7 @@ export function createFromText(raw: string, opts?: CreateOptions | string | null
       url: parsed.url,
       domain: domainOf(parsed.url),
       provider: providerFromUrl(parsed.url),
-      title: title ?? (isDirectVideoUrl(parsed.url) ? videoTitleFromUrl(parsed.url) : null),
+      title,
       videoUrl: isDirectVideoUrl(parsed.url) ? parsed.url : null,
       description,
       imageUrl,

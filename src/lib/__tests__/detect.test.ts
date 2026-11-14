@@ -7,6 +7,7 @@ describe("direct video files", () => {
     expect(isDirectVideoUrl(url)).toBe(true);
     expect(kindFromUrl(url)).toBe("video");
     expect(videoTitleFromUrl(url)).toBe("My clip");
+    expect(titleFromUrl(url)).toBe("My clip");
   });
   it("does not mistake video platform pages or query parameters for files", () => {
     expect(isDirectVideoUrl("https://youtube.com/watch?v=video.mp4")).toBe(false);

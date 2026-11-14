@@ -59,7 +59,7 @@ describe("createFromText", () => {
     expect(first.imageUrl).toBeNull();
   });
 
-  it("stores direct videos with a decoded filename title", () => {
-    expect(createFromText("https://example.com/Spring%20flowers.mp4")).toMatchObject({ kind: "video", title: "Spring flowers", videoUrl: "https://example.com/Spring%20flowers.mp4" });
+  it("leaves direct video filename titles as display-only fallbacks", () => {
+    expect(createFromText("https://example.com/Spring%20flowers.mp4")).toMatchObject({ kind: "video", title: null, videoUrl: "https://example.com/Spring%20flowers.mp4" });
   });
 });
