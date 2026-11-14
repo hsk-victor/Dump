@@ -454,7 +454,48 @@ button {
   height: 0.85rem;
 }
 
-/* Media card: the image is the card. A glass byline chip at rest; details rise in a glass panel on hover/focus. */
+/* Provider roundel bottom-left + "1/N" counter top-right — the only chrome a
+   media card shows at rest. */
+.d-mmark {
+  position: absolute;
+  left: 0.55rem;
+  bottom: 0.55rem;
+  display: grid;
+  place-items: center;
+  width: 1.65rem;
+  height: 1.65rem;
+  border-radius: 999px;
+  color: var(--provider, #fff);
+  background: rgb(0 0 0 / 0.5);
+  backdrop-filter: blur(6px);
+}
+.d-mmark svg {
+  width: 0.85rem;
+  height: 0.85rem;
+}
+.d-mcount {
+  position: absolute;
+  top: 0.55rem;
+  right: 0.55rem;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #fff;
+  background: rgb(0 0 0 / 0.55);
+  backdrop-filter: blur(6px);
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  line-height: 1.2;
+  transition: opacity 0.12s var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  /* The corner belongs to card actions once they're revealed. */
+  .d-mediacard:is(:hover, :focus-within) .d-mcount {
+    opacity: 0;
+  }
+}
+
+/* Media card: the image is the card. Pure media at rest; details rise in a glass panel on hover/focus. */
 .d-mediacard {
   container-type: inline-size;
 }
@@ -1666,62 +1707,33 @@ article.d-ig .d-meta,
   object-fit: cover;
 }
 .d-post-gallery {
-  display: grid;
-  gap: 2px;
+  position: relative;
+  display: block;
   margin-top: 0.6rem;
   border-radius: 12px;
   overflow: hidden;
   border: 1px solid var(--hairline);
   line-height: 0;
 }
-.d-post-g1 {
-  display: block;
-}
-.d-post-g1 img {
+.d-post-gallery img {
   display: block;
   width: 100%;
   max-height: 16rem;
   object-fit: cover;
 }
-.d-post-gi {
-  position: relative;
-  display: block;
-  overflow: hidden;
-}
-.d-post-gi img {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-.d-post-g2,
-.d-post-g3,
-.d-post-g4 {
-  grid-template-columns: 1fr 1fr;
-}
-.d-post-g2 .d-post-gi {
-  height: 11rem;
-}
-.d-post-g3 .d-post-gi {
-  height: 5.5rem;
-}
-.d-post-g3 .d-post-gi:first-child {
-  grid-row: span 2;
-  height: 100%;
-}
-.d-post-g4 .d-post-gi {
-  height: 5.75rem;
-}
-.d-post-more {
+.d-post-count {
   position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  background: rgb(0 0 0 / 0.45);
+  top: 0.5rem;
+  right: 0.5rem;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
   color: #fff;
-  font-size: 0.95rem;
-  font-weight: 650;
-  line-height: 1;
+  background: rgb(0 0 0 / 0.55);
+  backdrop-filter: blur(6px);
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  line-height: 1.2;
 }
 .d-post .d-meta {
   margin-top: 0.6rem;

@@ -125,6 +125,24 @@ function Flag({ dump }: { dump: Dump }) {
   return null;
 }
 
+/** Media-card chrome: provider roundel bottom-left, "1/N" counter top-right on multi-image. */
+function MediaMark({ dump }: { dump: Dump }) {
+  const meta = providerMeta(dump.provider);
+  const icon = meta && "icon" in meta && meta.icon;
+  const count = dump.imageUrls.length;
+  if (!icon && count < 2) return null;
+  return (
+    <>
+      {icon && (
+        <span className="d-mmark" title={meta.label}>
+          <ProviderIcon provider={dump.provider} />
+        </span>
+      )}
+      {count > 1 && <span className="d-mcount">1/{count}</span>}
+    </>
+  );
+}
+
 function PlayBadge() {
   return (
     <span className="d-play" aria-hidden>
@@ -271,14 +289,10 @@ function PostCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
         </>
       )}
       {images.length > 0 && (
-        <a href={bits.href ?? undefined} target="_blank" rel="noreferrer" className={`d-post-gallery d-post-g${Math.min(images.length, 4)}`}>
-          {images.slice(0, 4).map((src, i) => (
-            <span key={src} className="d-post-gi">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={src} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setFailedIdx((s) => new Set(s).add(i))} />
-              {i === 3 && images.length > 4 && <span className="d-post-more">+{images.length - 4}</span>}
-            </span>
-          ))}
+        <a href={bits.href ?? undefined} target="_blank" rel="noreferrer" className="d-post-gallery">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={images[0]} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setFailedIdx((s) => new Set(s).add(0))} />
+          {images.length > 1 && <span className="d-post-count">1/{images.length}</span>}
         </a>
       )}
       {dump.note && <p className="d-annotation" dir="auto">{dump.note}</p>}
@@ -435,7 +449,7 @@ function VideoCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
         )}
         <span className="d-vscrim" aria-hidden />
         <PlayBadge />
-        <Flag dump={dump} />
+        <MediaMark dump={dump} />
       </a>
       {bits.processing && (
         <span className="d-mchip" aria-hidden>
@@ -494,6 +508,7 @@ function MediaCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
       <a href={bits.href ?? undefined} target="_blank" rel="noreferrer" className="d-media" aria-label={t.title ?? t.byline ?? "Open image"}>
         <FadeImg dump={dump} bits={bits} alt={t.title ?? ""} />
         {dump.kind === "video" && <PlayBadge />}
+        <MediaMark dump={dump} />
       </a>
       {bits.processing && (
         <span className="d-mchip" aria-hidden>
