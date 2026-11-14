@@ -21,6 +21,14 @@ const tweet: SyndicationTweet = {
 };
 
 describe("X syndication", () => {
+  it("decodes HTML entities after link replacement without interpreting literal markup", () => {
+    const post = parseSyndication({
+      ...tweet,
+      text: "Tips &amp; tricks &gt; &lt; &quot;quoted&quot; &#39; &#x1F680; <script>text</script>\nhttps://t.co/site https://t.co/media",
+    });
+    expect(post?.description).toBe("Tips & tricks > < \"quoted\" ' 🚀 <script>text</script>\nhttp://gatheros.co");
+    expect(post?.content).toBe(post?.description);
+  });
   it("uses the react-tweet token algorithm for X status URLs", () => {
     const id = "2065157792109916488";
     const token = ((Number(id) / 1e15) * Math.PI).toString(36).replace(/(0+|\.)/g, "");

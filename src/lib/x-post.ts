@@ -1,3 +1,4 @@
+import * as cheerio from "cheerio";
 import type { Extracted } from "./extract";
 
 interface Entity {
@@ -40,6 +41,7 @@ export function parseSyndication(tweet: SyndicationTweet): Extracted | null {
   for (const link of tweet.entities?.urls ?? []) {
     text = text.split(link.url).join(link.expanded_url ?? link.display_url ?? link.url);
   }
+  text = cheerio.load(text.replace(/</g, "&lt;"), null, false).text();
   text = text.replace(/\s+pic\.(?:twitter|x)\.com\/\S+\s*$/i, "").trim();
   const images = tweet.photos?.map((p) => p.url) ?? tweet.mediaDetails?.filter((m) => m.type === "photo").map((m) => m.media_url_https) ?? [];
   const video = tweet.mediaDetails?.find((m) => m.type === "video" || m.type === "animated_gif");
