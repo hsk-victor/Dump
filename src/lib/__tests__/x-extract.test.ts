@@ -33,6 +33,14 @@ it.each([
   expect(await extractUrl(url)).toMatchObject({ kind: "video", title, videoUrl: url, videoType: "video", unreachable: false });
 });
 
+it("stores the stable requested video URL instead of an expiring redirect target", async () => {
+  const url = "https://example.com/video";
+  const response = new Response(null, { headers: { "content-type": "video/mp4" } });
+  Object.defineProperty(response, "url", { value: "https://cdn.example.com/clip.mp4?expires=123" });
+  fetch.mockResolvedValue(response);
+  expect(await extractUrl(url)).toMatchObject({ kind: "video", videoUrl: url, unreachable: false });
+});
+
 it("allows video bodies to stream past eight seconds after headers arrive", async () => {
   vi.useFakeTimers();
   try {

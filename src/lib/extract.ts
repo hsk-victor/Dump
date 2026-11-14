@@ -341,7 +341,7 @@ export async function extractUrl(url: string): Promise<Extracted> {
     return { kind: "image", title: decodeURIComponent(new URL(url).pathname.split("/").pop() || "Image"), description: null, content: null, imageUrl: url, imageUrls: [url], siteName: host, author: null, unreachable: false };
   }
   if (contentType.startsWith("video/") || isDirectVideoUrl(url)) {
-    return { kind: "video", title: videoTitleFromUrl(finalUrl), description: null, content: null, imageUrl: null, imageUrls: [], videoUrl: finalUrl, videoType: "video", siteName: host, author: null, unreachable: !reached };
+    return { kind: "video", title: videoTitleFromUrl(finalUrl), description: null, content: null, imageUrl: null, imageUrls: [], videoUrl: url, videoType: "video", siteName: host, author: null, unreachable: !reached };
   }
 
   const embedText = textFromEmbedHtml(oembed?.html);
