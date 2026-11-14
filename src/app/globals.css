@@ -1562,6 +1562,11 @@ button {
 /* GitHub card: media-first — the generated og:image is the card. The only new
    chrome is the type tag top-right naming the page kind (ISSUE #N / PR #N /
    FILE / PROFILE); everything else reuses .d-mediacard/.d-mpanel. */
+/* The og:image is a fixed 2:1 banner — drop .d-mediacard's min-height so the
+   frame hugs the art instead of cover-cropping/zooming it into 56cqw. */
+.d-ghcard .d-media img {
+  min-height: 0;
+}
 .d-gh-tag {
   position: absolute;
   top: 0.55rem;

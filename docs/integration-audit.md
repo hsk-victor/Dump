@@ -24,6 +24,12 @@ compose into one seamless feed. Not a redesign review.
   4.4rem so the brand glyph forms a visible medallion behind the tinted play
   badge (same shape relationship as YouTube's `.d-vid-placeholder`). One-line
   CSS change in `src/app/globals.css`; verified in capture.
+- **GitHub banner is cover-cropped/zoomed ~12%.** `.d-mediacard`'s
+  `min-height: 56cqw` forced the 1200×600 og:image into a taller 1.79:1 frame,
+  so object-fit: cover scaled it up and cropped the left/right edges — the
+  card read as a zoomed-in screenshot. Fixed: `.d-ghcard .d-media img` drops
+  the inherited min-height so the frame hugs the art at its native 2:1 —
+  full repo banner visible, no crop. One-line CSS change; verified in capture.
 
 ### NIT — reported, not fixed (bigger than a safe CSS tweak)
 
