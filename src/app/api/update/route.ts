@@ -129,17 +129,17 @@ export async function POST(req: NextRequest) {
   if (!script) return NextResponse.json({ error: "No updater on this machine" }, { status: 400 });
 
   // The updater pulls, rebuilds, and restarts — so it must outlive this process.
-  // The short delay lets this response flush before the server is killed.
-  const psQuote = (s: string) => `'${s.replaceAll("'", "''")}'`;
+  // Invoke it straight through cmd /c: Start-Process (used previously) uses
+  // ShellExecute, which silently fails to launch anything from this detached
+  // context — the updater never ran and the button timed out as "failed".
+  // The ping is a ~2s delay so this response flushes before the server dies.
   let cmd: string;
   let args: string[];
   if (process.platform === "win32") {
     const hidden = path.join(path.dirname(script), "hidden.vbs");
-    const ps = fs.existsSync(hidden)
-      ? `Start-Sleep -Seconds 2; Start-Process wscript -ArgumentList ${psQuote(`"${hidden}" "${script}"`)}`
-      : `Start-Sleep -Seconds 2; Start-Process cmd -ArgumentList ${psQuote(`/c "${script}"`)}`;
-    cmd = "powershell";
-    args = ["-NoProfile", "-Command", ps];
+    const tail = fs.existsSync(hidden) ? `wscript "${hidden}" "${script}"` : `"${script}"`;
+    cmd = "cmd";
+    args = ["/c", `ping -n 3 127.0.0.1 >nul & ${tail}`];
   } else {
     cmd = "sh";
     args = ["-c", `sleep 2 && "${script}"`];
