@@ -286,7 +286,8 @@ function LoopVideo({
     };
     const observer = new IntersectionObserver(
       ([entry]) => {
-        inView = entry.isIntersecting;
+        // isIntersecting trips on any sliver; the fraction is what honors the threshold.
+        inView = entry.intersectionRatio >= 0.25;
         sync();
       },
       { threshold: 0.25 },
