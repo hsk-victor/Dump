@@ -18,13 +18,40 @@ type Status = {
   latest: string | null;
   behind: number;
   canApply: boolean;
+  // null = no prepare info; preparing = staging a build now; prepared = staged
+  // build ready to swap in; failed = staging failed (apply still works inline);
+  // applied = a staged build was swapped in on the last restart.
+  phase: "preparing" | "prepared" | "failed" | "applied" | null;
 };
 
 let cached: { at: number; info: Status } | null = null;
+const preparedFor = new Set<string>();
+
+const DATA_DIR = path.resolve(process.env.DUMP_DATA_DIR ?? path.join(REPO, "data"));
+const STATE_FILE = path.join(DATA_DIR, "update-state.json");
 
 function updateScript() {
   const script = process.env.DUMP_UPDATE_SCRIPT ?? path.resolve(REPO, "..", "run", "dump-restart.cmd");
   return fs.existsSync(script) ? script : null;
+}
+
+function updatePhase(): Status["phase"] {
+  try {
+    const phase = JSON.parse(fs.readFileSync(STATE_FILE, "utf8")).phase;
+    if (phase === "preparing" || phase === "prepared" || phase === "failed" || phase === "applied") return phase;
+  } catch {}
+  return null;
+}
+
+// Build the new commit in a staging worktree in the background, so clicking
+// Update only has to swap it in and restart — seconds, like a binary update.
+function prepare(latest: string) {
+  if (preparedFor.has(latest)) return;
+  const script = path.join(REPO, "scripts", "update.mjs");
+  if (!fs.existsSync(script)) return;
+  preparedFor.add(latest);
+  const child = spawn(process.execPath, [script, "prepare"], { detached: true, stdio: "ignore" });
+  child.unref();
 }
 
 async function git(...args: string[]) {
@@ -43,7 +70,7 @@ function runningSha() {
 }
 
 async function status(): Promise<Status> {
-  const none = { supported: false, available: false, current: null, latest: null, behind: 0, canApply: !!updateScript() };
+  const none = { supported: false, available: false, current: null, latest: null, behind: 0, canApply: !!updateScript(), phase: updatePhase() };
   let head: string;
   try {
     head = await git("rev-parse", "HEAD");
@@ -59,6 +86,7 @@ async function status(): Promise<Status> {
   try {
     const latest = await git("rev-parse", "origin/main");
     const behind = Number(await git("rev-list", "--count", `${current}..origin/main`));
+    if (behind > 0 && updateScript()) prepare(latest);
     return {
       supported: true,
       available: behind > 0,
@@ -66,6 +94,7 @@ async function status(): Promise<Status> {
       latest: latest.slice(0, 7),
       behind,
       canApply: !!updateScript(),
+      phase: updatePhase(),
     };
   } catch {
     return { ...none, supported: true, current: current.slice(0, 7) };
