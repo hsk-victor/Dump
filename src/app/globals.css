@@ -1951,8 +1951,9 @@ button {
   color: var(--muted);
 }
 /* Ruled lines repeat at the text's line-height so they read as writing lines.
-   The -0.256em offset puts each rule on the text baseline (half-leading +
-   font ascent ≈ 1.244em below the block top, measured on Plus Jakarta Sans). */
+   The baseline sits ≈1.244em below the block top (half-leading + font ascent,
+   measured on Plus Jakarta Sans); the -0.14em offset drops each rule ~0.1em
+   under it so the words float just above their line instead of touching it. */
 .d-note-lines {
   font-size: 0.88rem;
   line-height: 1.5;
@@ -1963,6 +1964,7 @@ button {
   -webkit-line-clamp: 10;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  cursor: text;
   background: repeating-linear-gradient(
     to bottom,
     transparent 0,
@@ -1970,7 +1972,63 @@ button {
     var(--note-rule) calc(1.5em - 1px),
     var(--note-rule) 1.5em
   );
-  background-position: 0 -0.256em;
+  background-position: 0 -0.14em;
+}
+/* In-place editor: the same ruled lines under an invisible textarea. */
+.d-note-edit {
+  display: block;
+  width: 100%;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  color: var(--ink-2);
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent calc(1.5em - 1px),
+    var(--note-rule) calc(1.5em - 1px),
+    var(--note-rule) 1.5em
+  );
+  background-position: 0 -0.14em;
+  outline: none;
+  resize: vertical;
+  min-height: 4.5em;
+}
+.d-note-editbar {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.55rem;
+}
+.d-note-save,
+.d-note-cancel {
+  padding: 0.18rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  cursor: pointer;
+}
+.d-note-save {
+  color: #fff;
+  background: var(--ink);
+}
+.d-note-save:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.d-note-cancel {
+  color: var(--ink-2);
+}
+@media (hover: hover) and (pointer: fine) {
+  .d-note-cancel:hover {
+    background: color-mix(in srgb, var(--ink) 8%, transparent);
+  }
+}
+.d-note-edit-hint {
+  margin-left: auto;
+  font-size: 0.66rem;
+  color: var(--muted);
 }
 .d-card[data-kind="note"] .d-annotation {
   margin-inline-start: -0.5rem;
@@ -2097,7 +2155,11 @@ The tape strip: frosted so the paper shows through, slightly rotated.
     right: 0.55rem;
   }
   .d-card:not(.d-mediacard):not(.d-mus) .d-meta {
-    padding-right: 4.9rem;
+    padding-right: 6.4rem;
+  }
+  /* Notes dock an extra Edit button in the actions pill. */
+  .d-card[data-kind="note"] .d-meta {
+    padding-right: 8rem;
   }
   /* Same corner rule as desktop hover: once actions are revealed they own the
      top-right — the counter/tag there steps aside. */
@@ -2106,6 +2168,55 @@ The tape strip: frosted so the paper shows through, slightly rotated.
     opacity: 0;
   }
 }
+/* Pin + edit icon buttons share the square action sizing; pin stays lit while
+   the dump is pinned. */
+.d-actions .d-pintoggle,
+.d-actions .d-editbtn {
+  display: grid;
+  place-items: center;
+  color: inherit;
+}
+.d-actions .d-pintoggle svg,
+.d-actions .d-editbtn svg {
+  width: 0.78rem;
+  height: 0.78rem;
+}
+.d-actions .d-pintoggle[aria-pressed="true"] {
+  color: var(--ink);
+}
+
+/* A pinned card keeps a visible mark after the actions fade: a frosted roundel
+   top-left on media cards (mirroring .d-mmark), a small glyph in the meta row
+   on text cards. */
+.d-pin-badge {
+  position: absolute;
+  top: 0.55rem;
+  left: 0.55rem;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 1.65rem;
+  height: 1.65rem;
+  border-radius: 999px;
+  color: #fff;
+  background: rgb(0 0 0 / 0.5);
+  backdrop-filter: blur(6px);
+}
+.d-pin-badge svg {
+  width: 0.85rem;
+  height: 0.85rem;
+}
+/* Inline videos already own the top-left corner with the provider roundel. */
+.d-inline-video[data-pinned] .d-mmark {
+  left: 2.5rem;
+}
+.d-meta-pin {
+  width: 0.72rem;
+  height: 0.72rem;
+  flex-shrink: 0;
+  color: var(--muted);
+}
+
 /* The Move trigger is a base-ui Menu.Trigger (a <button>) — undo the square
    icon-button sizing .d-actions button gives it and match the old select look. */
 .d-actions .d-move {
@@ -2141,8 +2252,8 @@ The tape strip: frosted so the paper shows through, slightly rotated.
     color: #dc2626;
     background: rgb(220 38 38 / 0.1);
   }
-  /* Delete stays red-on-hover; Move takes a neutral wash instead. */
-  .d-actions .d-move:hover {
+  /* Delete stays red-on-hover; the other actions take a neutral wash instead. */
+  .d-actions :is(.d-move, .d-pintoggle, .d-editbtn):hover {
     color: var(--ink);
     background: color-mix(in srgb, var(--ink) 8%, transparent);
   }

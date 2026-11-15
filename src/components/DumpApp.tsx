@@ -226,6 +226,32 @@ export default function DumpApp() {
     }, 180);
   }
 
+  async function handlePin(id: string, pinned: boolean) {
+    setItems((prev) => prev.map((d) => (d.id === id ? { ...d, pinned } : d)));
+    const res = await fetch(`/api/dumps/${id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ pinned }) });
+    if (!res.ok) {
+      toast("Couldn't pin that", "error");
+      load();
+      return;
+    }
+    toast(pinned ? "Pinned to the top" : "Unpinned");
+    load();
+  }
+
+  /** Saves a note's edited body. Returns whether the save landed so the card can leave edit mode. */
+  async function handleSaveNote(id: string, content: string): Promise<boolean> {
+    const res = await fetch(`/api/dumps/${id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ content }) });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      toast(err.error ?? "Couldn't save that note", "error");
+      return false;
+    }
+    const updated = (await res.json()) as Dump;
+    setItems((prev) => prev.map((d) => (d.id === id ? updated : d)));
+    toast("Note saved");
+    return true;
+  }
+
   async function handleRetry(id: string) {
     pendingToasts.current.add(id);
     await fetch(`/api/dumps/${id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ reprocess: true }) });
@@ -406,6 +432,8 @@ export default function DumpApp() {
                 onTopic={handleTopic}
                 onDelete={handleDelete}
                 onRetry={handleRetry}
+                onPin={handlePin}
+                onSaveNote={handleSaveNote}
               />
             ))}
           </div>

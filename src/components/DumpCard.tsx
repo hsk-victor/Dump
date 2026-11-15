@@ -14,6 +14,9 @@ interface Props {
   onTopic: (id: string, topic: string) => void;
   onDelete: (id: string) => void;
   onRetry: (id: string) => void;
+  onPin: (id: string, pinned: boolean) => void;
+  /** Persists a note's edited body; resolves false when the save failed. */
+  onSaveNote: (id: string, content: string) => Promise<boolean>;
 }
 
 /** The name inside a "Name on X"-style title — only when the suffix is a known
@@ -69,6 +72,8 @@ const GLYPHS = {
   dots: "M2 12a2 2 0 1 1 4 0 2 2 0 0 1-4 0zm8 0a2 2 0 1 1 4 0 2 2 0 0 1-4 0zm8 0a2 2 0 1 1 4 0 2 2 0 0 1-4 0z",
   film: "M18 4l2 4h-3l-2-4h-2l2 4h-3l-2-4H8l2 4H7L5 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4h-4z",
   person: "M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z",
+  pin: "M16 9V4l1 0c.55 0 1-.45 1-1s-.45-1-1-1H7c-.55 0-1 .45-1 1s.45 1 1 1l1 0v5c0 1.66-1.34 3-3 3h-1v2h7v7l1 1 1-1v-7h7v-2h-1c-1.66 0-3-1.34-3-3z",
+  pencil: "M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z",
 };
 
 function Glyph({ name, className = "d-glyph" }: { name: keyof typeof GLYPHS; className?: string }) {
@@ -203,6 +208,13 @@ interface CardBits {
   /** Touch tap-to-reveal: first tap on a media card's face opens its panel (data-open). */
   revealed: boolean;
   cardProps: Record<string, unknown>;
+  /** Persistent badge marking a pinned media card (text cards get the meta-row pin instead). */
+  pinBadge: ReactNode;
+  /** Note-card editing, hoisted here so the actions row can offer the Edit button. */
+  editingNote: boolean;
+  beginNoteEdit: () => void;
+  endNoteEdit: () => void;
+  onSaveNote: Props["onSaveNote"];
 }
 
 function shimmerLines() {
@@ -612,6 +624,7 @@ function GithubCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
     return (
       <article {...bits.cardProps} className="d-card d-mediacard d-ghcard group" data-open={dead || bits.revealed || undefined}>
         {bits.actions}
+        {bits.pinBadge}
         <a href={bits.href ?? undefined} target="_blank" rel="noreferrer" className="d-media" aria-label={label}>
           <FadeImg dump={dump} bits={bits} alt={titled ? (title ?? "") : ""} />
           <MediaMark dump={dump} />
@@ -774,6 +787,7 @@ function VideoCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
   return (
     <article {...bits.cardProps} className={`d-card d-mediacard d-vidcard group${dump.videoUrl ? " d-inline-video" : ""}`} data-open={dump.status === "failed" || bits.revealed || undefined}>
       {bits.actions}
+      {bits.pinBadge}
       {dump.videoUrl ? (
         <div className="d-media d-vmedia">
           <LoopVideo src={dump.videoUrl} poster={dump.videoPosterUrl ?? undefined} controls label={t.title ?? "Video"} />
@@ -847,6 +861,7 @@ function MediaCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
   return (
     <article {...bits.cardProps} className="d-card d-mediacard group" data-open={dump.status === "failed" || bits.revealed || undefined}>
       {bits.actions}
+      {bits.pinBadge}
       <a href={bits.href ?? undefined} target="_blank" rel="noreferrer" className="d-media" aria-label={t.title ?? t.byline ?? "Open image"}>
         <FadeImg dump={dump} bits={bits} alt={t.title ?? ""} />
         {dump.kind === "video" && <PlayBadge />}
@@ -911,6 +926,7 @@ function IgCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
       data-open={dump.status === "failed" || bits.revealed || undefined}
     >
       {bits.actions}
+      {bits.pinBadge}
       {bits.showMedia ? (
         <a
           href={bits.href ?? undefined}
@@ -989,6 +1005,7 @@ function MusicCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
   return (
     <article {...bits.cardProps} className="d-card d-mus group" data-open={dump.status === "failed" || bits.revealed || undefined}>
       {bits.actions}
+      {bits.pinBadge}
       <a
         href={bits.href ?? undefined}
         target="_blank"
@@ -1118,14 +1135,73 @@ function noteBody(dump: Dump): string | null {
 /** note — an index card: a catalog header (uppercase title + date) over ruled
  *  writing lines, with a red margin rule on the leading edge. Plain card stock —
  *  the topic tint stays in the meta row, not the paper. User text only: no URL,
- *  no provider, nothing to link to. */
+ *  no provider, nothing to link to. Clicking the body (or the Edit action) swaps
+ *  the ruled text for an editor on the same lines; the title is always the first
+ *  line, so the whole note is edited as one text and re-titled on save. */
 function NoteCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
   const body = noteBody(dump);
+  const areaRef = useRef<HTMLTextAreaElement>(null);
+  const [saving, setSaving] = useState(false);
+  const editing = bits.editingNote;
+
+  useEffect(() => {
+    if (!editing) return;
+    const el = areaRef.current;
+    if (el) {
+      el.focus();
+      el.setSelectionRange(el.value.length, el.value.length);
+    }
+  }, [editing]);
+
+  const save = async () => {
+    const text = (areaRef.current?.value ?? "").trim();
+    if (!text || saving) return;
+    setSaving(true);
+    const ok = await bits.onSaveNote(dump.id, text);
+    setSaving(false);
+    if (ok) bits.endNoteEdit();
+  };
+
   return (
     <article {...bits.cardProps} className="d-card group">
       {bits.actions}
       <div className="d-note-body" dir={noteDir(dump.title ?? dump.content ?? "")}>
-        {bits.processing && !bits.title ? (
+        {editing ? (
+          <>
+            <div className="d-note-head">
+              <span className="d-note-title">Editing</span>
+              <time className="d-note-date" dateTime={new Date(dump.createdAt).toISOString()}>
+                {shortDate(dump.createdAt)}
+              </time>
+            </div>
+            <textarea
+              ref={areaRef}
+              className="d-note-edit"
+              defaultValue={dump.content ?? ""}
+              dir={noteDir(dump.content ?? "")}
+              rows={Math.min(Math.max((dump.content ?? "").split("\n").length, 3), 30)}
+              aria-label="Note text"
+              onKeyDown={(e) => {
+                if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+                  e.preventDefault();
+                  void save();
+                } else if (e.key === "Escape") {
+                  e.preventDefault();
+                  bits.endNoteEdit();
+                }
+              }}
+            />
+            <div className="d-note-editbar">
+              <button className="d-note-save" onClick={() => void save()} disabled={saving}>
+                {saving ? "Saving…" : "Save"}
+              </button>
+              <button className="d-note-cancel" onClick={() => bits.endNoteEdit()}>
+                Cancel
+              </button>
+              <span className="d-note-edit-hint">⌘↵ save · esc cancel</span>
+            </div>
+          </>
+        ) : bits.processing && !bits.title ? (
           shimmerLines()
         ) : (
           <>
@@ -1138,7 +1214,17 @@ function NoteCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
               </time>
             </div>
             {body && (
-              <p className="d-note-lines" dir="auto">
+              <p
+                className="d-note-lines"
+                dir="auto"
+                title="Click to edit"
+                onClick={(e) => {
+                  // A drag that selected text (or the double-click of selecting a word)
+                  // means the user wanted to copy, not edit.
+                  if (e.detail > 1 || window.getSelection()?.toString()) return;
+                  bits.beginNoteEdit();
+                }}
+              >
                 {body}
               </p>
             )}
@@ -1244,9 +1330,10 @@ function LinkCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
 
 /* ================================== dispatch ================================== */
 
-export default function DumpCard({ dump, fresh, removing, onTopic, onDelete, onRetry }: Props) {
+export default function DumpCard({ dump, fresh, removing, onTopic, onDelete, onRetry, onPin, onSaveNote }: Props) {
   const [imgFailed, setImgFailed] = useState(false);
   const [revealed, setRevealed] = useState(false);
+  const [editingNote, setEditingNote] = useState(false);
   const cardRef = useRef<HTMLElement | null>(null);
 
   /* A tap outside an open media card closes its panel again. */
@@ -1294,6 +1381,20 @@ export default function DumpCard({ dump, fresh, removing, onTopic, onDelete, onR
 
   const actions = (
     <div className="d-actions">
+      <button
+        className="d-pintoggle"
+        onClick={() => onPin(dump.id, !dump.pinned)}
+        aria-label={dump.pinned ? "Unpin" : "Pin"}
+        aria-pressed={dump.pinned}
+        title={dump.pinned ? "Unpin" : "Pin"}
+      >
+        <Glyph name="pin" />
+      </button>
+      {kind === "note" && !editingNote && (
+        <button className="d-editbtn" onClick={() => setEditingNote(true)} aria-label="Edit note" title="Edit">
+          <Glyph name="pencil" />
+        </button>
+      )}
       <Menu.Root>
         <Menu.Trigger className="d-move" aria-label="Move to topic">
           Move…
@@ -1328,6 +1429,7 @@ export default function DumpCard({ dump, fresh, removing, onTopic, onDelete, onR
 
   const metaRow = (siteLabel: string | null) => (
     <div className="d-meta">
+      {dump.pinned && <Glyph name="pin" className="d-meta-pin" />}
       {topicChip}
       {siteLabel && <span className="min-w-0 truncate">{siteLabel}</span>}
       {dump.status === "failed" && (
@@ -1352,11 +1454,21 @@ export default function DumpCard({ dump, fresh, removing, onTopic, onDelete, onR
     setImgFailed,
     processing,
     revealed,
+    pinBadge: dump.pinned ? (
+      <span className="d-pin-badge" title="Pinned">
+        <Glyph name="pin" />
+      </span>
+    ) : null,
+    editingNote,
+    beginNoteEdit: () => setEditingNote(true),
+    endNoteEdit: () => setEditingNote(false),
+    onSaveNote,
     cardProps: {
       "data-kind": kind,
       "data-provider": dump.provider ?? undefined,
       "data-fresh": fresh || undefined,
       "data-removing": removing || undefined,
+      "data-pinned": dump.pinned || undefined,
       ref: cardRef,
       onClick: onCardClick,
       onPointerDownCapture: onCardPointerDown,

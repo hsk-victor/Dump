@@ -36,6 +36,7 @@ export interface Dump {
   tags: string[];
   classifiedBy: "rules" | "ai" | "you" | null;
   topicLocked: boolean;
+  pinned: boolean;
   createdAt: number;
   updatedAt: number;
 }
@@ -66,6 +67,7 @@ interface Row {
   tags: string;
   classified_by: string | null;
   topic_locked: number;
+  pinned: number;
   created_at: number;
   updated_at: number;
 }
@@ -100,6 +102,7 @@ CREATE TABLE IF NOT EXISTS dumps (
   tags TEXT NOT NULL DEFAULT '[]',
   classified_by TEXT,
   topic_locked INTEGER NOT NULL DEFAULT 0,
+  pinned INTEGER NOT NULL DEFAULT 0,
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL
 );
@@ -145,6 +148,7 @@ export function db(): Database.Database {
     for (const name of ["author_handle", "author_avatar_url", "video_url", "video_poster_url", "video_type"]) {
       if (!cols.some((c) => c.name === name)) conn.exec(`ALTER TABLE dumps ADD COLUMN ${name} TEXT`);
     }
+    if (!cols.some((c) => c.name === "pinned")) conn.exec("ALTER TABLE dumps ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0");
     globalForDb.__dumpDb = conn;
   }
   return globalForDb.__dumpDb;
@@ -178,6 +182,7 @@ function toDump(r: Row): Dump {
     tags: safeJsonArray(r.tags),
     classifiedBy: r.classified_by as Dump["classifiedBy"],
     topicLocked: r.topic_locked === 1,
+    pinned: r.pinned === 1,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
@@ -233,6 +238,7 @@ const COLUMN: Record<string, string> = {
   tags: "tags",
   classifiedBy: "classified_by",
   topicLocked: "topic_locked",
+  pinned: "pinned",
 };
 
 type Patch = Partial<Omit<Dump, "id" | "createdAt" | "updatedAt">>;
@@ -245,7 +251,7 @@ function toColumns(patch: Patch): Record<string, unknown> {
     if (key === "tags") out[col] = JSON.stringify(value);
     else if (key === "imageUrls") out[col] = (value as string[] | null)?.length ? JSON.stringify(value) : null;
     else if (key === "subject") out[col] = value ? JSON.stringify(value) : null;
-    else if (key === "topicLocked") out[col] = value ? 1 : 0;
+    else if (key === "topicLocked" || key === "pinned") out[col] = value ? 1 : 0;
     else out[col] = value;
   }
   return out;
@@ -331,11 +337,11 @@ export function listDumps({ q, kind, topic, limit = 200, offset = 0 }: ListOptio
     params.fts = fts;
     sql = `SELECT d.* FROM dumps_fts f JOIN dumps d ON d.rowid = f.rowid
            WHERE dumps_fts MATCH @fts ${where.length ? `AND ${where.join(" AND ")}` : ""}
-           ORDER BY bm25(dumps_fts, 10.0, 4.0, 1.0, 4.0, 3.0, 6.0, 2.0, 2.0, 2.0), d.created_at DESC, d.id
+           ORDER BY d.pinned DESC, bm25(dumps_fts, 10.0, 4.0, 1.0, 4.0, 3.0, 6.0, 2.0, 2.0, 2.0), d.created_at DESC, d.id
            LIMIT @limit OFFSET @offset`;
   } else {
     sql = `SELECT d.* FROM dumps d ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
-           ORDER BY d.created_at DESC, d.id LIMIT @limit OFFSET @offset`;
+           ORDER BY d.pinned DESC, d.created_at DESC, d.id LIMIT @limit OFFSET @offset`;
   }
   return (db().prepare(sql).all(params) as Row[]).map(toDump);
 }
