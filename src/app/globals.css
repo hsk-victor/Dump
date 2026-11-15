@@ -2204,15 +2204,17 @@ body.d-dragging * {
 }
 
 /* Press-and-hold to drag: the subtle press-in while the hold timer runs says
-   the hold registered — the lift arrives when it fires. Also keeps iOS from
-   starting a text selection or callout during the hold window. */
-.d-item[data-arming] {
+   the hold registered — the lift arrives when it fires. */
+.d-item[data-arming] .d-card {
+  transform: scale(0.97);
+}
+/* Touch/pen only (set as data-no-select): keeps a long-press from starting a
+   native selection or callout during the hold window. Mouse presses never get
+   this — drag-selecting text and double-click word-select must keep working. */
+.d-item[data-no-select] {
   -webkit-user-select: none;
   user-select: none;
   -webkit-touch-callout: none;
-}
-.d-item[data-arming] .d-card {
-  transform: scale(0.97);
 }
 .d-actions .d-pintoggle[aria-pressed="true"] {
   color: var(--ink);

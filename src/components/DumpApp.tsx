@@ -460,11 +460,13 @@ export default function DumpApp() {
     const r = grid.getBoundingClientRect();
     const px = d.px - r.left;
     const py = d.py - r.top;
-    if (px < -SLOT_SLOP || px > grid.clientWidth + SLOT_SLOP || py < -SLOT_SLOP * 2 || py > grid.clientHeight + SLOT_SLOP * 2)
-      return null;
-    // Aim with the card's centre, not the fingertip — where it sits is where it lands.
+    // Cancel when the CARD's box leaves the grid, not when the pointer does —
+    // a tall card grabbed near its top needs the pointer well above the grid
+    // to aim at slot 0.
     const cx = px - d.grabX + d.w / 2;
     const cy = py - d.grabY + d.h / 2;
+    if (px + d.w - d.grabX < -SLOT_SLOP || px - d.grabX > grid.clientWidth + SLOT_SLOP || cy + d.h / 2 < -SLOT_SLOP * 2 || cy - d.h / 2 > grid.clientHeight + SLOT_SLOP * 2)
+      return null;
     const g = ghostRect.current;
     if (g && cx >= g.x && cx <= g.x + g.w && cy >= g.y && cy <= g.y + g.h) return d.j;
     const rest = itemsRef.current.filter((x) => x.id !== d.id);
@@ -505,7 +507,9 @@ export default function DumpApp() {
     const r = grid.getBoundingClientRect();
     d.el.style.transform = `translate3d(${d.px - r.left - d.grabX}px, ${d.py - r.top - d.grabY}px, 0)`;
     const j = computeSlot(d, grid);
-    if (j !== d.j && Math.hypot(d.px - d.jx, d.py - d.jy) >= SLOT_HYSTERESIS) {
+    // While auto-scrolling the pointer is static but the grid moves under it —
+    // re-aim every tick; the hysteresis (a pointer-distance guard) doesn't apply.
+    if (j !== d.j && (scroll !== 0 || Math.hypot(d.px - d.jx, d.py - d.jy) >= SLOT_HYSTERESIS)) {
       d.j = j;
       d.jx = d.px;
       d.jy = d.py;
@@ -601,11 +605,16 @@ export default function DumpApp() {
       if (pendingRef.current !== pending) return;
       pending.timer = 0;
       delete cap.dataset.arming;
+      delete cap.dataset.noSelect;
       beginDrag(pending.id, pending.pointerId, pending.lx, pending.ly, cap);
     };
     if (hold) {
       pending.timer = window.setTimeout(activate, HOLD_MS);
       cap.dataset.arming = "";
+      // Suppressing selection is only needed where a long-press natively
+      // selects (touch callout). On a mouse it would kill text selection and
+      // double-click word-select during the hold window.
+      if (e.pointerType !== "mouse") cap.dataset.noSelect = "";
     }
 
     const onMove = (ev: PointerEvent) => {
@@ -650,6 +659,7 @@ export default function DumpApp() {
       pendingRef.current = null;
       clearTimeout(pending.timer);
       delete cap.dataset.arming;
+      delete cap.dataset.noSelect;
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("pointercancel", onCancel);
