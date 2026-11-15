@@ -1,19 +1,16 @@
-/** The Dump mark: an arrow dropping into a tray — dump anything in. */
+/** The Dump mark: a dome-lid bin — dump anything in. */
 export default function Logo({ size = 34 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 64 64" aria-hidden className="d-logo">
+      <path d="M19 21a13 10 0 0 1 26 0v2H19z" fill="currentColor" />
+      <rect x="15" y="23" width="34" height="6.5" rx="3.25" fill="currentColor" />
       <path
-        d="M32 8v15M22 17l10 11 10-11"
-        fill="none"
-        stroke="#ff5a6e"
-        strokeWidth="7.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M21 34h-7q-2 0-2 2v5c0 7.2 4.8 12 12 12h16c7.2 0 12-4.8 12-12v-5q0-2-2-2h-7a11 9.5 0 0 1-22 0z"
+        d="M17.5 32.5h29l-2.3 18.5c-.4 3.8-2.5 5-6.7 5h-11c-4.2 0-6.3-1.2-6.7-5z"
         fill="currentColor"
       />
+      <rect x="25" y="38" width="4" height="13" rx="2" fill="var(--bg)" />
+      <rect x="30" y="38" width="4" height="13" rx="2" fill="var(--bg)" />
+      <rect x="35" y="38" width="4" height="13" rx="2" fill="var(--bg)" />
     </svg>
   );
 }

@@ -1,4 +1,16 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <path d="M32 8v15M22 17l10 11 10-11" fill="none" stroke="#ff5a6e" stroke-width="7.5" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M21 34h-7q-2 0-2 2v5c0 7.2 4.8 12 12 12h16c7.2 0 12-4.8 12-12v-5q0-2-2-2h-7a11 9.5 0 0 1-22 0z" fill="#18181b"/>
+  <style>
+    .bin { fill: #18181b; }
+    .rib { fill: #fafafa; }
+    @media (prefers-color-scheme: dark) {
+      .bin { fill: #f4f4f5; }
+      .rib { fill: #0f0f10; }
+    }
+  </style>
+  <path class="bin" d="M19 21a13 10 0 0 1 26 0v2H19z"/>
+  <rect class="bin" x="15" y="23" width="34" height="6.5" rx="3.25"/>
+  <path class="bin" d="M17.5 32.5h29l-2.3 18.5c-.4 3.8-2.5 5-6.7 5h-11c-4.2 0-6.3-1.2-6.7-5z"/>
+  <rect class="rib" x="25" y="38" width="4" height="13" rx="2"/>
+  <rect class="rib" x="30" y="38" width="4" height="13" rx="2"/>
+  <rect class="rib" x="35" y="38" width="4" height="13" rx="2"/>
 </svg>

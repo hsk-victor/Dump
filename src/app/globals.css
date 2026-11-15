@@ -2454,20 +2454,20 @@ body.d-dragging * {
   animation: d-float 5s ease-in-out infinite;
 }
 .d-empty-card.a {
-  left: calc(50% - 8.5rem);
-  top: 2.2rem;
-  rotate: -8deg;
+  left: calc(50% - 9rem);
+  top: 1.6rem;
+  rotate: -13deg;
 }
 .d-empty-card.b {
   left: calc(50% - 3.4rem);
-  top: 0.6rem;
+  top: 0.3rem;
   rotate: 2deg;
   animation-delay: -1.7s;
 }
 .d-empty-card.c {
-  right: calc(50% - 8.6rem);
-  top: 2.8rem;
-  rotate: 9deg;
+  right: calc(50% - 9.1rem);
+  top: 2rem;
+  rotate: 13deg;
   animation-delay: -3.1s;
 }
 .d-empty-img {
@@ -2507,6 +2507,50 @@ body.d-dragging * {
   bottom: 0;
   translate: -50% 0;
   color: var(--ink);
+}
+/* Bits tumbling into the bin: appear above it, drop in, vanish at the rim. */
+.d-empty-drop i {
+  position: absolute;
+  bottom: 4.4rem;
+  left: 50%;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 999px;
+  opacity: 0;
+  animation: d-drop 2.4s cubic-bezier(.5,0,.75,.4) infinite;
+}
+.d-empty-drop .d1 {
+  margin-left: -1.6rem;
+  background: #ff5a6e;
+}
+.d-empty-drop .d2 {
+  margin-left: -0.28rem;
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 2px;
+  background: #a5b4fc;
+  animation-delay: -0.8s;
+}
+.d-empty-drop .d3 {
+  margin-left: 1.1rem;
+  background: #ffb85c;
+  animation-delay: -1.6s;
+}
+@keyframes d-drop {
+  0% {
+    transform: translateY(-2.6rem) rotate(0deg);
+    opacity: 0;
+  }
+  18% {
+    opacity: 1;
+  }
+  82% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(0) rotate(160deg);
+    opacity: 0;
+  }
 }
 @keyframes d-float {
   0%,
