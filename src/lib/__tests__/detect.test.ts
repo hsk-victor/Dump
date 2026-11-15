@@ -1,5 +1,20 @@
 import { describe, expect, it } from "vitest";
-import { githubRef, kindFromUrl, normalizeUrl, parseInput, providerFromUrl, titleFromUrl } from "../detect";
+import { githubRef, isDirectVideoUrl, kindFromUrl, normalizeUrl, parseInput, providerFromUrl, titleFromUrl, videoTitleFromUrl } from "../detect";
+
+describe("direct video files", () => {
+  it.each(["mp4", "webm", "mov", "m4v"])("recognizes .%s files with query strings and fragments", (ext) => {
+    const url = `https://example.com/My%20clip.${ext}?download=1#start`;
+    expect(isDirectVideoUrl(url)).toBe(true);
+    expect(kindFromUrl(url)).toBe("video");
+    expect(videoTitleFromUrl(url)).toBe("My clip");
+    expect(titleFromUrl(url)).toBe("My clip");
+  });
+  it("does not mistake video platform pages or query parameters for files", () => {
+    expect(isDirectVideoUrl("https://youtube.com/watch?v=video.mp4")).toBe(false);
+    expect(isDirectVideoUrl("not a URL")).toBe(false);
+    expect(videoTitleFromUrl("https://example.com/%invalid.MP4")).toBe("%invalid");
+  });
+});
 
 describe("parseInput", () => {
   it("treats a lone URL as a link", () => {

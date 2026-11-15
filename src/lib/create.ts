@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import { domainOf, kindFromUrl, parseInput, providerFromUrl } from "./detect";
+import { domainOf, isDirectVideoUrl, kindFromUrl, parseInput, providerFromUrl } from "./detect";
 import { bumpDump, createDump, findByUrl, updateDump, UPLOAD_DIR, type Dump } from "./db";
 import { noteTitle } from "./enrich";
 
@@ -36,6 +36,9 @@ function safeImageUrl(u: string | null | undefined): string | null {
  * which a server-side fetch often can't get — e.g. Instagram and TikTok serve login walls to bots).
  */
 export function createFromText(raw: string, opts?: CreateOptions | string | null): Created {
+  if (/(?:^|\s)blob:https?:\/\//i.test(raw.trim())) {
+    throw new InputError("That's a temporary in-browser video address — copy the post's link instead.");
+  }
   const o: CreateOptions = typeof opts === "string" || opts == null ? { title: opts } : opts;
   const title = o.title?.trim() || null;
   const description = o.description?.replace(/\s+/g, " ").trim().slice(0, 2000) || null;
@@ -64,6 +67,7 @@ export function createFromText(raw: string, opts?: CreateOptions | string | null
       domain: domainOf(parsed.url),
       provider: providerFromUrl(parsed.url),
       title,
+      videoUrl: isDirectVideoUrl(parsed.url) ? parsed.url : null,
       description,
       imageUrl,
       note: parsed.note,

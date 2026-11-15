@@ -21,6 +21,12 @@ const tweet: SyndicationTweet = {
 };
 
 describe("X syndication", () => {
+  it("distinguishes animated GIF mp4s from real video and missing media", () => {
+    const animated = parseSyndication({ ...tweet, mediaDetails: tweet.mediaDetails?.map((m) => ({ ...m, type: "animated_gif" })) });
+    expect(animated).toMatchObject({ videoType: "animated_gif", videoUrl: "https://video.twimg.com/916x720/preferred.mp4" });
+    expect(parseSyndication(tweet)?.videoType).toBe("video");
+    expect(parseSyndication({ ...tweet, mediaDetails: [] })?.videoType).toBeNull();
+  });
   it("decodes HTML entities without interpreting literal markup", () => {
     const post = parseSyndication({
       ...tweet,

@@ -2,7 +2,7 @@ import * as cheerio from "cheerio";
 import dns from "node:dns";
 import net from "node:net";
 import { Agent, fetch as undiciFetch } from "undici";
-import { domainOf, kindFromUrl } from "./detect";
+import { domainOf, isDirectVideoUrl, kindFromUrl, videoTitleFromUrl } from "./detect";
 import type { Kind } from "./taxonomy";
 import { parseSyndication, syndicationUrl, type SyndicationTweet } from "./x-post";
 
@@ -20,6 +20,7 @@ export interface Extracted {
   authorAvatarUrl?: string | null;
   videoUrl?: string | null;
   videoPosterUrl?: string | null;
+  videoType?: "video" | "animated_gif" | null;
   /** True when no request for this URL got any HTTP response (network error, timeout, blocked). */
   unreachable: boolean;
 }
@@ -313,7 +314,7 @@ export async function extractUrl(url: string): Promise<Extracted> {
       // Fall back to oEmbed when syndication is unavailable.
     }
   }
-  const urlKind = kindFromUrl(url);
+  const urlKind = isDirectVideoUrl(url) ? null : kindFromUrl(url);
   const host = domainOf(url) ?? "";
   const oembedResult = await fetchOEmbed(url);
   const oembed = oembedResult?.data ?? null;
@@ -337,10 +338,10 @@ export async function extractUrl(url: string): Promise<Extracted> {
   }
 
   if (contentType.startsWith("image/")) {
-    return { kind: "image", title: decodeURIComponent(new URL(url).pathname.split("/").pop() || "Image"), description: null, content: null, imageUrl: url, imageUrls: [url], siteName: host, author: null, unreachable: false };
+    return { kind: "image", title: decodeURIComponent(new URL(url).pathname.split("/").pop() || "Image"), description: null, content: null, imageUrl: url, imageUrls: [url], videoUrl: null, videoType: null, siteName: host, author: null, unreachable: false };
   }
   if (contentType.startsWith("video/")) {
-    return { kind: "video", title: null, description: null, content: null, imageUrl: null, imageUrls: [], siteName: host, author: null, unreachable: false };
+    return { kind: "video", title: videoTitleFromUrl(finalUrl), description: null, content: null, imageUrl: null, imageUrls: [], videoUrl: url, videoType: "video", siteName: host, author: null, unreachable: !reached };
   }
 
   const embedText = textFromEmbedHtml(oembed?.html);
@@ -371,6 +372,8 @@ export async function extractUrl(url: string): Promise<Extracted> {
     content: page?.content ?? embedText,
     imageUrl: imageUrls[0] ?? null,
     imageUrls,
+    videoUrl: null,
+    videoType: null,
     siteName: page?.siteName ?? oembed?.provider_name ?? host,
     author: oembed?.author_name ?? page?.author ?? null,
     unreachable: !reached,

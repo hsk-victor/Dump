@@ -35,6 +35,12 @@ describe("createFromText", () => {
     expect(() => createFromText("   ")).toThrow(InputError);
   });
 
+  it.each(["blob:https://x.com/3f2a", "  BLOB:https://youtube.com/uuid  ", "watch this blob:https://instagram.com/uuid"])("rejects browser-local video addresses without saving anything: %s", (text) => {
+    const before = counts().total;
+    expect(() => createFromText(text)).toThrow("That's a temporary in-browser video address — copy the post's link instead.");
+    expect(counts().total).toBe(before);
+  });
+
   it("backfills bookmarklet metadata on a duplicate and flags it for re-enrichment", () => {
     const first = createFromText("https://example.com/clip");
     const again = createFromText("https://example.com/clip", {
@@ -51,5 +57,9 @@ describe("createFromText", () => {
     const again = createFromText("https://example.com/vid", { title: "New", description: "new desc", imageUrl: "javascript:alert(1)" });
     expect(again).toMatchObject({ duplicate: true, resync: false, title: "Kept", description: "old desc", imageUrl: null });
     expect(first.imageUrl).toBeNull();
+  });
+
+  it("leaves direct video filename titles as display-only fallbacks", () => {
+    expect(createFromText("https://example.com/Spring%20flowers.mp4")).toMatchObject({ kind: "video", title: null, videoUrl: "https://example.com/Spring%20flowers.mp4" });
   });
 });
