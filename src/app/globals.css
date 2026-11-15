@@ -107,7 +107,7 @@ button {
   background: var(--hairline);
 }
 .d-search {
-  flex: 0 1 15rem;
+  flex: 0 1 22rem;
   margin-left: auto;
   display: flex;
   align-items: center;
