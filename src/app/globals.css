@@ -2506,6 +2506,7 @@ body.d-dragging * {
   left: 50%;
   bottom: 0;
   translate: -50% 0;
+  color: var(--ink);
 }
 @keyframes d-float {
   0%,
