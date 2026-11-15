@@ -48,7 +48,7 @@ export default function UpdateButton() {
     const deadline = Date.now() + APPLY_TIMEOUT_MS;
     const poll = async () => {
       try {
-        const res = await fetch("/api/update", { cache: "no-store" });
+        const res = await fetch("/api/update?fresh", { cache: "no-store" });
         if (res.ok) {
           const next = (await res.json()) as UpdateInfo;
           if (next.current && next.current !== was) {

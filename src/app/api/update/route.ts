@@ -72,8 +72,13 @@ async function status(): Promise<Status> {
   }
 }
 
-export async function GET() {
-  if (!cached || Date.now() - cached.at > CHECK_TTL_MS) cached = { at: Date.now(), info: await status() };
+export async function GET(req: NextRequest) {
+  // ?fresh skips the cache: the post-apply poll needs live status, not a value
+  // re-cached mid-flight while the updater is still swapping builds.
+  if (!req.nextUrl.searchParams.has("fresh") && cached && Date.now() - cached.at <= CHECK_TTL_MS) {
+    return NextResponse.json(cached.info);
+  }
+  cached = { at: Date.now(), info: await status() };
   return NextResponse.json(cached.info);
 }
 
@@ -111,6 +116,5 @@ export async function POST(req: NextRequest) {
     args = ["-c", `sleep 2 && "${script}"`];
   }
   spawn(cmd, args, { detached: true, stdio: "ignore" }).unref();
-  cached = null;
   return NextResponse.json({ started: true });
 }
