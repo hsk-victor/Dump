@@ -422,13 +422,18 @@ export default function DumpApp() {
     const dragged = items.find((d) => d.id === id);
     if (!dragged || j === items.indexOf(dragged)) return;
     const list = items.filter((d) => d.id !== id);
-    const prev = list[j - 1];
-    const next = list[j];
-    const position = prev && next ? (prev.position + next.position) / 2 : prev ? prev.position - 1 : next ? next.position + 1 : 1;
     // Crossing the pinned boundary flips the flag: dragging below every pinned card
     // unpins, dragging an unpinned card into the pinned block pins it.
     const pinnedCount = list.filter((d) => d.pinned).length;
     const pinned = dragged.pinned ? j <= pinnedCount : j < pinnedCount;
+    // Each group sorts by position independently, so the slot must be priced
+    // against same-group neighbours — a midpoint across the boundary can rank
+    // the card above the very card it was dropped below.
+    const beforeJ = list.slice(0, j).filter((d) => d.pinned === pinned).length;
+    const same = list.filter((d) => d.pinned === pinned);
+    const prev = same[beforeJ - 1];
+    const next = same[beforeJ];
+    const position = prev && next ? (prev.position + next.position) / 2 : prev ? prev.position - 1 : next ? next.position + 1 : 1;
     const moved = { ...dragged, pinned, position };
     setItems([...list.slice(0, j), moved, ...list.slice(j)]);
     const res = await fetch(`/api/dumps/${id}`, {
