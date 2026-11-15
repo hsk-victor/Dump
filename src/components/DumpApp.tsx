@@ -10,6 +10,7 @@ import Composer from "./Composer";
 import DumpCard from "./DumpCard";
 import Logo from "./Logo";
 import SectionNav, { type Counts } from "./SectionNav";
+import UpdateButton from "./UpdateButton";
 
 const PAGE_SIZE = 60;
 
@@ -283,6 +284,7 @@ export default function DumpApp() {
           </label>
 
           <div className="d-header-tools">
+            <UpdateButton />
             <div className="d-settings" ref={settingsRef}>
               <button
                 className="d-icon-btn"
