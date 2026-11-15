@@ -184,8 +184,18 @@ function apply() {
         const srcNm = path.join(staged.dir, "node_modules");
         const dstNm = path.join(REPO, "node_modules");
         if (fs.existsSync(srcNm) && !fs.lstatSync(srcNm).isSymbolicLink()) {
+          // Stage next to the destination first: a same-volume rename is
+          // instant and atomic, and an EXDEV here still leaves the live
+          // tree untouched for the copy fallback.
+          const tmpNm = `${dstNm}.updating`;
+          fs.rmSync(tmpNm, { recursive: true, force: true });
+          try {
+            fs.renameSync(srcNm, tmpNm);
+          } catch {
+            fs.cpSync(srcNm, tmpNm, { recursive: true });
+          }
           fs.rmSync(dstNm, { recursive: true, force: true });
-          fs.renameSync(srcNm, dstNm);
+          fs.renameSync(tmpNm, dstNm);
         } else if (!fs.existsSync(srcNm)) {
           npmIn(REPO, ["ci"]);
         }
