@@ -1996,40 +1996,6 @@ button {
   resize: vertical;
   min-height: 4.5em;
 }
-.d-note-editbar {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  margin-top: 0.55rem;
-}
-.d-note-save,
-.d-note-cancel {
-  padding: 0.18rem 0.55rem;
-  border-radius: 999px;
-  font-size: 0.72rem;
-  cursor: pointer;
-}
-.d-note-save {
-  color: #fff;
-  background: var(--ink);
-}
-.d-note-save:disabled {
-  opacity: 0.6;
-  cursor: default;
-}
-.d-note-cancel {
-  color: var(--ink-2);
-}
-@media (hover: hover) and (pointer: fine) {
-  .d-note-cancel:hover {
-    background: color-mix(in srgb, var(--ink) 8%, transparent);
-  }
-}
-.d-note-edit-hint {
-  margin-left: auto;
-  font-size: 0.66rem;
-  color: var(--muted);
-}
 .d-card[data-kind="note"] .d-annotation {
   margin-inline-start: -0.5rem;
   margin-inline-end: 0;

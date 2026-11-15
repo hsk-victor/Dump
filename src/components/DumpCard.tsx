@@ -1154,8 +1154,14 @@ function NoteCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
   }, [editing]);
 
   const save = async () => {
-    const text = (areaRef.current?.value ?? "").trim();
-    if (!text || saving) return;
+    const el = areaRef.current;
+    if (!el || saving) return;
+    const text = el.value.trim();
+    // Clicking away without changes (or a wiped note) just closes the editor.
+    if (!text || text === (dump.content ?? "").trim()) {
+      bits.endNoteEdit();
+      return;
+    }
     setSaving(true);
     const ok = await bits.onSaveNote(dump.id, text);
     setSaving(false);
@@ -1181,6 +1187,7 @@ function NoteCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
               dir={noteDir(dump.content ?? "")}
               rows={Math.min(Math.max((dump.content ?? "").split("\n").length, 3), 30)}
               aria-label="Note text"
+              onBlur={() => void save()}
               onKeyDown={(e) => {
                 if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
                   e.preventDefault();
@@ -1191,15 +1198,6 @@ function NoteCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
                 }
               }}
             />
-            <div className="d-note-editbar">
-              <button className="d-note-save" onClick={() => void save()} disabled={saving}>
-                {saving ? "Saving…" : "Save"}
-              </button>
-              <button className="d-note-cancel" onClick={() => bits.endNoteEdit()}>
-                Cancel
-              </button>
-              <span className="d-note-edit-hint">⌘↵ save · esc cancel</span>
-            </div>
           </>
         ) : bits.processing && !bits.title ? (
           shimmerLines()
