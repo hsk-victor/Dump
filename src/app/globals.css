@@ -19,6 +19,7 @@
   --hairline: rgb(0 0 0 / 0.07);
   --shadow: 0 0 0 1px rgb(0 0 0 / 0.03), 0 1px 2px rgb(0 0 0 / 0.04), 0 12px 30px -16px rgb(0 0 0 / 0.16);
   --shadow-hover: 0 0 0 1px rgb(0 0 0 / 0.04), 0 2px 4px rgb(0 0 0 / 0.05), 0 20px 48px -16px rgb(0 0 0 / 0.28);
+  --shadow-drag: 0 0 0 1px rgb(0 0 0 / 0.04), 0 2px 6px rgb(0 0 0 / 0.06), 0 26px 60px -12px rgb(0 0 0 / 0.35);
   --dock-shadow: 0 18px 50px -12px rgb(0 0 0 / 0.28), 0 2px 6px rgb(0 0 0 / 0.06);
   --radius: 14px;
 }
@@ -34,6 +35,7 @@
   --hairline: rgb(255 255 255 / 0.07);
   --shadow: 0 0 0 1px rgb(255 255 255 / 0.05), 0 1px 2px rgb(0 0 0 / 0.3), 0 12px 30px -16px rgb(0 0 0 / 0.5);
   --shadow-hover: 0 0 0 1px rgb(255 255 255 / 0.1), 0 2px 4px rgb(0 0 0 / 0.4), 0 20px 48px -14px rgb(0 0 0 / 0.75);
+  --shadow-drag: 0 0 0 1px rgb(255 255 255 / 0.08), 0 2px 8px rgb(0 0 0 / 0.4), 0 30px 64px -12px rgb(0 0 0 / 0.8);
   --dock-shadow: 0 0 0 1px rgb(255 255 255 / 0.08), 0 20px 50px -12px rgb(0 0 0 / 0.8);
 }
 
@@ -394,17 +396,32 @@ button {
   padding: 0.25rem 1.25rem 9rem;
 }
 .d-grid {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--gap);
-  /* Not a real multicol any more — the feed is explicit .d-col columns so cards
-     don't teleport when the browser rebalances. column-width stays only as the
-     resolved target width the JS column-splitter reads. */
+  position: relative;
+  /* Not a real multicol — the feed is JS-packed absolute positioning so cards
+     can FLIP between slots without remounting. column-width/column-gap stay
+     only as the resolved values the layout code reads. */
   column-width: var(--col-w);
+  column-gap: var(--gap);
 }
-.d-col {
-  flex: 1 1 0;
-  min-width: 0;
+/* Each card sits at its packed slot via translate3d; whenever the pack changes
+   the transform transition carries it there — that's the FLIP. */
+.d-item {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transition: transform 0.26s var(--ease-out);
+}
+.d-grid[data-dragging] .d-item {
+  will-change: transform;
+}
+/* The held card leaves the pack: pointer writes its transform directly, so no
+   transition, and it floats above siblings. */
+.d-item[data-dragging] {
+  z-index: 5;
+  transition: none;
+}
+.d-item > .d-card {
+  margin-bottom: 0;
 }
 .d-card {
   position: relative;
@@ -414,7 +431,7 @@ button {
   overflow: hidden;
   background: var(--surface);
   box-shadow: var(--shadow);
-  transition: box-shadow 0.2s, translate 0.2s var(--ease-out), opacity 0.16s var(--ease-out);
+  transition: box-shadow 0.2s, translate 0.2s var(--ease-out), opacity 0.16s var(--ease-out), transform 0.18s var(--ease-out);
 }
 @media (hover: hover) and (pointer: fine) {
   .d-card:hover {
@@ -2167,25 +2184,23 @@ The tape strip: frosted so the paper shows through, slightly rotated.
   height: 0.78rem;
 }
 
-/* Card dragging: the source lifts out of the feed, an ink rule marks the
-   landing slot, and the overlay is the card itself tilted under the pointer. */
-.d-dropmark {
-  height: 3px;
-  margin-bottom: var(--gap);
-  border-radius: 2px;
-  background: var(--ink);
-  opacity: 0.45;
+/* Card dragging: the card itself lifts onto the pointer — small scale and tilt,
+   a deeper shadow — while the empty slot it left behind is the drop indicator.
+   Hover affordances (lift, hover actions) don't apply mid-flight. */
+.d-item[data-dragging] .d-card {
+  translate: none;
+  transform: scale(1.03) rotate(1.2deg);
+  box-shadow: var(--shadow-drag);
 }
-.d-overlay {
-  pointer-events: none;
+.d-item[data-dragging] .d-actions {
+  opacity: 0 !important;
 }
-.d-overlay .d-card {
-  transform: rotate(1.5deg);
-  box-shadow: 0 16px 40px rgb(0 0 0 / 0.22);
+body.d-dragging {
+  user-select: none;
 }
-.d-overlay .d-actions,
-.d-overlay .d-meta {
-  display: none;
+body.d-dragging,
+body.d-dragging * {
+  cursor: grabbing !important;
 }
 .d-actions .d-pintoggle[aria-pressed="true"] {
   color: var(--ink);
@@ -2602,5 +2617,13 @@ The tape strip: frosted so the paper shows through, slightly rotated.
   }
   .d-settings-pop {
     animation: none;
+  }
+  /* Reordering stays instant: slots jump instead of gliding, and the held card
+     keeps its shadow but not the scale/tilt. */
+  .d-item {
+    transition: none;
+  }
+  .d-item[data-dragging] .d-card {
+    transform: none;
   }
 }

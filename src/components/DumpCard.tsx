@@ -2,18 +2,14 @@
 
 import { useEffect, useRef, useState, type CSSProperties, type MouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { Menu } from "@base-ui/react/menu";
-import type { DraggableAttributes } from "@dnd-kit/core";
-import type { SyntheticListenerMap } from "@dnd-kit/core/dist/hooks/utilities";
 import type { Dump } from "@/lib/db";
 import { SUBJECT_MIN_CONFIDENCE, subjectLine, TOPICS, kindMeta, providerMeta, topicMeta } from "@/lib/taxonomy";
 import { timeAgo, shortDate } from "@/lib/format";
 import { GITHUB_TAG, githubInfo, type GithubInfo, titleFromUrl } from "@/lib/detect";
 
-/** Wiring for the actions-row grip: the card's parent makes it the drag activator. */
+/** Wiring for the actions-row grip: the parent feed owns the drag lifecycle. */
 export interface DragHandle {
-  activatorRef: (el: HTMLElement | null) => void;
-  listeners: SyntheticListenerMap | undefined;
-  attributes: DraggableAttributes;
+  onPointerDown: (e: ReactPointerEvent<HTMLButtonElement>) => void;
 }
 
 interface Props {
@@ -1404,9 +1400,8 @@ export default function DumpCard({ dump, fresh, removing, onTopic, onDelete, onR
       {drag && (
         <button
           className="d-drag"
-          ref={drag.activatorRef}
-          {...drag.attributes}
-          {...drag.listeners}
+          onPointerDown={drag.onPointerDown}
+          onContextMenu={(e) => e.preventDefault()}
           aria-label="Drag to move"
           title="Drag to move"
         >

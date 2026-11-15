@@ -1,26 +1,13 @@
 "use client";
 
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import {
-  DndContext,
-  DragOverlay,
-  PointerSensor,
-  pointerWithin,
-  useDraggable,
-  useDroppable,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-  type DragMoveEvent,
-  type DragStartEvent,
-} from "@dnd-kit/core";
 import { Toaster, toast as sonnerToast } from "sonner";
 import type { Dump } from "@/lib/db";
 import { KINDS, kindMeta, topicMeta } from "@/lib/taxonomy";
 import { DENSITY_KEY, MODE_KEY } from "@/lib/theme";
 import Composer from "./Composer";
-import DumpCard, { type DragHandle } from "./DumpCard";
+import DumpCard from "./DumpCard";
 import Logo from "./Logo";
 import SectionNav, { type Counts } from "./SectionNav";
 import UpdateButton from "./UpdateButton";
@@ -29,55 +16,75 @@ const PAGE_SIZE = 60;
 /** Card height guess before its first measurement, plus the 6px --gap between cards. */
 const ESTIMATE_H = 260;
 const GAP_EST = 6;
+/** Pointer must travel this far before a press on the grip becomes a drag. */
+const DRAG_THRESHOLD = 6;
+/** Viewport margin that starts auto-scrolling while a card is held. */
+const EDGE_PX = 72;
+/** How far past the grid the pointer may go before the drop is cancelled. */
+const SLOT_SLOP = 48;
+/** Re-aiming the landing slot needs the pointer to move this far — damps flip-flop. */
+const SLOT_HYSTERESIS = 8;
 
-type Cell = Dump | "marker";
+interface Rect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
 
-/** One card in the feed: droppable so other cards can land on it, draggable via its grip. */
+interface DragState {
+  id: string;
+  pointerId: number;
+  /** The .d-item element tracking the pointer. */
+  el: HTMLElement;
+  /** Grab offset inside the card, so it stays under the pointer 1:1. */
+  grabX: number;
+  grabY: number;
+  /** Card size at grab time; reserves its landing slot while it flies. */
+  w: number;
+  h: number;
+  /** Landing index in the dragged-card-removed order; null = drop cancels. */
+  j: number | null;
+  /** Pointer coords where j last changed (hysteresis anchor). */
+  jx: number;
+  jy: number;
+  /** Latest pointer client coords. */
+  px: number;
+  py: number;
+  raf: number;
+}
+
+/** One card in the feed; the grid positions it absolutely via transform. */
 function FeedItem({
   dump,
   fresh,
   removing,
   sortable,
+  dragging,
+  onGripDown,
   ...handlers
 }: {
   dump: Dump;
   fresh: boolean;
   removing: boolean;
   sortable: boolean;
+  dragging: boolean;
+  onGripDown: (e: ReactPointerEvent<HTMLButtonElement>, id: string) => void;
   onTopic: (id: string, topic: string) => void;
   onDelete: (id: string) => void;
   onRetry: (id: string) => void;
   onPin: (id: string, pinned: boolean) => void;
   onSaveNote: (id: string, content: string) => Promise<boolean>;
 }) {
-  const drag = useDraggable({ id: dump.id, disabled: !sortable });
-  const drop = useDroppable({ id: dump.id, disabled: !sortable });
   return (
-    <div
-      ref={(n) => {
-        drag.setNodeRef(n);
-        drop.setNodeRef(n);
-      }}
-      className="d-item"
-      data-did={dump.id}
-    >
+    <div className="d-item" data-did={dump.id} data-dragging={dragging ? "" : undefined}>
       <DumpCard
         dump={dump}
         fresh={fresh}
         removing={removing}
-        drag={sortable ? { activatorRef: drag.setActivatorNodeRef, listeners: drag.listeners, attributes: drag.attributes } : undefined}
+        drag={sortable ? { onPointerDown: (e) => onGripDown(e, dump.id) } : undefined}
         {...handlers}
       />
-    </div>
-  );
-}
-
-/** A masonry column; droppable itself so a card can be dropped past its last card. */
-function FeedColumn({ id, children }: { id: string; children: React.ReactNode }) {
-  const { setNodeRef } = useDroppable({ id });
-  return (
-    <div className="d-col" ref={setNodeRef}>
-      {children}
     </div>
   );
 }
@@ -112,13 +119,16 @@ export default function DumpApp() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const settingsRef = useRef<HTMLDivElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
-  const [colCount, setColCount] = useState(1);
-  const [measureTick, setMeasureTick] = useState(0);
+  const colCountRef = useRef(1);
   const cardHeights = useRef(new Map<string, number>());
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
+  const dragRef = useRef<DragState | null>(null);
+  const pendingRef = useRef<{ id: string; pointerId: number; x: number; y: number } | null>(null);
+  /** Latest packed slot per card (grid coords), plus the phantom slot while dragging. */
+  const slotRects = useRef(new Map<string, Rect>());
+  const ghostRect = useRef<Rect | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
-  const [dropIndex, setDropIndex] = useState<number | null>(null);
-  const [dragWidth, setDragWidth] = useState(0);
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
   // Manual order only makes sense under position sort — a search ranks by relevance instead.
   const sortable = !q;
 
@@ -242,6 +252,53 @@ export default function DumpApp() {
     return () => clearInterval(t);
   }, [anyProcessing, dragId, load]);
 
+  // Greedily packs the flat order into columns by measured height and writes each
+  // card's slot as a transform — positions are layout data, so React never re-renders
+  // to move a card. While dragging, a phantom of the grabbed card's size reserves
+  // its landing slot and siblings FLIP around it via their transform transition.
+  const applyLayout = useCallback(() => {
+    const grid = gridRef.current;
+    if (!grid) return;
+    const cs = getComputedStyle(grid);
+    const gap = parseFloat(cs.columnGap) || GAP_EST;
+    const n = Math.max(1, colCountRef.current);
+    const colW = (grid.clientWidth - gap * (n - 1)) / n;
+    const d = dragRef.current;
+    const list = d ? itemsRef.current.filter((x) => x.id !== d.id) : itemsRef.current;
+    slotRects.current.clear();
+    ghostRect.current = null;
+    const colsH = new Array<number>(n).fill(0);
+    const pack = (id: string | null, h: number) => {
+      let c = 0;
+      for (let i = 1; i < colsH.length; i++) if (colsH[i] < colsH[c]) c = i;
+      const r: Rect = { x: c * (colW + gap), y: colsH[c], w: colW, h };
+      if (id === null) ghostRect.current = r;
+      else slotRects.current.set(id, r);
+      colsH[c] = r.y + h + gap;
+    };
+    for (let i = 0; i <= list.length; i++) {
+      if (d && d.j === i) pack(null, d.h);
+      if (i < list.length) pack(list[i].id, cardHeights.current.get(list[i].id) ?? ESTIMATE_H);
+    }
+    grid.style.height = `${Math.max(0, Math.max(...colsH) - gap)}px`;
+    for (const node of grid.querySelectorAll<HTMLElement>(".d-item")) {
+      const id = node.dataset.did!;
+      if (d && id === d.id) {
+        node.style.width = `${colW}px`;
+        continue; // pointer-driven — leave its transform alone
+      }
+      const r = slotRects.current.get(id);
+      if (!r) continue;
+      node.style.width = `${r.w}px`;
+      node.style.transform = `translate3d(${r.x}px, ${r.y}px, 0)`;
+    }
+  }, []);
+
+  // Re-pack on every commit (new items, reorder, drag begin/end) before paint.
+  useLayoutEffect(() => {
+    applyLayout();
+  }, [items, dragId, applyLayout]);
+
   // Column count follows the container width and the card-size preference; the CSS
   // column-width on .d-grid is kept purely so this can read the resolved pixel width.
   useEffect(() => {
@@ -251,13 +308,17 @@ export default function DumpApp() {
       const cs = getComputedStyle(el);
       const gap = parseFloat(cs.columnGap) || GAP_EST;
       const w = parseFloat(cs.columnWidth) || 260;
-      setColCount(Math.max(1, Math.floor((el.clientWidth + gap) / (w + gap))));
+      const n = Math.max(1, Math.floor((el.clientWidth + gap) / (w + gap)));
+      if (n !== colCountRef.current) {
+        colCountRef.current = n;
+        applyLayout();
+      }
     };
     compute();
     const ro = new ResizeObserver(compute);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [density, loaded, items.length > 0]);
+  }, [density, loaded, items.length > 0, applyLayout]);
 
   // Measure each rendered card once so the greedy column split can balance heights.
   useEffect(() => {
@@ -274,33 +335,11 @@ export default function DumpApp() {
           changed = true;
         }
       }
-      if (changed) setMeasureTick((t) => t + 1);
+      if (changed) applyLayout();
     });
     el.querySelectorAll(".d-item").forEach((n) => ro.observe(n));
     return () => ro.disconnect();
   });
-
-  // Split the flat order into columns: every item (plus the drop marker while dragging)
-  // goes into whichever column is currently shortest.
-  const rest = dragId ? items.filter((d) => d.id !== dragId) : items;
-  const columns = useMemo(() => {
-    const seq: Cell[] =
-      dropIndex === null ? rest : [...rest.slice(0, dropIndex), "marker" as const, ...rest.slice(dropIndex)];
-    const out: Cell[][] = Array.from({ length: Math.max(1, colCount) }, () => []);
-    const heights = new Array<number>(out.length).fill(0);
-    for (const it of seq) {
-      let c = 0;
-      for (let i = 1; i < heights.length; i++) if (heights[i] < heights[c]) c = i;
-      if (it === "marker") {
-        out[c].push(it);
-        heights[c] += 14;
-      } else {
-        out[c].push(it);
-        heights[c] += (cardHeights.current.get(it.id) ?? ESTIMATE_H) + GAP_EST;
-      }
-    }
-    return out;
-  }, [rest, dropIndex, colCount, measureTick]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -377,79 +416,185 @@ export default function DumpApp() {
     load();
   }
 
-  function onDragStart(e: DragStartEvent) {
-    setDragId(String(e.active.id));
-    // rect.current.initial is 0 at drag start; measure the item's DOM box instead.
-    setDragWidth(
-      gridRef.current?.querySelector(`[data-did="${e.active.id}"]`)?.getBoundingClientRect().width ?? 0,
-    );
-    setDropIndex(null);
+  // ── Drag to reorder ──
+  // The grabbed card's wrapper (.d-item) follows the pointer via a direct transform
+  // write every animation frame; siblings reflow around a phantom slot through their
+  // own transform transitions. React state only changes on drag start and settle.
+
+  /** Where the card would land: index into the order with the dragged card removed. */
+  function computeSlot(d: DragState, grid: HTMLElement): number | null {
+    const r = grid.getBoundingClientRect();
+    const px = d.px - r.left;
+    const py = d.py - r.top;
+    if (px < -SLOT_SLOP || px > grid.clientWidth + SLOT_SLOP || py < -SLOT_SLOP * 2 || py > grid.clientHeight + SLOT_SLOP * 2)
+      return null;
+    // Aim with the card's centre, not the fingertip — where it sits is where it lands.
+    const cx = px - d.grabX + d.w / 2;
+    const cy = py - d.grabY + d.h / 2;
+    const g = ghostRect.current;
+    if (g && cx >= g.x && cx <= g.x + g.w && cy >= g.y && cy <= g.y + g.h) return d.j;
+    const rest = itemsRef.current.filter((x) => x.id !== d.id);
+    for (let i = 0; i < rest.length; i++) {
+      const rr = slotRects.current.get(rest[i].id);
+      if (rr && cx >= rr.x && cx <= rr.x + rr.w && cy >= rr.y && cy <= rr.y + rr.h)
+        return cy < rr.y + rr.h / 2 ? i : i + 1;
+    }
+    // Between columns or below a column's last card: land next to the nearest card.
+    let best = -1;
+    let bd = Infinity;
+    for (let i = 0; i < rest.length; i++) {
+      const rr = slotRects.current.get(rest[i].id);
+      if (!rr) continue;
+      const dx = Math.max(rr.x - cx, 0, cx - (rr.x + rr.w));
+      const dy = Math.max(rr.y - cy, 0, cy - (rr.y + rr.h));
+      const dd = dx * dx + dy * dy;
+      if (dd < bd) {
+        bd = dd;
+        best = i;
+      }
+    }
+    if (best < 0) return rest.length ? rest.length : 0;
+    const rr = slotRects.current.get(rest[best].id)!;
+    return cy < rr.y + rr.h / 2 ? best : best + 1;
   }
 
-  // The marker's flat index (in the dragged-card-removed list) where it would land.
-  function onDragMove(e: DragMoveEvent) {
-    const { active, over } = e;
-    // Clear the marker when the pointer leaves every droppable, so releasing
-    // outside the grid can't commit a stale slot.
-    if (!over) {
-      setDropIndex(null);
-      return;
+  function dragTick() {
+    const d = dragRef.current;
+    const grid = gridRef.current;
+    if (!d || !grid) return;
+    d.raf = 0;
+    // Drift the page while the pointer hugs a viewport edge.
+    let scroll = 0;
+    if (d.py < EDGE_PX) scroll = -Math.ceil((EDGE_PX - d.py) / 4);
+    else if (d.py > window.innerHeight - EDGE_PX) scroll = Math.ceil((d.py - (window.innerHeight - EDGE_PX)) / 4);
+    if (scroll) window.scrollBy(0, scroll);
+    const r = grid.getBoundingClientRect();
+    d.el.style.transform = `translate3d(${d.px - r.left - d.grabX}px, ${d.py - r.top - d.grabY}px, 0)`;
+    const j = computeSlot(d, grid);
+    if (j !== d.j && Math.hypot(d.px - d.jx, d.py - d.jy) >= SLOT_HYSTERESIS) {
+      d.j = j;
+      d.jx = d.px;
+      d.jy = d.py;
+      applyLayout();
     }
-    const list = items.filter((d) => d.id !== active.id);
-    const oid = String(over.id);
-    if (oid.startsWith("col-")) {
-      const col = columns[Number(oid.slice(4))]?.filter((c): c is Dump => c !== "marker") ?? [];
-      const last = col[col.length - 1];
-      setDropIndex(last ? list.findIndex((d) => d.id === last.id) + 1 : list.length);
-      return;
-    }
-    const i = list.findIndex((d) => d.id === oid);
-    if (i < 0) return;
-    // The pointer's own position inside the target decides before/after — the
-    // dragged card's center mispredicts it whenever the two cards differ in height.
-    const activator = e.activatorEvent;
-    const before =
-      activator instanceof MouseEvent
-        ? activator.clientY + e.delta.y < over.rect.top + over.rect.height / 2
-        : true;
-    setDropIndex(before ? i : i + 1);
+    if (scroll && dragRef.current) d.raf = requestAnimationFrame(dragTick);
   }
 
-  async function onDragEnd(e: DragEndEvent) {
-    const id = String(e.active.id);
-    const j = dropIndex;
-    setDragId(null);
-    setDropIndex(null);
+  function beginDrag(id: string, ev: PointerEvent, grip: HTMLElement) {
+    const grid = gridRef.current;
+    if (!grid) return;
+    const el = grid.querySelector<HTMLElement>(`[data-did="${id}"]`);
+    if (!el) return;
+    const box = el.getBoundingClientRect();
+    try {
+      grip.setPointerCapture(ev.pointerId);
+    } catch {}
+    const idx = itemsRef.current.findIndex((x) => x.id === id);
+    dragRef.current = {
+      id,
+      pointerId: ev.pointerId,
+      el,
+      grabX: ev.clientX - box.left,
+      grabY: ev.clientY - box.top,
+      w: box.width,
+      h: box.height,
+      j: idx,
+      jx: ev.clientX,
+      jy: ev.clientY,
+      px: ev.clientX,
+      py: ev.clientY,
+      raf: 0,
+    };
+    document.body.classList.add("d-dragging");
+    setDragId(id);
+    applyLayout(); // open the phantom slot at the card's own seat
+  }
+
+  function finishDrag(cancelled: boolean) {
+    const d = dragRef.current;
+    if (!d) return;
+    if (d.raf) cancelAnimationFrame(d.raf);
+    dragRef.current = null;
+    document.body.classList.remove("d-dragging");
+    setDragId(null); // restores transitions; the card eases into its slot
+    const j = cancelled ? null : d.j;
     if (j === null) return;
-    const dragged = items.find((d) => d.id === id);
-    if (!dragged || j === items.indexOf(dragged)) return;
-    const list = items.filter((d) => d.id !== id);
+    const all = itemsRef.current;
+    const dragged = all.find((x) => x.id === d.id);
+    if (!dragged || j === all.indexOf(dragged)) return;
+    const list = all.filter((x) => x.id !== d.id);
     // Crossing the pinned boundary flips the flag: dragging below every pinned card
     // unpins, dragging an unpinned card into the pinned block pins it.
-    const pinnedCount = list.filter((d) => d.pinned).length;
+    const pinnedCount = list.filter((x) => x.pinned).length;
     const pinned = dragged.pinned ? j <= pinnedCount : j < pinnedCount;
     // Each group sorts by position independently, so the slot must be priced
     // against same-group neighbours — a midpoint across the boundary can rank
     // the card above the very card it was dropped below.
-    const beforeJ = list.slice(0, j).filter((d) => d.pinned === pinned).length;
-    const same = list.filter((d) => d.pinned === pinned);
+    const beforeJ = list.slice(0, j).filter((x) => x.pinned === pinned).length;
+    const same = list.filter((x) => x.pinned === pinned);
     const prev = same[beforeJ - 1];
     const next = same[beforeJ];
     const position = prev && next ? (prev.position + next.position) / 2 : prev ? prev.position - 1 : next ? next.position + 1 : 1;
     const moved = { ...dragged, pinned, position };
     setItems([...list.slice(0, j), moved, ...list.slice(j)]);
-    const res = await fetch(`/api/dumps/${id}`, {
+    fetch(`/api/dumps/${d.id}`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(pinned === dragged.pinned ? { position } : { pinned, position }),
+    }).then((res) => {
+      if (!res.ok) {
+        toast("Couldn't move that card", "error");
+        load();
+      }
     });
-    if (!res.ok) {
-      toast("Couldn't move that card", "error");
-      load();
-    }
   }
 
-  const dragDump = items.find((d) => d.id === dragId) ?? null;
+  function onGripDown(e: ReactPointerEvent<HTMLButtonElement>, id: string) {
+    // Second fingers and non-primary buttons never join or restart a drag.
+    if (!e.isPrimary || (e.pointerType === "mouse" && e.button !== 0) || pendingRef.current || dragRef.current) return;
+    const grip = e.currentTarget;
+    const pending = { id, pointerId: e.pointerId, x: e.clientX, y: e.clientY };
+    pendingRef.current = pending;
+
+    const onMove = (ev: PointerEvent) => {
+      if (ev.pointerId !== pending.pointerId) return;
+      const d = dragRef.current;
+      if (!d) {
+        if (Math.hypot(ev.clientX - pending.x, ev.clientY - pending.y) < DRAG_THRESHOLD) return;
+        beginDrag(pending.id, ev, grip);
+        return;
+      }
+      d.px = ev.clientX;
+      d.py = ev.clientY;
+      if (!d.raf) d.raf = requestAnimationFrame(dragTick);
+    };
+    const onUp = (ev: PointerEvent) => {
+      if (ev.pointerId !== pending.pointerId) return;
+      teardown();
+      finishDrag(false);
+    };
+    const onCancel = (ev: PointerEvent) => {
+      if (ev.pointerId !== pending.pointerId) return;
+      teardown();
+      finishDrag(true);
+    };
+    const onKey = (ev: KeyboardEvent) => {
+      if (ev.key !== "Escape") return;
+      teardown();
+      finishDrag(true);
+    };
+    const teardown = () => {
+      pendingRef.current = null;
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onCancel);
+      window.removeEventListener("keydown", onKey);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onCancel);
+    window.addEventListener("keydown", onKey);
+  }
 
   /** Saves a note's edited body. Returns whether the save landed so the card can leave edit mode. */
   async function handleSaveNote(id: string, content: string): Promise<boolean> {
@@ -635,58 +780,24 @@ export default function DumpApp() {
             )}
           </div>
         ) : (
-          <DndContext
-            sensors={sensors}
-            collisionDetection={pointerWithin}
-            onDragStart={onDragStart}
-            onDragMove={onDragMove}
-            onDragEnd={onDragEnd}
-            onDragCancel={() => {
-              setDragId(null);
-              setDropIndex(null);
-            }}
-          >
-            <div className="d-grid" ref={gridRef}>
-              {columns.map((col, ci) => (
-                <FeedColumn key={ci} id={`col-${ci}`}>
-                  {col.map((cell) =>
-                    cell === "marker" ? (
-                      <div key="marker" className="d-dropmark" />
-                    ) : (
-                      <FeedItem
-                        key={cell.id}
-                        dump={cell}
-                        fresh={cell.id === freshId}
-                        removing={removingIds.has(cell.id)}
-                        sortable={sortable}
-                        onTopic={handleTopic}
-                        onDelete={handleDelete}
-                        onRetry={handleRetry}
-                        onPin={handlePin}
-                        onSaveNote={handleSaveNote}
-                      />
-                    ),
-                  )}
-                </FeedColumn>
-              ))}
-            </div>
-            <DragOverlay dropAnimation={null}>
-              {dragDump && (
-                <div className="d-overlay" style={{ width: dragWidth }}>
-                  <DumpCard
-                    dump={dragDump}
-                    fresh={false}
-                    removing={false}
-                    onTopic={() => {}}
-                    onDelete={() => {}}
-                    onRetry={() => {}}
-                    onPin={() => {}}
-                    onSaveNote={async () => false}
-                  />
-                </div>
-              )}
-            </DragOverlay>
-          </DndContext>
+          <div className="d-grid" ref={gridRef} data-dragging={dragId ? "" : undefined}>
+            {items.map((d) => (
+              <FeedItem
+                key={d.id}
+                dump={d}
+                fresh={d.id === freshId}
+                removing={removingIds.has(d.id)}
+                sortable={sortable}
+                dragging={d.id === dragId}
+                onGripDown={onGripDown}
+                onTopic={handleTopic}
+                onDelete={handleDelete}
+                onRetry={handleRetry}
+                onPin={handlePin}
+                onSaveNote={handleSaveNote}
+              />
+            ))}
+          </div>
         )}
         {hasMore && (
           <div className="mt-6 flex justify-center">
