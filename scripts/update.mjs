@@ -50,6 +50,24 @@ const writeState = (patch) => {
 const builtAt = (dir) => fs.existsSync(path.join(dir, ".next", "BUILD_ID"));
 const lockChanged = (from, to) => git("diff", "--name-only", from, to, "--", "package-lock.json") !== "";
 
+// cpSync resolves relative symlinks to absolute paths into the SOURCE tree,
+// so after copying a staged dir its links would dangle once that dir is
+// removed. Re-point each copied link at the mirrored path inside dstRoot.
+const repointLinks = (dir, srcRoot, dstRoot) => {
+  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+    const p = path.join(dir, e.name);
+    if (e.isSymbolicLink()) {
+      const rel = path.relative(srcRoot, fs.realpathSync(p));
+      if (rel && !rel.startsWith("..") && !path.isAbsolute(rel)) {
+        fs.rmSync(p, { force: true });
+        fs.symlinkSync(path.relative(path.dirname(p), path.join(dstRoot, rel)), p);
+      }
+    } else if (e.isDirectory()) {
+      repointLinks(p, srcRoot, dstRoot);
+    }
+  }
+};
+
 // The commit the installed build actually serves (stamped by postbuild), which
 // can lag HEAD after a staged swap — unlike a plain BUILD_ID existence check.
 const installedSha = () => {
@@ -192,7 +210,10 @@ function apply() {
           try {
             fs.renameSync(srcNm, tmpNm);
           } catch {
+            // Cross-volume (EXDEV): copy, then re-point links cpSync resolved
+            // to absolute paths inside the worktree we're about to remove.
             fs.cpSync(srcNm, tmpNm, { recursive: true });
+            repointLinks(tmpNm, fs.realpathSync(srcNm), tmpNm);
           }
           fs.rmSync(dstNm, { recursive: true, force: true });
           fs.renameSync(tmpNm, dstNm);
