@@ -50,6 +50,17 @@ const writeState = (patch) => {
 const builtAt = (dir) => fs.existsSync(path.join(dir, ".next", "BUILD_ID"));
 const lockChanged = (from, to) => git("diff", "--name-only", from, to, "--", "package-lock.json") !== "";
 
+// The commit the installed build actually serves (stamped by postbuild), which
+// can lag HEAD after a staged swap — unlike a plain BUILD_ID existence check.
+const installedSha = () => {
+  try {
+    const sha = fs.readFileSync(path.join(REPO, ".next", "build-sha"), "utf8").trim();
+    return /^[0-9a-f]{40}$/i.test(sha) ? sha : null;
+  } catch {
+    return null;
+  }
+};
+
 function log(msg) {
   console.log(`[update] ${msg}`);
 }
@@ -131,7 +142,7 @@ function apply() {
   }
   const head = git("rev-parse", "HEAD");
 
-  if (old === head && builtAt(REPO)) {
+  if (installedSha() === head) {
     log(`already up to date at ${head}`);
     return;
   }
@@ -147,7 +158,9 @@ function apply() {
 
   // Swap in the staged build even if origin/main moved past it — a slightly
   // stale fast update beats a slow inline build; the button stays available
-  // for whatever is still behind.
+  // for whatever is still behind. Not when the lockfile moved between the two
+  // commits though: node_modules gets installed for HEAD's lockfile, and a
+  // serverExternalPackages dep the staged build needs could be missing.
   const isAncestor = (a, b) => {
     try {
       git("merge-base", "--is-ancestor", a, b);
@@ -157,13 +170,15 @@ function apply() {
     }
   };
   const staged =
-    st?.phase === "prepared" && st.dir && builtAt(st.dir) && isAncestor(st.sha, head) ? st : null;
+    st?.phase === "prepared" && st.dir && builtAt(st.dir) && isAncestor(st.sha, head) && !lockChanged(st.sha, head)
+      ? st
+      : null;
 
   if (staged) {
     try {
       // Only when the lockfile moved do we pay for a real install in the app;
       // sharing the staged node_modules isn't safe across lockfile changes.
-      if (lockChanged(old, staged.sha)) npmIn(REPO, ["ci"]);
+      if (lockChanged(old, head)) npmIn(REPO, ["ci"]);
       fs.rmSync(path.join(REPO, ".next"), { recursive: true, force: true });
       fs.cpSync(path.join(staged.dir, ".next"), path.join(REPO, ".next"), { recursive: true });
       try {
@@ -178,9 +193,11 @@ function apply() {
   }
 
   // No staged build: the original behaviour — install if needed, build, and on
-  // failure roll back to the previous commit and rebuild that.
-  if (lockChanged(old, head) || !fs.existsSync(path.join(REPO, "node_modules"))) npmIn(REPO, ["ci"]);
+  // failure roll back to the previous commit and rebuild that. `npm ci` must be
+  // inside the try too: it wipes node_modules first, so a registry failure
+  // without the rollback leaves the stopped app unable to restart.
   try {
+    if (lockChanged(old, head) || !fs.existsSync(path.join(REPO, "node_modules"))) npmIn(REPO, ["ci"]);
     npmIn(REPO, ["run", "build"]);
     log(`built ${head}`);
   } catch {
