@@ -34,6 +34,7 @@ export default function UpdateButton() {
   }, [check]);
 
   async function apply() {
+    const was = info?.current;
     setState("updating");
     try {
       const res = await fetch("/api/update", { method: "POST" });
@@ -42,14 +43,15 @@ export default function UpdateButton() {
       setState("failed");
       return;
     }
-    // The updater kills this server; wait until it's back on the new build, then reload.
+    // The updater kills this server; reload once it answers on a different build
+    // (a rollback keeps the same build and stays "available" for a retry).
     const deadline = Date.now() + APPLY_TIMEOUT_MS;
     const poll = async () => {
       try {
         const res = await fetch("/api/update", { cache: "no-store" });
         if (res.ok) {
           const next = (await res.json()) as UpdateInfo;
-          if (!next.available) {
+          if (next.current && next.current !== was) {
             location.reload();
             return;
           }
