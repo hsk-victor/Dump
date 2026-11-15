@@ -1186,6 +1186,7 @@ function NoteCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
               defaultValue={dump.content ?? ""}
               dir={noteDir(dump.content ?? "")}
               rows={Math.min(Math.max((dump.content ?? "").split("\n").length, 3), 30)}
+              maxLength={50000}
               aria-label="Note text"
               onBlur={() => void save()}
               onKeyDown={(e) => {
