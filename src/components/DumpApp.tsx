@@ -60,7 +60,6 @@ function FeedItem({
       }}
       className="d-item"
       data-did={dump.id}
-      data-dragging={drag.isDragging || undefined}
     >
       <DumpCard
         dump={dump}
@@ -380,7 +379,10 @@ export default function DumpApp() {
 
   function onDragStart(e: DragStartEvent) {
     setDragId(String(e.active.id));
-    setDragWidth(e.active.rect.current.initial?.width ?? 0);
+    // rect.current.initial is 0 at drag start; measure the item's DOM box instead.
+    setDragWidth(
+      gridRef.current?.querySelector(`[data-did="${e.active.id}"]`)?.getBoundingClientRect().width ?? 0,
+    );
     setDropIndex(null);
   }
 

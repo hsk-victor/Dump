@@ -2167,11 +2167,8 @@ The tape strip: frosted so the paper shows through, slightly rotated.
   height: 0.78rem;
 }
 
-/* Card dragging: the source dims in place, an ink rule marks the landing slot,
-   and the overlay is the card itself tilted under the pointer. */
-.d-item[data-dragging] .d-card {
-  opacity: 0.35;
-}
+/* Card dragging: the source lifts out of the feed, an ink rule marks the
+   landing slot, and the overlay is the card itself tilted under the pointer. */
 .d-dropmark {
   height: 3px;
   margin-bottom: var(--gap);
