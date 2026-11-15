@@ -86,5 +86,6 @@ export async function POST() {
     args = ["-c", `sleep 2 && "${script}"`];
   }
   spawn(cmd, args, { detached: true, stdio: "ignore" }).unref();
+  cached = null;
   return NextResponse.json({ started: true });
 }
