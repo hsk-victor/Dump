@@ -1141,8 +1141,11 @@ function noteBody(dump: Dump): string | null {
 function NoteCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
   const body = noteBody(dump);
   const areaRef = useRef<HTMLTextAreaElement>(null);
+  const openTimer = useRef<number | undefined>(undefined);
   const [saving, setSaving] = useState(false);
   const editing = bits.editingNote;
+
+  useEffect(() => () => window.clearTimeout(openTimer.current), []);
 
   useEffect(() => {
     if (!editing) return;
@@ -1218,10 +1221,16 @@ function NoteCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
                 dir="auto"
                 title="Click to edit"
                 onClick={(e) => {
-                  // A drag that selected text (or the double-click of selecting a word)
-                  // means the user wanted to copy, not edit.
-                  if (e.detail > 1 || window.getSelection()?.toString()) return;
-                  bits.beginNoteEdit();
+                  // Entering edit removes the text, so a single click only arms
+                  // a timer — a second click (or an in-flight selection) cancels
+                  // it, leaving double-click word select and drag-select intact.
+                  if (e.detail === 1) {
+                    openTimer.current = window.setTimeout(() => {
+                      if (!window.getSelection()?.toString()) bits.beginNoteEdit();
+                    }, 250);
+                  } else {
+                    window.clearTimeout(openTimer.current);
+                  }
                 }}
               >
                 {body}
