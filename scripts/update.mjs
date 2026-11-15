@@ -225,6 +225,12 @@ function apply() {
       fs.rmSync(path.join(REPO, ".next"), { recursive: true, force: true });
       fs.cpSync(path.join(staged.dir, ".next"), path.join(REPO, ".next"), { recursive: true });
       try {
+        // prepare may have linked the staged node_modules at the live tree —
+        // unlink it first: git worktree remove deletes through junctions.
+        const stagedNm = path.join(staged.dir, "node_modules");
+        try {
+          if (fs.lstatSync(stagedNm).isSymbolicLink()) fs.rmSync(stagedNm, { force: true });
+        } catch {}
         git("worktree", "remove", "--force", staged.dir);
       } catch {}
       writeState({ phase: "applied", sha: staged.sha });
