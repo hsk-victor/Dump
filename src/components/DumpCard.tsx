@@ -255,48 +255,98 @@ function FadeImg({ dump, bits, className, alt = "" }: { dump: Dump; bits: CardBi
 
 /* ============================ platform-native cards ============================ */
 
-function XVideo({ dump, author }: { dump: Dump; author: string | null }) {
-  const animated = dump.videoType === "animated_gif";
+/** Inline video: plays muted on loop while at least a quarter of it is on
+ *  screen and pauses when scrolled away, so off-screen cards cost nothing.
+ *  `prefers-reduced-motion` holds playback until the user starts it; a clip
+ *  without `controls` (ambient animation) gets a tap-to-play overlay instead. */
+function LoopVideo({
+  src,
+  poster,
+  controls,
+  className,
+  label,
+}: {
+  src: string;
+  poster?: string;
+  controls?: boolean;
+  className?: string;
+  label: string;
+}) {
   const video = useRef<HTMLVideoElement>(null);
-  const [reducedMotion, setReducedMotion] = useState(true);
   const [playing, setPlaying] = useState(false);
+  const [reducedMotion, setReducedMotion] = useState(false);
   useEffect(() => {
+    const el = video.current;
+    if (!el) return;
     const preference = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const update = () => {
-      setReducedMotion(preference.matches);
-      if (animated && preference.matches) video.current?.pause();
-      else if (animated) void video.current?.play().catch(() => setPlaying(false));
+    let inView = false;
+    const sync = () => {
+      if (inView && !preference.matches) void el.play().catch(() => {});
+      else el.pause();
     };
-    update();
-    preference.addEventListener("change", update);
-    return () => preference.removeEventListener("change", update);
-  }, [animated]);
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        inView = entry.isIntersecting;
+        sync();
+      },
+      { threshold: 0.25 },
+    );
+    observer.observe(el);
+    setReducedMotion(preference.matches);
+    const onPreference = () => {
+      setReducedMotion(preference.matches);
+      sync();
+    };
+    preference.addEventListener("change", onPreference);
+    return () => {
+      observer.disconnect();
+      preference.removeEventListener("change", onPreference);
+    };
+  }, []);
   return (
-    <div className="d-post-video-frame">
+    <>
       <video
         ref={video}
+        className={className}
+        src={src}
+        poster={poster}
+        controls={controls}
+        muted
+        loop
+        playsInline
+        preload="metadata"
+        aria-label={label}
+        onPlaying={() => setPlaying(true)}
+        onPause={() => setPlaying(false)}
+        onError={() => setPlaying(false)}
+      />
+      {!controls && (reducedMotion || !playing) && (
+        <button
+          className="d-animation-toggle"
+          aria-label={playing ? "Pause animation" : "Play animation"}
+          onClick={() => {
+            if (playing) video.current?.pause();
+            else void video.current?.play().catch(() => setPlaying(false));
+          }}
+        >
+          {!playing && <PlayBadge />}
+        </button>
+      )}
+    </>
+  );
+}
+
+function XVideo({ dump, author }: { dump: Dump; author: string | null }) {
+  const animated = dump.videoType === "animated_gif";
+  return (
+    <div className="d-post-video-frame">
+      <LoopVideo
         className="d-post-video"
         src={`/api/dumps/${dump.id}/video`}
         poster={dump.videoPosterUrl ?? undefined}
         controls={!animated}
-        autoPlay={animated && !reducedMotion}
-        muted={animated}
-        loop={animated}
-        playsInline
-        preload={animated && !reducedMotion ? "auto" : "none"}
-        onPlaying={() => setPlaying(true)}
-        onPause={() => setPlaying(false)}
-        onError={() => setPlaying(false)}
-        aria-label={`${animated ? "Animation" : "Video"} by ${author ?? "X author"}`}
+        label={`${animated ? "Animation" : "Video"} by ${author ?? "X author"}`}
       />
-      {animated && (reducedMotion || !playing) && (
-        <button className="d-animation-toggle" aria-label={playing ? "Pause animation" : "Play animation"} onClick={() => {
-          if (playing) video.current?.pause();
-          else void video.current?.play().catch(() => setPlaying(false));
-        }}>
-          {!playing && <PlayBadge />}
-        </button>
-      )}
     </div>
   );
 }
@@ -725,7 +775,7 @@ function VideoCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
       {bits.actions}
       {dump.videoUrl ? (
         <div className="d-media d-vmedia">
-          <video src={dump.videoUrl} poster={dump.videoPosterUrl ?? undefined} controls playsInline preload="metadata" aria-label={t.title ?? "Video"} />
+          <LoopVideo src={dump.videoUrl} poster={dump.videoPosterUrl ?? undefined} controls label={t.title ?? "Video"} />
           <MediaMark dump={dump} />
         </div>
       ) : (
