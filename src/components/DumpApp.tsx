@@ -403,8 +403,13 @@ export default function DumpApp() {
     }
     const i = list.findIndex((d) => d.id === oid);
     if (i < 0) return;
-    const dragged = active.rect.current.translated;
-    const before = dragged ? dragged.top + dragged.height / 2 < over.rect.top + over.rect.height / 2 : true;
+    // The pointer's own position inside the target decides before/after — the
+    // dragged card's center mispredicts it whenever the two cards differ in height.
+    const activator = e.activatorEvent;
+    const before =
+      activator instanceof MouseEvent
+        ? activator.clientY + e.delta.y < over.rect.top + over.rect.height / 2
+        : true;
     setDropIndex(before ? i : i + 1);
   }
 
