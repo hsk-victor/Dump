@@ -1,8 +1,8 @@
 import { after, NextResponse, type NextRequest } from "next/server";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { deleteDump, getDump, updateDump, UPLOAD_DIR } from "@/lib/db";
-import { enrichDump } from "@/lib/enrich";
+import { deleteDump, getDump, topPosition, updateDump, UPLOAD_DIR } from "@/lib/db";
+import { enrichDump, noteTitle } from "@/lib/enrich";
 import { isTopic } from "@/lib/taxonomy";
 
 export const runtime = "nodejs";
@@ -26,6 +26,23 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
   }
   if (isTopic(body.topic)) {
     return NextResponse.json(updateDump(id, { topic: body.topic, topicLocked: true, classifiedBy: "you" }));
+  }
+  // Pin and/or manual reorder arrive together from card drags.
+  if (typeof body.pinned === "boolean" || typeof body.position === "number") {
+    const patch: Record<string, unknown> = {};
+    if (typeof body.pinned === "boolean") patch.pinned = body.pinned;
+    if (typeof body.position === "number" && Number.isFinite(body.position)) patch.position = body.position;
+    // A pin with no explicit slot floats to the very top of the pinned group.
+    if (patch.pinned === true && patch.position === undefined) patch.position = topPosition();
+    if (Object.keys(patch).length) return NextResponse.json(updateDump(id, patch));
+  }
+  // Note body edits: the title is always the first line, re-derived on save.
+  if (typeof body.content === "string") {
+    const dump = getDump(id)!;
+    if (dump.kind !== "note") return NextResponse.json({ error: "Only notes can be edited" }, { status: 400 });
+    const content = body.content.trim().slice(0, 50000);
+    if (!content) return NextResponse.json({ error: "Notes can't be empty" }, { status: 400 });
+    return NextResponse.json(updateDump(id, { content, title: noteTitle(content) }));
   }
   return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
 }

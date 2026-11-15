@@ -36,6 +36,9 @@ export interface Dump {
   tags: string[];
   classifiedBy: "rules" | "ai" | "you" | null;
   topicLocked: boolean;
+  pinned: boolean;
+  /** Manual sort key — the feed orders pinned first, then position DESC (newest = max+1). Drags slot it between neighbours. */
+  position: number;
   createdAt: number;
   updatedAt: number;
 }
@@ -66,6 +69,8 @@ interface Row {
   tags: string;
   classified_by: string | null;
   topic_locked: number;
+  pinned: number;
+  position: number;
   created_at: number;
   updated_at: number;
 }
@@ -100,6 +105,8 @@ CREATE TABLE IF NOT EXISTS dumps (
   tags TEXT NOT NULL DEFAULT '[]',
   classified_by TEXT,
   topic_locked INTEGER NOT NULL DEFAULT 0,
+  pinned INTEGER NOT NULL DEFAULT 0,
+  position REAL NOT NULL DEFAULT 0,
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL
 );
@@ -145,6 +152,17 @@ export function db(): Database.Database {
     for (const name of ["author_handle", "author_avatar_url", "video_url", "video_poster_url", "video_type"]) {
       if (!cols.some((c) => c.name === name)) conn.exec(`ALTER TABLE dumps ADD COLUMN ${name} TEXT`);
     }
+    if (!cols.some((c) => c.name === "pinned")) conn.exec("ALTER TABLE dumps ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0");
+    if (!cols.some((c) => c.name === "position")) {
+      conn.exec("ALTER TABLE dumps ADD COLUMN position REAL NOT NULL DEFAULT 0");
+      // Backfill by created_at rank (not rowid): re-dumped links bumped created_at,
+      // and their place at the top of the feed must survive under position DESC.
+      conn.exec(`UPDATE dumps SET position = (
+        SELECT COUNT(*) FROM dumps d2
+        WHERE d2.created_at < dumps.created_at
+           OR (d2.created_at = dumps.created_at AND d2.rowid <= dumps.rowid)
+      )`);
+    }
     globalForDb.__dumpDb = conn;
   }
   return globalForDb.__dumpDb;
@@ -178,6 +196,8 @@ function toDump(r: Row): Dump {
     tags: safeJsonArray(r.tags),
     classifiedBy: r.classified_by as Dump["classifiedBy"],
     topicLocked: r.topic_locked === 1,
+    pinned: r.pinned === 1,
+    position: r.position,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
@@ -233,6 +253,8 @@ const COLUMN: Record<string, string> = {
   tags: "tags",
   classifiedBy: "classified_by",
   topicLocked: "topic_locked",
+  pinned: "pinned",
+  position: "position",
 };
 
 type Patch = Partial<Omit<Dump, "id" | "createdAt" | "updatedAt">>;
@@ -245,15 +267,25 @@ function toColumns(patch: Patch): Record<string, unknown> {
     if (key === "tags") out[col] = JSON.stringify(value);
     else if (key === "imageUrls") out[col] = (value as string[] | null)?.length ? JSON.stringify(value) : null;
     else if (key === "subject") out[col] = value ? JSON.stringify(value) : null;
-    else if (key === "topicLocked") out[col] = value ? 1 : 0;
+    else if (key === "topicLocked" || key === "pinned") out[col] = value ? 1 : 0;
     else out[col] = value;
   }
   return out;
 }
 
+/** Next slot at the top of the feed: ordering is position DESC, so new/reshuffled cards take max+1. */
+export function topPosition(): number {
+  return (db().prepare("SELECT COALESCE(MAX(position), 0) + 1 AS p FROM dumps").get() as { p: number }).p;
+}
+
 export function createDump(fields: Patch & { kind: Kind }, id: string = randomUUID()): Dump {
   const now = Date.now();
-  const cols = { ...toColumns({ topic: "other", status: "processing", tags: [], ...fields }), id, created_at: now, updated_at: now };
+  const cols = {
+    ...toColumns({ topic: "other", status: "processing", tags: [], position: topPosition(), ...fields }),
+    id,
+    created_at: now,
+    updated_at: now,
+  };
   const names = Object.keys(cols);
   db()
     .prepare(`INSERT INTO dumps (${names.join(", ")}) VALUES (${names.map((n) => `@${n}`).join(", ")})`)
@@ -284,7 +316,11 @@ export function findByUrl(url: string): Dump | null {
 
 /** Moves an existing dump back to the top of the feed. */
 export function bumpDump(id: string): Dump | null {
-  db().prepare("UPDATE dumps SET created_at = @now, updated_at = @now WHERE id = @id").run({ now: Date.now(), id });
+  db()
+    .prepare(
+      "UPDATE dumps SET created_at = @now, updated_at = @now, position = (SELECT COALESCE(MAX(position), 0) + 1 FROM dumps) WHERE id = @id",
+    )
+    .run({ now: Date.now(), id });
   return getDump(id);
 }
 
@@ -331,11 +367,11 @@ export function listDumps({ q, kind, topic, limit = 200, offset = 0 }: ListOptio
     params.fts = fts;
     sql = `SELECT d.* FROM dumps_fts f JOIN dumps d ON d.rowid = f.rowid
            WHERE dumps_fts MATCH @fts ${where.length ? `AND ${where.join(" AND ")}` : ""}
-           ORDER BY bm25(dumps_fts, 10.0, 4.0, 1.0, 4.0, 3.0, 6.0, 2.0, 2.0, 2.0), d.created_at DESC, d.id
+           ORDER BY d.pinned DESC, bm25(dumps_fts, 10.0, 4.0, 1.0, 4.0, 3.0, 6.0, 2.0, 2.0, 2.0), d.created_at DESC, d.id
            LIMIT @limit OFFSET @offset`;
   } else {
     sql = `SELECT d.* FROM dumps d ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
-           ORDER BY d.created_at DESC, d.id LIMIT @limit OFFSET @offset`;
+           ORDER BY d.pinned DESC, d.position DESC, d.created_at DESC, d.id LIMIT @limit OFFSET @offset`;
   }
   return (db().prepare(sql).all(params) as Row[]).map(toDump);
 }

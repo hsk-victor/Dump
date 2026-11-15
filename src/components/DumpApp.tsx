@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Toaster, toast as sonnerToast } from "sonner";
 import type { Dump } from "@/lib/db";
@@ -13,6 +13,113 @@ import SectionNav, { type Counts } from "./SectionNav";
 import UpdateButton from "./UpdateButton";
 
 const PAGE_SIZE = 60;
+/** Card height guess before its first measurement, plus the 6px --gap between cards. */
+const ESTIMATE_H = 260;
+const GAP_EST = 6;
+/** Pointer must travel this far before a press on the grip becomes a drag. */
+const DRAG_THRESHOLD = 6;
+/** Hold a card this long without moving to lift it into a drag (iOS-style). */
+const HOLD_MS = 240;
+/** Targets inside a card that never arm a hold-drag — buttons, inputs, media. */
+const HOLD_EXCLUDE = "button, input, textarea, select, summary, video, audio, iframe, [contenteditable], [role='menu'], [role='dialog'], [role='listbox'], .d-actions, .d-menu";
+/** Viewport margin that starts auto-scrolling while a card is held. */
+const EDGE_PX = 72;
+/** How far past the grid the pointer may go before the drop is cancelled. */
+const SLOT_SLOP = 48;
+/** Re-aiming the landing slot needs the pointer to move this far — damps flip-flop. */
+const SLOT_HYSTERESIS = 8;
+/** Attached non-passively while a touch drag is live: blocks the scroll steal. */
+const blockTouchMove = (e: TouchEvent) => e.preventDefault();
+
+interface Rect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+interface PendingDrag {
+  id: string;
+  pointerId: number;
+  /** Pointerdown position — threshold anchor. */
+  x: number;
+  y: number;
+  /** Latest pointer position — the drag lifts from here. */
+  lx: number;
+  ly: number;
+  timer: number;
+  /** Element the pointer gets captured to (grip, or the card's .d-item). */
+  cap: HTMLElement;
+  /** Hold mode arms by timer (card body); move mode arms by slop (grip). */
+  hold: boolean;
+}
+
+interface DragState {
+  id: string;
+  pointerId: number;
+  /** The .d-item element tracking the pointer. */
+  el: HTMLElement;
+  /** Grab offset inside the card, so it stays under the pointer 1:1. */
+  grabX: number;
+  grabY: number;
+  /** Card size at grab time; reserves its landing slot while it flies. */
+  w: number;
+  h: number;
+  /** Landing index in the dragged-card-removed order; null = drop cancels. */
+  j: number | null;
+  /** Pointer coords where j last changed (hysteresis anchor). */
+  jx: number;
+  jy: number;
+  /** Latest pointer client coords. */
+  px: number;
+  py: number;
+  raf: number;
+}
+
+/** One card in the feed; the grid positions it absolutely via transform. */
+function FeedItem({
+  dump,
+  fresh,
+  removing,
+  sortable,
+  dragging,
+  onGripDown,
+  onItemDown,
+  onItemClickCapture,
+  ...handlers
+}: {
+  dump: Dump;
+  fresh: boolean;
+  removing: boolean;
+  sortable: boolean;
+  dragging: boolean;
+  onGripDown: (e: ReactPointerEvent<HTMLButtonElement>, id: string) => void;
+  onItemDown: (e: ReactPointerEvent<HTMLDivElement>, id: string) => void;
+  onItemClickCapture: (e: ReactMouseEvent<HTMLDivElement>) => void;
+  onTopic: (id: string, topic: string) => void;
+  onDelete: (id: string) => void;
+  onRetry: (id: string) => void;
+  onPin: (id: string, pinned: boolean) => void;
+  onSaveNote: (id: string, content: string) => Promise<boolean>;
+}) {
+  return (
+    <div
+      className="d-item"
+      data-did={dump.id}
+      data-dragging={dragging ? "" : undefined}
+      onPointerDown={sortable ? (e) => onItemDown(e, dump.id) : undefined}
+      onClickCapture={onItemClickCapture}
+    >
+      <DumpCard
+        dump={dump}
+        fresh={fresh}
+        removing={removing}
+        drag={sortable ? { onPointerDown: (e) => onGripDown(e, dump.id) } : undefined}
+        {...handlers}
+      />
+    </div>
+  );
+}
 
 export default function DumpApp() {
   const router = useRouter();
@@ -43,6 +150,21 @@ export default function DumpApp() {
   const [dark, setDark] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const settingsRef = useRef<HTMLDivElement>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
+  const colCountRef = useRef(1);
+  const cardHeights = useRef(new Map<string, number>());
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
+  const dragRef = useRef<DragState | null>(null);
+  const pendingRef = useRef<PendingDrag | null>(null);
+  /** Set by the click that trails a real drag — eats it so it can't edit/navigate. */
+  const suppressClickRef = useRef(false);
+  /** Latest packed slot per card (grid coords), plus the phantom slot while dragging. */
+  const slotRects = useRef(new Map<string, Rect>());
+  const ghostRect = useRef<Rect | null>(null);
+  const [dragId, setDragId] = useState<string | null>(null);
+  // Manual order only makes sense under position sort — a search ranks by relevance instead.
+  const sortable = !q;
 
   useEffect(() => {
     try {
@@ -155,13 +277,103 @@ export default function DumpApp() {
     return () => clearTimeout(t);
   }, [search, q, setFilter]);
 
-  // Poll while anything is still being sorted in the background.
+  // Poll while anything is still being sorted in the background. Pause mid-drag so the
+  // list doesn't re-render under the pointer.
   const anyProcessing = items.some((d) => d.status === "processing") || pendingToasts.current.size > 0;
   useEffect(() => {
-    if (!anyProcessing) return;
+    if (!anyProcessing || dragId) return;
     const t = setInterval(load, 1200);
     return () => clearInterval(t);
-  }, [anyProcessing, load]);
+  }, [anyProcessing, dragId, load]);
+
+  // Greedily packs the flat order into columns by measured height and writes each
+  // card's slot as a transform — positions are layout data, so React never re-renders
+  // to move a card. While dragging, a phantom of the grabbed card's size reserves
+  // its landing slot and siblings FLIP around it via their transform transition.
+  const applyLayout = useCallback(() => {
+    const grid = gridRef.current;
+    if (!grid) return;
+    const cs = getComputedStyle(grid);
+    const gap = parseFloat(cs.columnGap) || GAP_EST;
+    const n = Math.max(1, colCountRef.current);
+    const colW = (grid.clientWidth - gap * (n - 1)) / n;
+    const d = dragRef.current;
+    const list = d ? itemsRef.current.filter((x) => x.id !== d.id) : itemsRef.current;
+    slotRects.current.clear();
+    ghostRect.current = null;
+    const colsH = new Array<number>(n).fill(0);
+    const pack = (id: string | null, h: number) => {
+      let c = 0;
+      for (let i = 1; i < colsH.length; i++) if (colsH[i] < colsH[c]) c = i;
+      const r: Rect = { x: c * (colW + gap), y: colsH[c], w: colW, h };
+      if (id === null) ghostRect.current = r;
+      else slotRects.current.set(id, r);
+      colsH[c] = r.y + h + gap;
+    };
+    for (let i = 0; i <= list.length; i++) {
+      if (d && d.j === i) pack(null, d.h);
+      if (i < list.length) pack(list[i].id, cardHeights.current.get(list[i].id) ?? ESTIMATE_H);
+    }
+    grid.style.height = `${Math.max(0, Math.max(...colsH) - gap)}px`;
+    for (const node of grid.querySelectorAll<HTMLElement>(".d-item")) {
+      const id = node.dataset.did!;
+      if (d && id === d.id) {
+        node.style.width = `${colW}px`;
+        continue; // pointer-driven — leave its transform alone
+      }
+      const r = slotRects.current.get(id);
+      if (!r) continue;
+      node.style.width = `${r.w}px`;
+      node.style.transform = `translate3d(${r.x}px, ${r.y}px, 0)`;
+    }
+  }, []);
+
+  // Re-pack on every commit (new items, reorder, drag begin/end) before paint.
+  useLayoutEffect(() => {
+    applyLayout();
+  }, [items, dragId, applyLayout]);
+
+  // Column count follows the container width and the card-size preference; the CSS
+  // column-width on .d-grid is kept purely so this can read the resolved pixel width.
+  useEffect(() => {
+    const el = gridRef.current;
+    if (!el) return;
+    const compute = () => {
+      const cs = getComputedStyle(el);
+      const gap = parseFloat(cs.columnGap) || GAP_EST;
+      const w = parseFloat(cs.columnWidth) || 260;
+      const n = Math.max(1, Math.floor((el.clientWidth + gap) / (w + gap)));
+      if (n !== colCountRef.current) {
+        colCountRef.current = n;
+        applyLayout();
+      }
+    };
+    compute();
+    const ro = new ResizeObserver(compute);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [density, loaded, items.length > 0, applyLayout]);
+
+  // Measure each rendered card once so the greedy column split can balance heights.
+  useEffect(() => {
+    const el = gridRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      let changed = false;
+      for (const e of entries) {
+        const id = (e.target as HTMLElement).dataset.did;
+        if (!id) continue;
+        const h = Math.round(e.borderBoxSize?.[0]?.blockSize ?? e.contentRect.height);
+        if (Math.abs((cardHeights.current.get(id) ?? -1) - h) > 4) {
+          cardHeights.current.set(id, h);
+          changed = true;
+        }
+      }
+      if (changed) applyLayout();
+    });
+    el.querySelectorAll(".d-item").forEach((n) => ro.observe(n));
+    return () => ro.disconnect();
+  });
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -224,6 +436,275 @@ export default function DumpApp() {
       await fetch(`/api/dumps/${id}`, { method: "DELETE" });
       load();
     }, 180);
+  }
+
+  async function handlePin(id: string, pinned: boolean) {
+    setItems((prev) => prev.map((d) => (d.id === id ? { ...d, pinned } : d)));
+    const res = await fetch(`/api/dumps/${id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ pinned }) });
+    if (!res.ok) {
+      toast("Couldn't pin that", "error");
+      load();
+      return;
+    }
+    toast(pinned ? "Pinned to the top" : "Unpinned");
+    load();
+  }
+
+  // ── Drag to reorder ──
+  // The grabbed card's wrapper (.d-item) follows the pointer via a direct transform
+  // write every animation frame; siblings reflow around a phantom slot through their
+  // own transform transitions. React state only changes on drag start and settle.
+
+  /** Where the card would land: index into the order with the dragged card removed. */
+  function computeSlot(d: DragState, grid: HTMLElement): number | null {
+    const r = grid.getBoundingClientRect();
+    const px = d.px - r.left;
+    const py = d.py - r.top;
+    // Cancel when the CARD's box leaves the grid, not when the pointer does —
+    // a tall card grabbed near its top needs the pointer well above the grid
+    // to aim at slot 0.
+    const cx = px - d.grabX + d.w / 2;
+    const cy = py - d.grabY + d.h / 2;
+    if (px + d.w - d.grabX < -SLOT_SLOP || px - d.grabX > grid.clientWidth + SLOT_SLOP || cy + d.h / 2 < -SLOT_SLOP * 2 || cy - d.h / 2 > grid.clientHeight + SLOT_SLOP * 2)
+      return null;
+    const g = ghostRect.current;
+    if (g && cx >= g.x && cx <= g.x + g.w && cy >= g.y && cy <= g.y + g.h) return d.j;
+    const rest = itemsRef.current.filter((x) => x.id !== d.id);
+    for (let i = 0; i < rest.length; i++) {
+      const rr = slotRects.current.get(rest[i].id);
+      if (rr && cx >= rr.x && cx <= rr.x + rr.w && cy >= rr.y && cy <= rr.y + rr.h)
+        return cy < rr.y + rr.h / 2 ? i : i + 1;
+    }
+    // Between columns or below a column's last card: land next to the nearest card.
+    let best = -1;
+    let bd = Infinity;
+    for (let i = 0; i < rest.length; i++) {
+      const rr = slotRects.current.get(rest[i].id);
+      if (!rr) continue;
+      const dx = Math.max(rr.x - cx, 0, cx - (rr.x + rr.w));
+      const dy = Math.max(rr.y - cy, 0, cy - (rr.y + rr.h));
+      const dd = dx * dx + dy * dy;
+      if (dd < bd) {
+        bd = dd;
+        best = i;
+      }
+    }
+    if (best < 0) return rest.length ? rest.length : 0;
+    const rr = slotRects.current.get(rest[best].id)!;
+    return cy < rr.y + rr.h / 2 ? best : best + 1;
+  }
+
+  function dragTick() {
+    const d = dragRef.current;
+    const grid = gridRef.current;
+    if (!d || !grid) return;
+    d.raf = 0;
+    // Drift the page while the pointer hugs a viewport edge.
+    let scroll = 0;
+    if (d.py < EDGE_PX) scroll = -Math.ceil((EDGE_PX - d.py) / 4);
+    else if (d.py > window.innerHeight - EDGE_PX) scroll = Math.ceil((d.py - (window.innerHeight - EDGE_PX)) / 4);
+    if (scroll) window.scrollBy(0, scroll);
+    const r = grid.getBoundingClientRect();
+    d.el.style.transform = `translate3d(${d.px - r.left - d.grabX}px, ${d.py - r.top - d.grabY}px, 0)`;
+    const j = computeSlot(d, grid);
+    // While auto-scrolling the pointer is static but the grid moves under it —
+    // re-aim every tick; the hysteresis (a pointer-distance guard) doesn't apply.
+    if (j !== d.j && (scroll !== 0 || Math.hypot(d.px - d.jx, d.py - d.jy) >= SLOT_HYSTERESIS)) {
+      d.j = j;
+      d.jx = d.px;
+      d.jy = d.py;
+      applyLayout();
+    }
+    if (scroll && dragRef.current) d.raf = requestAnimationFrame(dragTick);
+  }
+
+  function beginDrag(id: string, pointerId: number, x: number, y: number, cap: HTMLElement) {
+    const grid = gridRef.current;
+    if (!grid) return;
+    const el = grid.querySelector<HTMLElement>(`[data-did="${id}"]`);
+    if (!el) return;
+    const box = el.getBoundingClientRect();
+    try {
+      cap.setPointerCapture(pointerId);
+    } catch {}
+    const idx = itemsRef.current.findIndex((it) => it.id === id);
+    dragRef.current = {
+      id,
+      pointerId,
+      el,
+      grabX: x - box.left,
+      grabY: y - box.top,
+      w: box.width,
+      h: box.height,
+      j: idx,
+      jx: x,
+      jy: y,
+      px: x,
+      py: y,
+      raf: 0,
+    };
+    // Once the drag owns a touch gesture, stop the page stealing it as a scroll.
+    window.addEventListener("touchmove", blockTouchMove, { passive: false });
+    document.body.classList.add("d-dragging");
+    setDragId(id);
+    applyLayout(); // open the phantom slot at the card's own seat
+  }
+
+  function finishDrag(cancelled: boolean) {
+    const d = dragRef.current;
+    if (!d) return;
+    if (d.raf) cancelAnimationFrame(d.raf);
+    dragRef.current = null;
+    suppressClickRef.current = true; // the click that trails pointerup isn't a click
+    window.removeEventListener("touchmove", blockTouchMove);
+    document.body.classList.remove("d-dragging");
+    setDragId(null); // restores transitions; the card eases into its slot
+    const j = cancelled ? null : d.j;
+    if (j === null) return;
+    const all = itemsRef.current;
+    const dragged = all.find((x) => x.id === d.id);
+    if (!dragged || j === all.indexOf(dragged)) return;
+    const list = all.filter((x) => x.id !== d.id);
+    // Crossing the pinned boundary flips the flag: dragging below every pinned card
+    // unpins, dragging an unpinned card into the pinned block pins it.
+    const pinnedCount = list.filter((x) => x.pinned).length;
+    const pinned = dragged.pinned ? j <= pinnedCount : j < pinnedCount;
+    // Each group sorts by position independently, so the slot must be priced
+    // against same-group neighbours — a midpoint across the boundary can rank
+    // the card above the very card it was dropped below.
+    const beforeJ = list.slice(0, j).filter((x) => x.pinned === pinned).length;
+    const same = list.filter((x) => x.pinned === pinned);
+    const prev = same[beforeJ - 1];
+    const next = same[beforeJ];
+    const position = prev && next ? (prev.position + next.position) / 2 : prev ? prev.position - 1 : next ? next.position + 1 : 1;
+    const moved = { ...dragged, pinned, position };
+    setItems([...list.slice(0, j), moved, ...list.slice(j)]);
+    fetch(`/api/dumps/${d.id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(pinned === dragged.pinned ? { position } : { pinned, position }),
+    }).then((res) => {
+      if (!res.ok) {
+        toast("Couldn't move that card", "error");
+        load();
+      }
+    });
+  }
+
+  // Shared arming for both entry points: the grip activates on a 6px move,
+  // the card body activates by holding still for HOLD_MS. After activation the
+  // same pointer-tracked flight applies either way.
+  function armDrag(e: ReactPointerEvent<HTMLElement>, id: string, cap: HTMLElement, hold: boolean) {
+    // Second fingers and non-primary buttons never join or restart a drag.
+    if (!e.isPrimary || (e.pointerType === "mouse" && e.button !== 0) || pendingRef.current || dragRef.current) return;
+    suppressClickRef.current = false;
+    const pending: PendingDrag = { id, pointerId: e.pointerId, x: e.clientX, y: e.clientY, lx: e.clientX, ly: e.clientY, timer: 0, cap, hold };
+    pendingRef.current = pending;
+
+    const activate = () => {
+      if (pendingRef.current !== pending) return;
+      pending.timer = 0;
+      delete cap.dataset.arming;
+      delete cap.dataset.noSelect;
+      beginDrag(pending.id, pending.pointerId, pending.lx, pending.ly, cap);
+    };
+    if (hold) {
+      pending.timer = window.setTimeout(activate, HOLD_MS);
+      cap.dataset.arming = "";
+      // Suppressing selection is only needed where a long-press natively
+      // selects (touch callout). On a mouse it would kill text selection and
+      // double-click word-select during the hold window.
+      if (e.pointerType !== "mouse") cap.dataset.noSelect = "";
+    }
+
+    const onMove = (ev: PointerEvent) => {
+      if (ev.pointerId !== pending.pointerId) return;
+      pending.lx = ev.clientX;
+      pending.ly = ev.clientY;
+      const d = dragRef.current;
+      if (!d) {
+        if (Math.hypot(ev.clientX - pending.x, ev.clientY - pending.y) < DRAG_THRESHOLD) return;
+        // Moving past slop before the hold fired means a click/scroll intent.
+        if (pending.hold) {
+          teardown();
+          return;
+        }
+        activate();
+        return;
+      }
+      d.px = ev.clientX;
+      d.py = ev.clientY;
+      if (!d.raf) d.raf = requestAnimationFrame(dragTick);
+    };
+    const onUp = (ev: PointerEvent) => {
+      if (ev.pointerId !== pending.pointerId) return;
+      teardown();
+      finishDrag(false);
+    };
+    const onCancel = (ev: PointerEvent) => {
+      if (ev.pointerId !== pending.pointerId) return;
+      teardown();
+      finishDrag(true);
+    };
+    const onKey = (ev: KeyboardEvent) => {
+      if (ev.key !== "Escape") return;
+      teardown();
+      finishDrag(true);
+    };
+    // While armed or flying, kill the touch long-press context menu and any
+    // native link/image drag that would fight our own.
+    const onCtx = (ev: Event) => ev.preventDefault();
+    const onNativeDrag = (ev: Event) => ev.preventDefault();
+    const teardown = () => {
+      pendingRef.current = null;
+      clearTimeout(pending.timer);
+      delete cap.dataset.arming;
+      delete cap.dataset.noSelect;
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onCancel);
+      window.removeEventListener("keydown", onKey);
+      document.removeEventListener("contextmenu", onCtx, true);
+      document.removeEventListener("dragstart", onNativeDrag, true);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onCancel);
+    window.addEventListener("keydown", onKey);
+    document.addEventListener("contextmenu", onCtx, true);
+    document.addEventListener("dragstart", onNativeDrag, true);
+  }
+
+  function onGripDown(e: ReactPointerEvent<HTMLButtonElement>, id: string) {
+    armDrag(e, id, e.currentTarget, false);
+  }
+
+  /** Press-and-hold anywhere on the card (except interactive targets) lifts it. */
+  function onItemDown(e: ReactPointerEvent<HTMLDivElement>, id: string) {
+    if ((e.target as HTMLElement).closest(HOLD_EXCLUDE)) return;
+    armDrag(e, id, e.currentTarget, true);
+  }
+
+  /** The click that trails a real drag must not edit a note or open a link. */
+  function onItemClickCapture(e: ReactMouseEvent<HTMLDivElement>) {
+    if (!suppressClickRef.current) return;
+    suppressClickRef.current = false;
+    e.preventDefault();
+    e.stopPropagation();
+  }
+
+  /** Saves a note's edited body. Returns whether the save landed so the card can leave edit mode. */
+  async function handleSaveNote(id: string, content: string): Promise<boolean> {
+    const res = await fetch(`/api/dumps/${id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ content }) });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      toast(err.error ?? "Couldn't save that note", "error");
+      return false;
+    }
+    const updated = (await res.json()) as Dump;
+    setItems((prev) => prev.map((d) => (d.id === id ? updated : d)));
+    toast("Note saved");
+    return true;
   }
 
   async function handleRetry(id: string) {
@@ -396,16 +877,23 @@ export default function DumpApp() {
             )}
           </div>
         ) : (
-          <div className="d-grid">
+          <div className="d-grid" ref={gridRef} data-dragging={dragId ? "" : undefined}>
             {items.map((d) => (
-              <DumpCard
+              <FeedItem
                 key={d.id}
                 dump={d}
                 fresh={d.id === freshId}
                 removing={removingIds.has(d.id)}
+                sortable={sortable}
+                dragging={d.id === dragId}
+                onGripDown={onGripDown}
+                onItemDown={onItemDown}
+                onItemClickCapture={onItemClickCapture}
                 onTopic={handleTopic}
                 onDelete={handleDelete}
                 onRetry={handleRetry}
+                onPin={handlePin}
+                onSaveNote={handleSaveNote}
               />
             ))}
           </div>

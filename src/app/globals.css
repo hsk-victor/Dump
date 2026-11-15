@@ -19,6 +19,7 @@
   --hairline: rgb(0 0 0 / 0.07);
   --shadow: 0 0 0 1px rgb(0 0 0 / 0.03), 0 1px 2px rgb(0 0 0 / 0.04), 0 12px 30px -16px rgb(0 0 0 / 0.16);
   --shadow-hover: 0 0 0 1px rgb(0 0 0 / 0.04), 0 2px 4px rgb(0 0 0 / 0.05), 0 20px 48px -16px rgb(0 0 0 / 0.28);
+  --shadow-drag: 0 0 0 1px rgb(0 0 0 / 0.04), 0 2px 6px rgb(0 0 0 / 0.06), 0 26px 60px -12px rgb(0 0 0 / 0.35);
   --dock-shadow: 0 18px 50px -12px rgb(0 0 0 / 0.28), 0 2px 6px rgb(0 0 0 / 0.06);
   --radius: 14px;
 }
@@ -34,6 +35,7 @@
   --hairline: rgb(255 255 255 / 0.07);
   --shadow: 0 0 0 1px rgb(255 255 255 / 0.05), 0 1px 2px rgb(0 0 0 / 0.3), 0 12px 30px -16px rgb(0 0 0 / 0.5);
   --shadow-hover: 0 0 0 1px rgb(255 255 255 / 0.1), 0 2px 4px rgb(0 0 0 / 0.4), 0 20px 48px -14px rgb(0 0 0 / 0.75);
+  --shadow-drag: 0 0 0 1px rgb(255 255 255 / 0.08), 0 2px 8px rgb(0 0 0 / 0.4), 0 30px 64px -12px rgb(0 0 0 / 0.8);
   --dock-shadow: 0 0 0 1px rgb(255 255 255 / 0.08), 0 20px 50px -12px rgb(0 0 0 / 0.8);
 }
 
@@ -394,8 +396,32 @@ button {
   padding: 0.25rem 1.25rem 9rem;
 }
 .d-grid {
+  position: relative;
+  /* Not a real multicol — the feed is JS-packed absolute positioning so cards
+     can FLIP between slots without remounting. column-width/column-gap stay
+     only as the resolved values the layout code reads. */
   column-width: var(--col-w);
   column-gap: var(--gap);
+}
+/* Each card sits at its packed slot via translate3d; whenever the pack changes
+   the transform transition carries it there — that's the FLIP. */
+.d-item {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transition: transform 0.26s var(--ease-out);
+}
+.d-grid[data-dragging] .d-item {
+  will-change: transform;
+}
+/* The held card leaves the pack: pointer writes its transform directly, so no
+   transition, and it floats above siblings. */
+.d-item[data-dragging] {
+  z-index: 5;
+  transition: none;
+}
+.d-item > .d-card {
+  margin-bottom: 0;
 }
 .d-card {
   position: relative;
@@ -405,7 +431,7 @@ button {
   overflow: hidden;
   background: var(--surface);
   box-shadow: var(--shadow);
-  transition: box-shadow 0.2s, translate 0.2s var(--ease-out), opacity 0.16s var(--ease-out);
+  transition: box-shadow 0.2s, translate 0.2s var(--ease-out), opacity 0.16s var(--ease-out), transform 0.18s var(--ease-out);
 }
 @media (hover: hover) and (pointer: fine) {
   .d-card:hover {
@@ -1951,8 +1977,9 @@ button {
   color: var(--muted);
 }
 /* Ruled lines repeat at the text's line-height so they read as writing lines.
-   The -0.256em offset puts each rule on the text baseline (half-leading +
-   font ascent ≈ 1.244em below the block top, measured on Plus Jakarta Sans). */
+   The baseline sits ≈1.244em below the block top (half-leading + font ascent,
+   measured on Plus Jakarta Sans); the -0.14em offset drops each rule ~0.1em
+   under it so the words float just above their line instead of touching it. */
 .d-note-lines {
   font-size: 0.88rem;
   line-height: 1.5;
@@ -1963,6 +1990,7 @@ button {
   -webkit-line-clamp: 10;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  cursor: text;
   background: repeating-linear-gradient(
     to bottom,
     transparent 0,
@@ -1970,7 +1998,29 @@ button {
     var(--note-rule) calc(1.5em - 1px),
     var(--note-rule) 1.5em
   );
-  background-position: 0 -0.256em;
+  background-position: 0 -0.14em;
+}
+/* In-place editor: the same ruled lines under an invisible textarea. */
+.d-note-edit {
+  display: block;
+  width: 100%;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  color: var(--ink-2);
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent calc(1.5em - 1px),
+    var(--note-rule) calc(1.5em - 1px),
+    var(--note-rule) 1.5em
+  );
+  background-position: 0 -0.14em;
+  outline: none;
+  resize: vertical;
+  min-height: 4.5em;
 }
 .d-card[data-kind="note"] .d-annotation {
   margin-inline-start: -0.5rem;
@@ -2097,7 +2147,11 @@ The tape strip: frosted so the paper shows through, slightly rotated.
     right: 0.55rem;
   }
   .d-card:not(.d-mediacard):not(.d-mus) .d-meta {
-    padding-right: 4.9rem;
+    padding-right: 6.4rem;
+  }
+  /* Notes dock an extra Edit button in the actions pill. */
+  .d-card[data-kind="note"] .d-meta {
+    padding-right: 8rem;
   }
   /* Same corner rule as desktop hover: once actions are revealed they own the
      top-right — the counter/tag there steps aside. */
@@ -2106,6 +2160,98 @@ The tape strip: frosted so the paper shows through, slightly rotated.
     opacity: 0;
   }
 }
+/* Pin + edit icon buttons share the square action sizing; pin stays lit while
+   the dump is pinned. */
+.d-actions .d-pintoggle,
+.d-actions .d-editbtn,
+.d-actions .d-drag {
+  display: grid;
+  place-items: center;
+  color: inherit;
+}
+.d-actions .d-drag {
+  cursor: grab;
+  /* Without this the browser steals the touch drag as a page scroll. */
+  touch-action: none;
+}
+.d-actions .d-drag:active {
+  cursor: grabbing;
+}
+.d-actions .d-pintoggle svg,
+.d-actions .d-editbtn svg,
+.d-actions .d-drag svg {
+  width: 0.78rem;
+  height: 0.78rem;
+}
+
+/* Card dragging: the card itself lifts onto the pointer — small scale and tilt,
+   a deeper shadow — while the empty slot it left behind is the drop indicator.
+   Hover affordances (lift, hover actions) don't apply mid-flight. */
+.d-item[data-dragging] .d-card {
+  translate: none;
+  transform: scale(1.03) rotate(1.2deg);
+  box-shadow: var(--shadow-drag);
+}
+.d-item[data-dragging] .d-actions {
+  opacity: 0 !important;
+}
+body.d-dragging {
+  user-select: none;
+}
+body.d-dragging,
+body.d-dragging * {
+  cursor: grabbing !important;
+}
+
+/* Press-and-hold to drag: the subtle press-in while the hold timer runs says
+   the hold registered — the lift arrives when it fires. */
+.d-item[data-arming] .d-card {
+  transform: scale(0.97);
+}
+/* Touch/pen only (set as data-no-select): keeps a long-press from starting a
+   native selection or callout during the hold window. Mouse presses never get
+   this — drag-selecting text and double-click word-select must keep working. */
+.d-item[data-no-select] {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+.d-actions .d-pintoggle[aria-pressed="true"] {
+  color: var(--ink);
+}
+
+/* A pinned card keeps a visible mark after the actions fade: a frosted roundel
+   top-left on media cards (mirroring .d-mmark), a small glyph in the meta row
+   on text cards. */
+.d-pin-badge {
+  position: absolute;
+  top: 0.55rem;
+  left: 0.55rem;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 1.65rem;
+  height: 1.65rem;
+  border-radius: 999px;
+  color: #fff;
+  background: rgb(0 0 0 / 0.5);
+  backdrop-filter: blur(6px);
+}
+.d-pin-badge svg {
+  width: 0.85rem;
+  height: 0.85rem;
+}
+/* Inline videos already own the top-left corner with the provider roundel. */
+.d-inline-video[data-pinned] .d-mmark {
+  left: 2.5rem;
+}
+.d-meta-pin {
+  width: 0.72rem;
+  height: 0.72rem;
+  flex-shrink: 0;
+  color: var(--muted);
+}
+
 /* The Move trigger is a base-ui Menu.Trigger (a <button>) — undo the square
    icon-button sizing .d-actions button gives it and match the old select look. */
 .d-actions .d-move {
@@ -2141,8 +2287,8 @@ The tape strip: frosted so the paper shows through, slightly rotated.
     color: #dc2626;
     background: rgb(220 38 38 / 0.1);
   }
-  /* Delete stays red-on-hover; Move takes a neutral wash instead. */
-  .d-actions .d-move:hover {
+  /* Delete stays red-on-hover; the other actions take a neutral wash instead. */
+  .d-actions :is(.d-move, .d-pintoggle, .d-editbtn, .d-drag):hover {
     color: var(--ink);
     background: color-mix(in srgb, var(--ink) 8%, transparent);
   }
@@ -2485,5 +2631,14 @@ The tape strip: frosted so the paper shows through, slightly rotated.
   }
   .d-settings-pop {
     animation: none;
+  }
+  /* Reordering stays instant: slots jump instead of gliding, and the held card
+     keeps its shadow but not the scale/tilt. */
+  .d-item {
+    transition: none;
+  }
+  .d-item[data-dragging] .d-card,
+  .d-item[data-arming] .d-card {
+    transform: none;
   }
 }
