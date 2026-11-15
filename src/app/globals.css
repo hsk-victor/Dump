@@ -2202,6 +2202,18 @@ body.d-dragging,
 body.d-dragging * {
   cursor: grabbing !important;
 }
+
+/* Press-and-hold to drag: the subtle press-in while the hold timer runs says
+   the hold registered — the lift arrives when it fires. Also keeps iOS from
+   starting a text selection or callout during the hold window. */
+.d-item[data-arming] {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+.d-item[data-arming] .d-card {
+  transform: scale(0.97);
+}
 .d-actions .d-pintoggle[aria-pressed="true"] {
   color: var(--ink);
 }
@@ -2623,7 +2635,8 @@ body.d-dragging * {
   .d-item {
     transition: none;
   }
-  .d-item[data-dragging] .d-card {
+  .d-item[data-dragging] .d-card,
+  .d-item[data-arming] .d-card {
     transform: none;
   }
 }

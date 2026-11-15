@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Toaster, toast as sonnerToast } from "sonner";
 import type { Dump } from "@/lib/db";
@@ -18,18 +18,40 @@ const ESTIMATE_H = 260;
 const GAP_EST = 6;
 /** Pointer must travel this far before a press on the grip becomes a drag. */
 const DRAG_THRESHOLD = 6;
+/** Hold a card this long without moving to lift it into a drag (iOS-style). */
+const HOLD_MS = 240;
+/** Targets inside a card that never arm a hold-drag — buttons, inputs, media. */
+const HOLD_EXCLUDE = "button, input, textarea, select, summary, video, audio, iframe, [contenteditable], [role='menu'], [role='dialog'], [role='listbox'], .d-actions, .d-menu";
 /** Viewport margin that starts auto-scrolling while a card is held. */
 const EDGE_PX = 72;
 /** How far past the grid the pointer may go before the drop is cancelled. */
 const SLOT_SLOP = 48;
 /** Re-aiming the landing slot needs the pointer to move this far — damps flip-flop. */
 const SLOT_HYSTERESIS = 8;
+/** Attached non-passively while a touch drag is live: blocks the scroll steal. */
+const blockTouchMove = (e: TouchEvent) => e.preventDefault();
 
 interface Rect {
   x: number;
   y: number;
   w: number;
   h: number;
+}
+
+interface PendingDrag {
+  id: string;
+  pointerId: number;
+  /** Pointerdown position — threshold anchor. */
+  x: number;
+  y: number;
+  /** Latest pointer position — the drag lifts from here. */
+  lx: number;
+  ly: number;
+  timer: number;
+  /** Element the pointer gets captured to (grip, or the card's .d-item). */
+  cap: HTMLElement;
+  /** Hold mode arms by timer (card body); move mode arms by slop (grip). */
+  hold: boolean;
 }
 
 interface DragState {
@@ -62,6 +84,8 @@ function FeedItem({
   sortable,
   dragging,
   onGripDown,
+  onItemDown,
+  onItemClickCapture,
   ...handlers
 }: {
   dump: Dump;
@@ -70,6 +94,8 @@ function FeedItem({
   sortable: boolean;
   dragging: boolean;
   onGripDown: (e: ReactPointerEvent<HTMLButtonElement>, id: string) => void;
+  onItemDown: (e: ReactPointerEvent<HTMLDivElement>, id: string) => void;
+  onItemClickCapture: (e: ReactMouseEvent<HTMLDivElement>) => void;
   onTopic: (id: string, topic: string) => void;
   onDelete: (id: string) => void;
   onRetry: (id: string) => void;
@@ -77,7 +103,13 @@ function FeedItem({
   onSaveNote: (id: string, content: string) => Promise<boolean>;
 }) {
   return (
-    <div className="d-item" data-did={dump.id} data-dragging={dragging ? "" : undefined}>
+    <div
+      className="d-item"
+      data-did={dump.id}
+      data-dragging={dragging ? "" : undefined}
+      onPointerDown={sortable ? (e) => onItemDown(e, dump.id) : undefined}
+      onClickCapture={onItemClickCapture}
+    >
       <DumpCard
         dump={dump}
         fresh={fresh}
@@ -124,7 +156,9 @@ export default function DumpApp() {
   const itemsRef = useRef(items);
   itemsRef.current = items;
   const dragRef = useRef<DragState | null>(null);
-  const pendingRef = useRef<{ id: string; pointerId: number; x: number; y: number } | null>(null);
+  const pendingRef = useRef<PendingDrag | null>(null);
+  /** Set by the click that trails a real drag — eats it so it can't edit/navigate. */
+  const suppressClickRef = useRef(false);
   /** Latest packed slot per card (grid coords), plus the phantom slot while dragging. */
   const slotRects = useRef(new Map<string, Rect>());
   const ghostRect = useRef<Rect | null>(null);
@@ -480,31 +514,33 @@ export default function DumpApp() {
     if (scroll && dragRef.current) d.raf = requestAnimationFrame(dragTick);
   }
 
-  function beginDrag(id: string, ev: PointerEvent, grip: HTMLElement) {
+  function beginDrag(id: string, pointerId: number, x: number, y: number, cap: HTMLElement) {
     const grid = gridRef.current;
     if (!grid) return;
     const el = grid.querySelector<HTMLElement>(`[data-did="${id}"]`);
     if (!el) return;
     const box = el.getBoundingClientRect();
     try {
-      grip.setPointerCapture(ev.pointerId);
+      cap.setPointerCapture(pointerId);
     } catch {}
-    const idx = itemsRef.current.findIndex((x) => x.id === id);
+    const idx = itemsRef.current.findIndex((it) => it.id === id);
     dragRef.current = {
       id,
-      pointerId: ev.pointerId,
+      pointerId,
       el,
-      grabX: ev.clientX - box.left,
-      grabY: ev.clientY - box.top,
+      grabX: x - box.left,
+      grabY: y - box.top,
       w: box.width,
       h: box.height,
       j: idx,
-      jx: ev.clientX,
-      jy: ev.clientY,
-      px: ev.clientX,
-      py: ev.clientY,
+      jx: x,
+      jy: y,
+      px: x,
+      py: y,
       raf: 0,
     };
+    // Once the drag owns a touch gesture, stop the page stealing it as a scroll.
+    window.addEventListener("touchmove", blockTouchMove, { passive: false });
     document.body.classList.add("d-dragging");
     setDragId(id);
     applyLayout(); // open the phantom slot at the card's own seat
@@ -515,6 +551,8 @@ export default function DumpApp() {
     if (!d) return;
     if (d.raf) cancelAnimationFrame(d.raf);
     dragRef.current = null;
+    suppressClickRef.current = true; // the click that trails pointerup isn't a click
+    window.removeEventListener("touchmove", blockTouchMove);
     document.body.classList.remove("d-dragging");
     setDragId(null); // restores transitions; the card eases into its slot
     const j = cancelled ? null : d.j;
@@ -549,19 +587,40 @@ export default function DumpApp() {
     });
   }
 
-  function onGripDown(e: ReactPointerEvent<HTMLButtonElement>, id: string) {
+  // Shared arming for both entry points: the grip activates on a 6px move,
+  // the card body activates by holding still for HOLD_MS. After activation the
+  // same pointer-tracked flight applies either way.
+  function armDrag(e: ReactPointerEvent<HTMLElement>, id: string, cap: HTMLElement, hold: boolean) {
     // Second fingers and non-primary buttons never join or restart a drag.
     if (!e.isPrimary || (e.pointerType === "mouse" && e.button !== 0) || pendingRef.current || dragRef.current) return;
-    const grip = e.currentTarget;
-    const pending = { id, pointerId: e.pointerId, x: e.clientX, y: e.clientY };
+    suppressClickRef.current = false;
+    const pending: PendingDrag = { id, pointerId: e.pointerId, x: e.clientX, y: e.clientY, lx: e.clientX, ly: e.clientY, timer: 0, cap, hold };
     pendingRef.current = pending;
+
+    const activate = () => {
+      if (pendingRef.current !== pending) return;
+      pending.timer = 0;
+      delete cap.dataset.arming;
+      beginDrag(pending.id, pending.pointerId, pending.lx, pending.ly, cap);
+    };
+    if (hold) {
+      pending.timer = window.setTimeout(activate, HOLD_MS);
+      cap.dataset.arming = "";
+    }
 
     const onMove = (ev: PointerEvent) => {
       if (ev.pointerId !== pending.pointerId) return;
+      pending.lx = ev.clientX;
+      pending.ly = ev.clientY;
       const d = dragRef.current;
       if (!d) {
         if (Math.hypot(ev.clientX - pending.x, ev.clientY - pending.y) < DRAG_THRESHOLD) return;
-        beginDrag(pending.id, ev, grip);
+        // Moving past slop before the hold fired means a click/scroll intent.
+        if (pending.hold) {
+          teardown();
+          return;
+        }
+        activate();
         return;
       }
       d.px = ev.clientX;
@@ -583,17 +642,45 @@ export default function DumpApp() {
       teardown();
       finishDrag(true);
     };
+    // While armed or flying, kill the touch long-press context menu and any
+    // native link/image drag that would fight our own.
+    const onCtx = (ev: Event) => ev.preventDefault();
+    const onNativeDrag = (ev: Event) => ev.preventDefault();
     const teardown = () => {
       pendingRef.current = null;
+      clearTimeout(pending.timer);
+      delete cap.dataset.arming;
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("pointercancel", onCancel);
       window.removeEventListener("keydown", onKey);
+      document.removeEventListener("contextmenu", onCtx, true);
+      document.removeEventListener("dragstart", onNativeDrag, true);
     };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
     window.addEventListener("pointercancel", onCancel);
     window.addEventListener("keydown", onKey);
+    document.addEventListener("contextmenu", onCtx, true);
+    document.addEventListener("dragstart", onNativeDrag, true);
+  }
+
+  function onGripDown(e: ReactPointerEvent<HTMLButtonElement>, id: string) {
+    armDrag(e, id, e.currentTarget, false);
+  }
+
+  /** Press-and-hold anywhere on the card (except interactive targets) lifts it. */
+  function onItemDown(e: ReactPointerEvent<HTMLDivElement>, id: string) {
+    if ((e.target as HTMLElement).closest(HOLD_EXCLUDE)) return;
+    armDrag(e, id, e.currentTarget, true);
+  }
+
+  /** The click that trails a real drag must not edit a note or open a link. */
+  function onItemClickCapture(e: ReactMouseEvent<HTMLDivElement>) {
+    if (!suppressClickRef.current) return;
+    suppressClickRef.current = false;
+    e.preventDefault();
+    e.stopPropagation();
   }
 
   /** Saves a note's edited body. Returns whether the save landed so the card can leave edit mode. */
@@ -790,6 +877,8 @@ export default function DumpApp() {
                 sortable={sortable}
                 dragging={d.id === dragId}
                 onGripDown={onGripDown}
+                onItemDown={onItemDown}
+                onItemClickCapture={onItemClickCapture}
                 onTopic={handleTopic}
                 onDelete={handleDelete}
                 onRetry={handleRetry}
