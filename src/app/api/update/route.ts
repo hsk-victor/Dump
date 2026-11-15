@@ -83,7 +83,11 @@ export async function POST(req: NextRequest) {
   const site = req.headers.get("sec-fetch-site");
   if (site === "cross-site") return NextResponse.json({ error: "Cross-site request" }, { status: 403 });
   const origin = req.headers.get("origin");
-  if (origin && new URL(origin).host !== req.headers.get("host")) {
+  try {
+    if (origin && new URL(origin).host !== req.headers.get("host")) {
+      return NextResponse.json({ error: "Cross-site request" }, { status: 403 });
+    }
+  } catch {
     return NextResponse.json({ error: "Cross-site request" }, { status: 403 });
   }
 
