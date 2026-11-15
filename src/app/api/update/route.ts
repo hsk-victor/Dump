@@ -129,21 +129,29 @@ export async function POST(req: NextRequest) {
   if (!script) return NextResponse.json({ error: "No updater on this machine" }, { status: 400 });
 
   // The updater pulls, rebuilds, and restarts — so it must outlive this process.
-  // The short delay lets this response flush before the server is killed.
-  const psQuote = (s: string) => `'${s.replaceAll("'", "''")}'`;
+  // It launches straight through cmd /c into wscript: Start-Process (used
+  // previously) silently launches nothing from this detached context, and a
+  // detached powershell exits without running its -Command at all — both
+  // verified on Windows. windowsVerbatimArguments keeps node's arg quoting
+  // from rewriting the inner " to \" which cmd doesn't understand.
+  // The ping is a ~2s delay so this response flushes before the server dies.
   let cmd: string;
   let args: string[];
   if (process.platform === "win32") {
     const hidden = path.join(path.dirname(script), "hidden.vbs");
-    const ps = fs.existsSync(hidden)
-      ? `Start-Sleep -Seconds 2; Start-Process wscript -ArgumentList ${psQuote(`"${hidden}" "${script}"`)}`
-      : `Start-Sleep -Seconds 2; Start-Process cmd -ArgumentList ${psQuote(`/c "${script}"`)}`;
-    cmd = "powershell";
-    args = ["-NoProfile", "-Command", ps];
+    const tail = fs.existsSync(hidden)
+      ? `wscript "${hidden}" "${script}"`
+      : `call "${script}"`;
+    cmd = "cmd";
+    args = ["/c", `ping -n 3 127.0.0.1 >nul & ${tail}`];
   } else {
     cmd = "sh";
     args = ["-c", `sleep 2 && "${script}"`];
   }
-  spawn(cmd, args, { detached: true, stdio: "ignore" }).unref();
+  spawn(cmd, args, {
+    detached: true,
+    stdio: "ignore",
+    windowsVerbatimArguments: process.platform === "win32",
+  }).unref();
   return NextResponse.json({ started: true });
 }
