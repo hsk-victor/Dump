@@ -1,18 +1,87 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  pointerWithin,
+  useDraggable,
+  useDroppable,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragMoveEvent,
+  type DragStartEvent,
+} from "@dnd-kit/core";
 import { Toaster, toast as sonnerToast } from "sonner";
 import type { Dump } from "@/lib/db";
 import { KINDS, kindMeta, topicMeta } from "@/lib/taxonomy";
 import { DENSITY_KEY, MODE_KEY } from "@/lib/theme";
 import Composer from "./Composer";
-import DumpCard from "./DumpCard";
+import DumpCard, { type DragHandle } from "./DumpCard";
 import Logo from "./Logo";
 import SectionNav, { type Counts } from "./SectionNav";
 import UpdateButton from "./UpdateButton";
 
 const PAGE_SIZE = 60;
+/** Card height guess before its first measurement, plus the 6px --gap between cards. */
+const ESTIMATE_H = 260;
+const GAP_EST = 6;
+
+type Cell = Dump | "marker";
+
+/** One card in the feed: droppable so other cards can land on it, draggable via its grip. */
+function FeedItem({
+  dump,
+  fresh,
+  removing,
+  sortable,
+  ...handlers
+}: {
+  dump: Dump;
+  fresh: boolean;
+  removing: boolean;
+  sortable: boolean;
+  onTopic: (id: string, topic: string) => void;
+  onDelete: (id: string) => void;
+  onRetry: (id: string) => void;
+  onPin: (id: string, pinned: boolean) => void;
+  onSaveNote: (id: string, content: string) => Promise<boolean>;
+}) {
+  const drag = useDraggable({ id: dump.id, disabled: !sortable });
+  const drop = useDroppable({ id: dump.id, disabled: !sortable });
+  return (
+    <div
+      ref={(n) => {
+        drag.setNodeRef(n);
+        drop.setNodeRef(n);
+      }}
+      className="d-item"
+      data-did={dump.id}
+      data-dragging={drag.isDragging || undefined}
+    >
+      <DumpCard
+        dump={dump}
+        fresh={fresh}
+        removing={removing}
+        drag={sortable ? { activatorRef: drag.setActivatorNodeRef, listeners: drag.listeners, attributes: drag.attributes } : undefined}
+        {...handlers}
+      />
+    </div>
+  );
+}
+
+/** A masonry column; droppable itself so a card can be dropped past its last card. */
+function FeedColumn({ id, children }: { id: string; children: React.ReactNode }) {
+  const { setNodeRef } = useDroppable({ id });
+  return (
+    <div className="d-col" ref={setNodeRef}>
+      {children}
+    </div>
+  );
+}
 
 export default function DumpApp() {
   const router = useRouter();
@@ -43,6 +112,16 @@ export default function DumpApp() {
   const [dark, setDark] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const settingsRef = useRef<HTMLDivElement>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
+  const [colCount, setColCount] = useState(1);
+  const [measureTick, setMeasureTick] = useState(0);
+  const cardHeights = useRef(new Map<string, number>());
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [dropIndex, setDropIndex] = useState<number | null>(null);
+  const [dragWidth, setDragWidth] = useState(0);
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+  // Manual order only makes sense under position sort — a search ranks by relevance instead.
+  const sortable = !q;
 
   useEffect(() => {
     try {
@@ -155,13 +234,74 @@ export default function DumpApp() {
     return () => clearTimeout(t);
   }, [search, q, setFilter]);
 
-  // Poll while anything is still being sorted in the background.
+  // Poll while anything is still being sorted in the background. Pause mid-drag so the
+  // list doesn't re-render under the pointer.
   const anyProcessing = items.some((d) => d.status === "processing") || pendingToasts.current.size > 0;
   useEffect(() => {
-    if (!anyProcessing) return;
+    if (!anyProcessing || dragId) return;
     const t = setInterval(load, 1200);
     return () => clearInterval(t);
-  }, [anyProcessing, load]);
+  }, [anyProcessing, dragId, load]);
+
+  // Column count follows the container width and the card-size preference; the CSS
+  // column-width on .d-grid is kept purely so this can read the resolved pixel width.
+  useEffect(() => {
+    const el = gridRef.current;
+    if (!el) return;
+    const compute = () => {
+      const cs = getComputedStyle(el);
+      const gap = parseFloat(cs.columnGap) || GAP_EST;
+      const w = parseFloat(cs.columnWidth) || 260;
+      setColCount(Math.max(1, Math.floor((el.clientWidth + gap) / (w + gap))));
+    };
+    compute();
+    const ro = new ResizeObserver(compute);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [density, loaded, items.length > 0]);
+
+  // Measure each rendered card once so the greedy column split can balance heights.
+  useEffect(() => {
+    const el = gridRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      let changed = false;
+      for (const e of entries) {
+        const id = (e.target as HTMLElement).dataset.did;
+        if (!id) continue;
+        const h = Math.round(e.borderBoxSize?.[0]?.blockSize ?? e.contentRect.height);
+        if (Math.abs((cardHeights.current.get(id) ?? -1) - h) > 4) {
+          cardHeights.current.set(id, h);
+          changed = true;
+        }
+      }
+      if (changed) setMeasureTick((t) => t + 1);
+    });
+    el.querySelectorAll(".d-item").forEach((n) => ro.observe(n));
+    return () => ro.disconnect();
+  });
+
+  // Split the flat order into columns: every item (plus the drop marker while dragging)
+  // goes into whichever column is currently shortest.
+  const rest = dragId ? items.filter((d) => d.id !== dragId) : items;
+  const columns = useMemo(() => {
+    const seq: Cell[] =
+      dropIndex === null ? rest : [...rest.slice(0, dropIndex), "marker" as const, ...rest.slice(dropIndex)];
+    const out: Cell[][] = Array.from({ length: Math.max(1, colCount) }, () => []);
+    const heights = new Array<number>(out.length).fill(0);
+    for (const it of seq) {
+      let c = 0;
+      for (let i = 1; i < heights.length; i++) if (heights[i] < heights[c]) c = i;
+      if (it === "marker") {
+        out[c].push(it);
+        heights[c] += 14;
+      } else {
+        out[c].push(it);
+        heights[c] += (cardHeights.current.get(it.id) ?? ESTIMATE_H) + GAP_EST;
+      }
+    }
+    return out;
+  }, [rest, dropIndex, colCount, measureTick]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -237,6 +377,62 @@ export default function DumpApp() {
     toast(pinned ? "Pinned to the top" : "Unpinned");
     load();
   }
+
+  function onDragStart(e: DragStartEvent) {
+    setDragId(String(e.active.id));
+    setDragWidth(e.active.rect.current.initial?.width ?? 0);
+    setDropIndex(null);
+  }
+
+  // The marker's flat index (in the dragged-card-removed list) where it would land.
+  function onDragMove(e: DragMoveEvent) {
+    const { active, over } = e;
+    if (!over) return;
+    const list = items.filter((d) => d.id !== active.id);
+    const oid = String(over.id);
+    if (oid.startsWith("col-")) {
+      const col = columns[Number(oid.slice(4))]?.filter((c): c is Dump => c !== "marker") ?? [];
+      const last = col[col.length - 1];
+      setDropIndex(last ? list.findIndex((d) => d.id === last.id) + 1 : list.length);
+      return;
+    }
+    const i = list.findIndex((d) => d.id === oid);
+    if (i < 0) return;
+    const dragged = active.rect.current.translated;
+    const before = dragged ? dragged.top + dragged.height / 2 < over.rect.top + over.rect.height / 2 : true;
+    setDropIndex(before ? i : i + 1);
+  }
+
+  async function onDragEnd(e: DragEndEvent) {
+    const id = String(e.active.id);
+    const j = dropIndex;
+    setDragId(null);
+    setDropIndex(null);
+    if (j === null) return;
+    const dragged = items.find((d) => d.id === id);
+    if (!dragged || j === items.indexOf(dragged)) return;
+    const list = items.filter((d) => d.id !== id);
+    const prev = list[j - 1];
+    const next = list[j];
+    const position = prev && next ? (prev.position + next.position) / 2 : prev ? prev.position - 1 : next ? next.position + 1 : 1;
+    // Crossing the pinned boundary flips the flag: dragging below every pinned card
+    // unpins, dragging an unpinned card into the pinned block pins it.
+    const pinnedCount = list.filter((d) => d.pinned).length;
+    const pinned = dragged.pinned ? j <= pinnedCount : j < pinnedCount;
+    const moved = { ...dragged, pinned, position };
+    setItems([...list.slice(0, j), moved, ...list.slice(j)]);
+    const res = await fetch(`/api/dumps/${id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(pinned === dragged.pinned ? { position } : { pinned, position }),
+    });
+    if (!res.ok) {
+      toast("Couldn't move that card", "error");
+      load();
+    }
+  }
+
+  const dragDump = items.find((d) => d.id === dragId) ?? null;
 
   /** Saves a note's edited body. Returns whether the save landed so the card can leave edit mode. */
   async function handleSaveNote(id: string, content: string): Promise<boolean> {
@@ -422,21 +618,58 @@ export default function DumpApp() {
             )}
           </div>
         ) : (
-          <div className="d-grid">
-            {items.map((d) => (
-              <DumpCard
-                key={d.id}
-                dump={d}
-                fresh={d.id === freshId}
-                removing={removingIds.has(d.id)}
-                onTopic={handleTopic}
-                onDelete={handleDelete}
-                onRetry={handleRetry}
-                onPin={handlePin}
-                onSaveNote={handleSaveNote}
-              />
-            ))}
-          </div>
+          <DndContext
+            sensors={sensors}
+            collisionDetection={pointerWithin}
+            onDragStart={onDragStart}
+            onDragMove={onDragMove}
+            onDragEnd={onDragEnd}
+            onDragCancel={() => {
+              setDragId(null);
+              setDropIndex(null);
+            }}
+          >
+            <div className="d-grid" ref={gridRef}>
+              {columns.map((col, ci) => (
+                <FeedColumn key={ci} id={`col-${ci}`}>
+                  {col.map((cell) =>
+                    cell === "marker" ? (
+                      <div key="marker" className="d-dropmark" />
+                    ) : (
+                      <FeedItem
+                        key={cell.id}
+                        dump={cell}
+                        fresh={cell.id === freshId}
+                        removing={removingIds.has(cell.id)}
+                        sortable={sortable}
+                        onTopic={handleTopic}
+                        onDelete={handleDelete}
+                        onRetry={handleRetry}
+                        onPin={handlePin}
+                        onSaveNote={handleSaveNote}
+                      />
+                    ),
+                  )}
+                </FeedColumn>
+              ))}
+            </div>
+            <DragOverlay dropAnimation={null}>
+              {dragDump && (
+                <div className="d-overlay" style={{ width: dragWidth }}>
+                  <DumpCard
+                    dump={dragDump}
+                    fresh={false}
+                    removing={false}
+                    onTopic={() => {}}
+                    onDelete={() => {}}
+                    onRetry={() => {}}
+                    onPin={() => {}}
+                    onSaveNote={async () => false}
+                  />
+                </div>
+              )}
+            </DragOverlay>
+          </DndContext>
         )}
         {hasMore && (
           <div className="mt-6 flex justify-center">

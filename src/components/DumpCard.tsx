@@ -2,10 +2,19 @@
 
 import { useEffect, useRef, useState, type CSSProperties, type MouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { Menu } from "@base-ui/react/menu";
+import type { DraggableAttributes } from "@dnd-kit/core";
+import type { SyntheticListenerMap } from "@dnd-kit/core/dist/hooks/utilities";
 import type { Dump } from "@/lib/db";
 import { SUBJECT_MIN_CONFIDENCE, subjectLine, TOPICS, kindMeta, providerMeta, topicMeta } from "@/lib/taxonomy";
 import { timeAgo, shortDate } from "@/lib/format";
 import { GITHUB_TAG, githubInfo, type GithubInfo, titleFromUrl } from "@/lib/detect";
+
+/** Wiring for the actions-row grip: the card's parent makes it the drag activator. */
+export interface DragHandle {
+  activatorRef: (el: HTMLElement | null) => void;
+  listeners: SyntheticListenerMap | undefined;
+  attributes: DraggableAttributes;
+}
 
 interface Props {
   dump: Dump;
@@ -17,6 +26,8 @@ interface Props {
   onPin: (id: string, pinned: boolean) => void;
   /** Persists a note's edited body; resolves false when the save failed. */
   onSaveNote: (id: string, content: string) => Promise<boolean>;
+  /** Present when the card can be grabbed and reordered. */
+  drag?: DragHandle;
 }
 
 /** The name inside a "Name on X"-style title — only when the suffix is a known
@@ -74,6 +85,7 @@ const GLYPHS = {
   person: "M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z",
   pin: "M16 9V4l1 0c.55 0 1-.45 1-1s-.45-1-1-1H7c-.55 0-1 .45-1 1s.45 1 1 1l1 0v5c0 1.66-1.34 3-3 3h-1v2h7v7l1 1 1-1v-7h7v-2h-1c-1.66 0-3-1.34-3-3z",
   pencil: "M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z",
+  grip: "M11 18c0 1.1-.9 2-2 2s-2-.9-2-2 .9-2 2-2 2 .9 2 2zm-2-8c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm0-5c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm6 4c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z",
 };
 
 function Glyph({ name, className = "d-glyph" }: { name: keyof typeof GLYPHS; className?: string }) {
@@ -1338,7 +1350,7 @@ function LinkCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
 
 /* ================================== dispatch ================================== */
 
-export default function DumpCard({ dump, fresh, removing, onTopic, onDelete, onRetry, onPin, onSaveNote }: Props) {
+export default function DumpCard({ dump, fresh, removing, onTopic, onDelete, onRetry, onPin, onSaveNote, drag }: Props) {
   const [imgFailed, setImgFailed] = useState(false);
   const [revealed, setRevealed] = useState(false);
   const [editingNote, setEditingNote] = useState(false);
@@ -1389,6 +1401,18 @@ export default function DumpCard({ dump, fresh, removing, onTopic, onDelete, onR
 
   const actions = (
     <div className="d-actions">
+      {drag && (
+        <button
+          className="d-drag"
+          ref={drag.activatorRef}
+          {...drag.attributes}
+          {...drag.listeners}
+          aria-label="Drag to move"
+          title="Drag to move"
+        >
+          <Glyph name="grip" />
+        </button>
+      )}
       <button
         className="d-pintoggle"
         onClick={() => onPin(dump.id, !dump.pinned)}

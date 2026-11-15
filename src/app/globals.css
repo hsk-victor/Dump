@@ -394,8 +394,17 @@ button {
   padding: 0.25rem 1.25rem 9rem;
 }
 .d-grid {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--gap);
+  /* Not a real multicol any more — the feed is explicit .d-col columns so cards
+     don't teleport when the browser rebalances. column-width stays only as the
+     resolved target width the JS column-splitter reads. */
   column-width: var(--col-w);
-  column-gap: var(--gap);
+}
+.d-col {
+  flex: 1 1 0;
+  min-width: 0;
 }
 .d-card {
   position: relative;
@@ -2137,15 +2146,49 @@ The tape strip: frosted so the paper shows through, slightly rotated.
 /* Pin + edit icon buttons share the square action sizing; pin stays lit while
    the dump is pinned. */
 .d-actions .d-pintoggle,
-.d-actions .d-editbtn {
+.d-actions .d-editbtn,
+.d-actions .d-drag {
   display: grid;
   place-items: center;
   color: inherit;
 }
+.d-actions .d-drag {
+  cursor: grab;
+  /* Without this the browser steals the touch drag as a page scroll. */
+  touch-action: none;
+}
+.d-actions .d-drag:active {
+  cursor: grabbing;
+}
 .d-actions .d-pintoggle svg,
-.d-actions .d-editbtn svg {
+.d-actions .d-editbtn svg,
+.d-actions .d-drag svg {
   width: 0.78rem;
   height: 0.78rem;
+}
+
+/* Card dragging: the source dims in place, an ink rule marks the landing slot,
+   and the overlay is the card itself tilted under the pointer. */
+.d-item[data-dragging] .d-card {
+  opacity: 0.35;
+}
+.d-dropmark {
+  height: 3px;
+  margin-bottom: var(--gap);
+  border-radius: 2px;
+  background: var(--ink);
+  opacity: 0.45;
+}
+.d-overlay {
+  pointer-events: none;
+}
+.d-overlay .d-card {
+  transform: rotate(1.5deg);
+  box-shadow: 0 16px 40px rgb(0 0 0 / 0.22);
+}
+.d-overlay .d-actions,
+.d-overlay .d-meta {
+  display: none;
 }
 .d-actions .d-pintoggle[aria-pressed="true"] {
   color: var(--ink);
@@ -2219,7 +2262,7 @@ The tape strip: frosted so the paper shows through, slightly rotated.
     background: rgb(220 38 38 / 0.1);
   }
   /* Delete stays red-on-hover; the other actions take a neutral wash instead. */
-  .d-actions :is(.d-move, .d-pintoggle, .d-editbtn):hover {
+  .d-actions :is(.d-move, .d-pintoggle, .d-editbtn, .d-drag):hover {
     color: var(--ink);
     background: color-mix(in srgb, var(--ink) 8%, transparent);
   }

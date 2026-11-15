@@ -1,7 +1,7 @@
 import { after, NextResponse, type NextRequest } from "next/server";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { deleteDump, getDump, updateDump, UPLOAD_DIR } from "@/lib/db";
+import { deleteDump, getDump, topPosition, updateDump, UPLOAD_DIR } from "@/lib/db";
 import { enrichDump, noteTitle } from "@/lib/enrich";
 import { isTopic } from "@/lib/taxonomy";
 
@@ -27,8 +27,14 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
   if (isTopic(body.topic)) {
     return NextResponse.json(updateDump(id, { topic: body.topic, topicLocked: true, classifiedBy: "you" }));
   }
-  if (typeof body.pinned === "boolean") {
-    return NextResponse.json(updateDump(id, { pinned: body.pinned }));
+  // Pin and/or manual reorder arrive together from card drags.
+  if (typeof body.pinned === "boolean" || typeof body.position === "number") {
+    const patch: Record<string, unknown> = {};
+    if (typeof body.pinned === "boolean") patch.pinned = body.pinned;
+    if (typeof body.position === "number" && Number.isFinite(body.position)) patch.position = body.position;
+    // A pin with no explicit slot floats to the very top of the pinned group.
+    if (patch.pinned === true && patch.position === undefined) patch.position = topPosition();
+    if (Object.keys(patch).length) return NextResponse.json(updateDump(id, patch));
   }
   // Note body edits: the title is always the first line, re-derived on save.
   if (typeof body.content === "string") {
