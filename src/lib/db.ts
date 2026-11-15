@@ -155,8 +155,13 @@ export function db(): Database.Database {
     if (!cols.some((c) => c.name === "pinned")) conn.exec("ALTER TABLE dumps ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0");
     if (!cols.some((c) => c.name === "position")) {
       conn.exec("ALTER TABLE dumps ADD COLUMN position REAL NOT NULL DEFAULT 0");
-      // Backfill so the existing newest-first order survives under position DESC.
-      conn.exec("UPDATE dumps SET position = rowid");
+      // Backfill by created_at rank (not rowid): re-dumped links bumped created_at,
+      // and their place at the top of the feed must survive under position DESC.
+      conn.exec(`UPDATE dumps SET position = (
+        SELECT COUNT(*) FROM dumps d2
+        WHERE d2.created_at < dumps.created_at
+           OR (d2.created_at = dumps.created_at AND d2.rowid <= dumps.rowid)
+      )`);
     }
     globalForDb.__dumpDb = conn;
   }
