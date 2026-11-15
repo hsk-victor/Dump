@@ -843,7 +843,7 @@ export default function DumpApp() {
 
       <main className="d-main">
         {loaded && items.length === 0 ? (
-          <div className="d-empty">
+          <div className="d-empty" key="empty">
             {q || kind || topic ? (
               <p>Nothing matches that. Try a different word.</p>
             ) : (
@@ -882,7 +882,7 @@ export default function DumpApp() {
             )}
           </div>
         ) : (
-          <div className="d-grid" ref={gridRef} data-dragging={dragId ? "" : undefined}>
+          <div className="d-grid" key="grid" ref={gridRef} data-dragging={dragId ? "" : undefined}>
             {items.map((d) => (
               <FeedItem
                 key={d.id}
