@@ -843,7 +843,7 @@ export default function DumpApp() {
 
       <main className="d-main">
         {loaded && items.length === 0 ? (
-          <div className="d-empty">
+          <div className="d-empty" key="empty">
             {q || kind || topic ? (
               <p>Nothing matches that. Try a different word.</p>
             ) : (
@@ -867,17 +867,22 @@ export default function DumpApp() {
                       <i />
                     </span>
                   </span>
+                  <span className="d-empty-drop" aria-hidden>
+                    <i className="d1" />
+                    <i className="d2" />
+                    <i className="d3" />
+                  </span>
                   <span className="d-empty-bin">
-                    <Logo size={64} />
+                    <Logo size={88} />
                   </span>
                 </div>
-                <p className="d-empty-title">Your dump is empty</p>
+                <p className="d-empty-title">Nothing dumped yet</p>
                 <p>Paste a link, an X post, a YouTube video, an image or a quick note below. Dump files it for you.</p>
               </>
             )}
           </div>
         ) : (
-          <div className="d-grid" ref={gridRef} data-dragging={dragId ? "" : undefined}>
+          <div className="d-grid" key="grid" ref={gridRef} data-dragging={dragId ? "" : undefined}>
             {items.map((d) => (
               <FeedItem
                 key={d.id}
