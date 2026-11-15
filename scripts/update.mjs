@@ -176,9 +176,23 @@ function apply() {
 
   if (staged) {
     try {
-      // Only when the lockfile moved do we pay for a real install in the app;
-      // sharing the staged node_modules isn't safe across lockfile changes.
-      if (lockChanged(old, head)) npmIn(REPO, ["ci"]);
+      // Only when the lockfile moved do node_modules change — and the worktree
+      // already installed them during prepare, so copy that ready-made tree
+      // instead of running npm ci against the live checkout: an interrupted
+      // npm ci wipes node_modules and leaves the app unable to start at all.
+      if (lockChanged(old, head)) {
+        const srcNm = path.join(staged.dir, "node_modules");
+        const dstNm = path.join(REPO, "node_modules");
+        const tmpNm = `${dstNm}.updating`;
+        if (fs.existsSync(srcNm)) {
+          fs.rmSync(tmpNm, { recursive: true, force: true });
+          fs.cpSync(srcNm, tmpNm, { recursive: true });
+          fs.rmSync(dstNm, { recursive: true, force: true });
+          fs.renameSync(tmpNm, dstNm);
+        } else {
+          npmIn(REPO, ["ci"]);
+        }
+      }
       fs.rmSync(path.join(REPO, ".next"), { recursive: true, force: true });
       fs.cpSync(path.join(staged.dir, ".next"), path.join(REPO, ".next"), { recursive: true });
       try {
