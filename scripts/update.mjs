@@ -177,21 +177,19 @@ function apply() {
   if (staged) {
     try {
       // Only when the lockfile moved do node_modules change — and the worktree
-      // already installed them during prepare, so copy that ready-made tree
-      // instead of running npm ci against the live checkout: an interrupted
-      // npm ci wipes node_modules and leaves the app unable to start at all.
+      // already installed them during prepare, so move that ready-made tree in
+      // instead of running npm ci against the live checkout: a rename is
+      // atomic, while an interrupted npm ci/copy leaves node_modules broken.
       if (lockChanged(old, head)) {
         const srcNm = path.join(staged.dir, "node_modules");
         const dstNm = path.join(REPO, "node_modules");
-        const tmpNm = `${dstNm}.updating`;
-        if (fs.existsSync(srcNm)) {
-          fs.rmSync(tmpNm, { recursive: true, force: true });
-          fs.cpSync(srcNm, tmpNm, { recursive: true });
+        if (fs.existsSync(srcNm) && !fs.lstatSync(srcNm).isSymbolicLink()) {
           fs.rmSync(dstNm, { recursive: true, force: true });
-          fs.renameSync(tmpNm, dstNm);
-        } else {
+          fs.renameSync(srcNm, dstNm);
+        } else if (!fs.existsSync(srcNm)) {
           npmIn(REPO, ["ci"]);
         }
+        // A linked srcNm is the live tree already (prepare shared it) — leave it.
       }
       fs.rmSync(path.join(REPO, ".next"), { recursive: true, force: true });
       fs.cpSync(path.join(staged.dir, ".next"), path.join(REPO, ".next"), { recursive: true });
