@@ -50,6 +50,24 @@ const writeState = (patch) => {
 const builtAt = (dir) => fs.existsSync(path.join(dir, ".next", "BUILD_ID"));
 const lockChanged = (from, to) => git("diff", "--name-only", from, to, "--", "package-lock.json") !== "";
 
+// cpSync resolves relative symlinks to absolute paths into the SOURCE tree,
+// so after copying a staged dir its links would dangle once that dir is
+// removed. Re-point each copied link at the mirrored path inside dstRoot.
+const repointLinks = (dir, srcRoot, dstRoot) => {
+  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+    const p = path.join(dir, e.name);
+    if (e.isSymbolicLink()) {
+      const rel = path.relative(srcRoot, fs.realpathSync(p));
+      if (rel && !rel.startsWith("..") && !path.isAbsolute(rel)) {
+        fs.rmSync(p, { force: true });
+        fs.symlinkSync(path.relative(path.dirname(p), path.join(dstRoot, rel)), p);
+      }
+    } else if (e.isDirectory()) {
+      repointLinks(p, srcRoot, dstRoot);
+    }
+  }
+};
+
 // The commit the installed build actually serves (stamped by postbuild), which
 // can lag HEAD after a staged swap — unlike a plain BUILD_ID existence check.
 const installedSha = () => {
@@ -176,9 +194,34 @@ function apply() {
 
   if (staged) {
     try {
-      // Only when the lockfile moved do we pay for a real install in the app;
-      // sharing the staged node_modules isn't safe across lockfile changes.
-      if (lockChanged(old, head)) npmIn(REPO, ["ci"]);
+      // Only when the lockfile moved do node_modules change — and the worktree
+      // already installed them during prepare, so move that ready-made tree in
+      // instead of running npm ci against the live checkout: a rename is
+      // atomic, while an interrupted npm ci/copy leaves node_modules broken.
+      if (lockChanged(old, head)) {
+        const srcNm = path.join(staged.dir, "node_modules");
+        const dstNm = path.join(REPO, "node_modules");
+        if (fs.existsSync(srcNm) && !fs.lstatSync(srcNm).isSymbolicLink()) {
+          // Stage next to the destination first: a same-volume rename is
+          // instant and atomic, and an EXDEV here still leaves the live
+          // tree untouched for the copy fallback.
+          const tmpNm = `${dstNm}.updating`;
+          fs.rmSync(tmpNm, { recursive: true, force: true });
+          try {
+            fs.renameSync(srcNm, tmpNm);
+          } catch {
+            // Cross-volume (EXDEV): copy, then re-point links cpSync resolved
+            // to absolute paths inside the worktree we're about to remove.
+            fs.cpSync(srcNm, tmpNm, { recursive: true });
+            repointLinks(tmpNm, fs.realpathSync(srcNm), tmpNm);
+          }
+          fs.rmSync(dstNm, { recursive: true, force: true });
+          fs.renameSync(tmpNm, dstNm);
+        } else if (!fs.existsSync(srcNm)) {
+          npmIn(REPO, ["ci"]);
+        }
+        // A linked srcNm is the live tree already (prepare shared it) — leave it.
+      }
       fs.rmSync(path.join(REPO, ".next"), { recursive: true, force: true });
       fs.cpSync(path.join(staged.dir, ".next"), path.join(REPO, ".next"), { recursive: true });
       try {
