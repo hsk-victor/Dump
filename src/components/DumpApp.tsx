@@ -387,7 +387,12 @@ export default function DumpApp() {
   // The marker's flat index (in the dragged-card-removed list) where it would land.
   function onDragMove(e: DragMoveEvent) {
     const { active, over } = e;
-    if (!over) return;
+    // Clear the marker when the pointer leaves every droppable, so releasing
+    // outside the grid can't commit a stale slot.
+    if (!over) {
+      setDropIndex(null);
+      return;
+    }
     const list = items.filter((d) => d.id !== active.id);
     const oid = String(over.id);
     if (oid.startsWith("col-")) {
