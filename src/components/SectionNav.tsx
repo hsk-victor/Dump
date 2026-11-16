@@ -51,9 +51,10 @@ export default function SectionNav({ counts, topics: all, topic, onSelect, onCha
   // A finished long-press still emits a click on release — flag it so the
   // tab's onClick doesn't toggle the filter after the popover opens.
   const heldRef = useRef(false);
-  /** The `topic` filter just before the current click burst — lets a double-click
-   *  restore it exactly (the prop is still stale when the dblclick handler runs). */
-  const preClickTopic = useRef<string | null>(null);
+  /** The `topic` to restore if a click burst's first click toggled the filter
+   *  (undefined = this burst didn't toggle) — lets a double-click undo that
+   *  toggle, since the `topic` prop is still stale when dblclick runs. */
+  const toggleRestore = useRef<string | null | undefined>(undefined);
   /** Topic id whose popover the current pointerdown just closed — lets the
    *  anchor's click read as "dismiss" instead of reopening the popover. */
   const dismissClick = useRef<string | null>(null);
@@ -209,16 +210,16 @@ export default function SectionNav({ counts, topics: all, topic, onSelect, onCha
               data-tid={t.id}
               aria-pressed={topic === t.id}
               onClick={(e) => {
+                if (e.detail === 1) toggleRestore.current = undefined; // a burst starts
+                if (dismissClick.current === t.id) {
+                  dismissClick.current = null;
+                  return; // pointerdown just closed this tab's popover — a dismiss click
+                }
                 if (e.detail > 1) return; // second click of a double-click
                 if (heldRef.current) {
                   heldRef.current = false;
                   return; // trailing click after a long-press
                 }
-                if (dismissClick.current === t.id) {
-                  dismissClick.current = null;
-                  return; // pointerdown just closed this tab's popover — a dismiss click
-                }
-                preClickTopic.current = topic;
                 // Clicking the active tab opens its popover instead of
                 // clearing the filter (use "All" to clear).
                 if (topic === t.id && t.id !== "other") {
@@ -226,12 +227,16 @@ export default function SectionNav({ counts, topics: all, topic, onSelect, onCha
                   else anchorPop(t, e.currentTarget);
                   return;
                 }
+                toggleRestore.current = topic;
                 onSelect({ topic: topic === t.id ? null : t.id });
               }}
               onDoubleClick={(e) => {
                 e.preventDefault();
-                // The first click already toggled the filter — restore it.
-                onSelect({ topic: preClickTopic.current });
+                // The first click may have toggled the filter — undo it.
+                if (toggleRestore.current !== undefined) {
+                  onSelect({ topic: toggleRestore.current });
+                  toggleRestore.current = undefined;
+                }
                 setRenaming(t.id);
               }}
               onContextMenu={(e) => {
