@@ -239,11 +239,11 @@ export default function DumpApp() {
     if (!res.ok) return;
     const data = (await res.json()) as { items: Dump[]; hasMore: boolean; counts?: Counts; ai: boolean };
     setItems((prev) => {
-      if (data.items.length >= prev.length) return data.items;
-      // More was loaded than the cap returns: keep the unrevalidated tail,
-      // minus ids the fresh window already covers.
+      // Only a window that can't cover the loaded list keeps a tail; a shorter
+      // response below the cap means the list genuinely shrank (filters, moves).
+      if (prev.length <= LIMIT_CAP) return data.items;
       const seen = new Set(data.items.map((d) => d.id));
-      return [...data.items, ...prev.filter((d) => !seen.has(d.id))];
+      return [...data.items, ...prev.slice(LIMIT_CAP).filter((d) => !seen.has(d.id))];
     });
     setAiOn(data.ai);
     setHasMore(data.hasMore);
