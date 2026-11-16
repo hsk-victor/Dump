@@ -558,7 +558,7 @@ function hnFallback(dump: Dump, domainish: string | null) {
   return id ? `Item #${id}` : "Hacker News";
 }
 
-/** hackernews — flat Y-orange rail + mono kicker (:\ HACKER_NEWS, type tag),    *
+/** hackernews — flat Y-orange rail + mono kicker (:\ HACKER_NEWS, type tag),
  *  headline as a stretched link over the whole card. */
 function HnCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
   const item = hnItem(bits.title);

@@ -11,7 +11,7 @@ npm run dev        # http://localhost:3000
 
 Requires Node 20+. Data lives in `./data` (SQLite database + uploaded images); set `DUMP_DATA_DIR` to put it elsewhere.
 
-Optional: set `OPENROUTER_API_KEY` to file dumps with [Jev](https://openrouter.ai/typesafe/jev-1.14), a decision model, via OpenRouter's [Decisions API](https://openrouter.ai/docs/api/reference/decisions). Jev picks the topic (and can look at uploaded images); tags still come from the rules. It answers in ~0.2s and costs about $0.00002 per dump. Without a key, Dump uses a built-in rules classifier that works offline. With a key, the ✦ button in the header re-sorts everything you haven't filed by hand.
+Optional: set `OPENROUTER_API_KEY` to file dumps with [Jev](https://openrouter.ai/typesafe/jev-1.14), a decision model, via OpenRouter's [Decisions API](https://openrouter.ai/docs/api/reference/decisions). Jev picks the topic (and can look at uploaded images); tags still come from the rules. It answers in ~0.2s and costs about $0.00002 per dump. Without a key, Dump uses a built-in rules classifier that works offline. With a key, "Re-sort with AI" in the settings menu re-sorts everything you haven't filed by hand.
 
 The same key also powers **subject identification**: clips and images (TikTok/Instagram posts and reels, YouTube and other videos, uploaded or linked images) get a second pass with a regular chat-completions vision model that names what they're about — "Severance (2022) · TV series" — plus a 1–2 line description that becomes the card's dek and is searchable. A low-confidence answer keeps the card unchanged. The identified subject is stored as JSON in a `subject` column and feeds Jev's filing; re-sorting reuses it without calling the model again.
 
@@ -32,9 +32,9 @@ npm run build && npm start
 
 - **Dump:** paste a link, type a note, or paste/drop an image into the box and press Enter. Text around a link is kept as your note ("try this weekend https://…").
 - **Auto-filing:** the dump appears instantly with a "Sorting…" badge, then fills in with its title, preview, topic and tags a moment later.
-- **Browse:** the sidebar lists topics and types with counts. Click to filter.
+- **Browse:** the header lists your topics with counts; the settings menu filters by type.
 - **Search:** press `/` and type. Search runs across titles, descriptions, page text, notes, tags and sites, with prefix matching.
-- **Bookmarklet:** drag "+ Dump it" from the sidebar to your bookmarks bar to dump the page you're on in one click. It also sends the page's og:description and og:image, which a logged-in Instagram/TikTok tab has but a server-side fetch never sees.
+- **Bookmarklet:** drag "+ Dump it" from the footer to your bookmarks bar to dump the page you're on in one click. It also sends the page's og:description and og:image, which a logged-in Instagram/TikTok tab has but a server-side fetch never sees.
 - **Fix a filing (optional):** hover a card, then use "Move…". Manual choices are never overwritten.
 - Dumping the same link twice moves it back to the top instead of creating a duplicate.
 

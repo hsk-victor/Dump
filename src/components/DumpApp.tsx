@@ -367,6 +367,7 @@ export default function DumpApp() {
     applyLayout();
   }, [items, dragId, applyLayout]);
 
+  const hasItems = items.length > 0;
   // Column count follows the container width and the card-size preference; the CSS
   // column-width on .d-grid is kept purely so this can read the resolved pixel width.
   useEffect(() => {
@@ -386,7 +387,7 @@ export default function DumpApp() {
     const ro = new ResizeObserver(compute);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [density, loaded, items.length > 0, applyLayout]);
+  }, [density, loaded, hasItems, applyLayout]);
 
   // Measure each rendered card once so the greedy column split can balance heights.
   useEffect(() => {

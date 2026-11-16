@@ -189,27 +189,6 @@ const GITHUB_NON_REPO = new Set([
   "signup", "sponsors", "team", "topics", "trending",
 ]);
 
-/**
- * The repo a GitHub URL points at: { repo: "owner/name", ref: "#123" } for pulls/issues,
- * { repo: "user/gist-id" } for gists. Null for non-repo pages (explore, settings, …).
- */
-export function githubRef(url: string): { repo: string; ref?: string } | null {
-  const host = domainOf(url) ?? "";
-  let u: URL;
-  try {
-    u = new URL(url);
-  } catch {
-    return null;
-  }
-  const seg = u.pathname.split("/").filter(Boolean);
-  if (host === "gist.github.com") {
-    return seg.length >= 2 ? { repo: `${seg[0]}/${seg[1].slice(0, 12)}` } : null;
-  }
-  if (host !== "github.com" || seg.length < 2 || GITHUB_NON_REPO.has(seg[0].toLowerCase())) return null;
-  const m = u.pathname.match(/^\/[^/]+\/[^/]+\/(?:pull|issues)\/(\d+)/);
-  return { repo: `${seg[0]}/${seg[1]}`, ref: m ? `#${m[1]}` : undefined };
-}
-
 export type GithubKind = "repo" | "issue" | "pr" | "discussion" | "file" | "profile" | "page";
 
 /** What a GitHub URL actually is — decided by the path alone, never by guessed data. */

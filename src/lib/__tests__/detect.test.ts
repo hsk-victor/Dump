@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { githubRef, isDirectVideoUrl, kindFromUrl, normalizeUrl, parseInput, providerFromUrl, titleFromUrl, videoTitleFromUrl } from "../detect";
+import { githubInfo, isDirectVideoUrl, kindFromUrl, normalizeUrl, parseInput, providerFromUrl, titleFromUrl, videoTitleFromUrl } from "../detect";
 
 describe("direct video files", () => {
   it.each(["mp4", "webm", "mov", "m4v"])("recognizes .%s files with query strings and fragments", (ext) => {
@@ -87,18 +87,29 @@ describe("providerFromUrl", () => {
   });
 });
 
-describe("githubRef", () => {
-  it("reads owner/repo, plus a ref for pulls and issues", () => {
-    expect(githubRef("https://github.com/vercel/next.js")).toEqual({ repo: "vercel/next.js", ref: undefined });
-    expect(githubRef("https://github.com/vercel/next.js/pull/123")).toEqual({ repo: "vercel/next.js", ref: "#123" });
-    expect(githubRef("https://github.com/vercel/next.js/issues/45")).toEqual({ repo: "vercel/next.js", ref: "#45" });
+describe("githubInfo", () => {
+  it("reads owner/repo, plus a ref and kind for pulls, issues and discussions", () => {
+    expect(githubInfo("https://github.com/vercel/next.js")).toMatchObject({ kind: "repo", repo: "vercel/next.js", ref: null });
+    expect(githubInfo("https://github.com/vercel/next.js/pull/123")).toMatchObject({ kind: "pr", repo: "vercel/next.js", ref: "#123" });
+    expect(githubInfo("https://github.com/vercel/next.js/issues/45")).toMatchObject({ kind: "issue", repo: "vercel/next.js", ref: "#45" });
+    expect(githubInfo("https://github.com/vercel/next.js/discussions/7")).toMatchObject({ kind: "discussion", repo: "vercel/next.js", ref: "#7" });
   });
 
-  it("handles gists and ignores non-repo pages", () => {
-    expect(githubRef("https://gist.github.com/mattn/abcdef1234567890")).toEqual({ repo: "mattn/abcdef123456" });
-    expect(githubRef("https://github.com/explore")).toBeNull();
-    expect(githubRef("https://github.com/settings/profile")).toBeNull();
-    expect(githubRef("https://example.com/vercel/next.js")).toBeNull();
+  it("reads profiles, file pages and gists", () => {
+    expect(githubInfo("https://github.com/vercel")).toMatchObject({ kind: "profile", login: "vercel" });
+    expect(githubInfo("https://github.com/vercel/next.js/blob/main/package.json")).toMatchObject({
+      kind: "file",
+      repo: "vercel/next.js",
+      filePath: "main/package.json",
+    });
+    expect(githubInfo("https://gist.github.com/mattn/abcdef1234567890")).toMatchObject({ kind: "file", repo: "mattn/abcdef123456" });
+  });
+
+  it("ignores non-repo and non-github pages", () => {
+    expect(githubInfo("https://github.com/explore")).toMatchObject({ kind: "page", repo: null });
+    expect(githubInfo("https://github.com/settings/profile")).toMatchObject({ kind: "page", repo: null });
+    expect(githubInfo("https://example.com/vercel/next.js")).toMatchObject({ kind: "page", repo: null });
+    expect(githubInfo(null)).toMatchObject({ kind: "page", repo: null });
   });
 });
 
