@@ -229,28 +229,36 @@ export default function DumpApp() {
   );
 
   const load = useCallback(async () => {
-    const sp = new URLSearchParams();
-    if (q) sp.set("q", q);
-    if (kind) sp.set("kind", kind);
-    if (topic) sp.set("topic", topic);
-    // Revalidate the loaded window, bounded by the server's per-request cap.
-    sp.set("limit", String(Math.min(Math.max(itemsRef.current.length, PAGE_SIZE), LIMIT_CAP)));
-    const res = await fetch(`/api/dumps?${sp}`, { cache: "no-store" });
-    if (!res.ok) return;
-    const data = (await res.json()) as { items: Dump[]; hasMore: boolean; counts?: Counts; ai: boolean };
-    setItems((prev) => {
-      // Only a window that can't cover the loaded list keeps a tail; a shorter
-      // response below the cap means the list genuinely shrank (filters, moves).
-      if (prev.length <= LIMIT_CAP) return data.items;
-      const seen = new Set(data.items.map((d) => d.id));
-      return [...data.items, ...prev.slice(LIMIT_CAP).filter((d) => !seen.has(d.id))];
-    });
-    setAiOn(data.ai);
-    setHasMore(data.hasMore);
-    if (data.counts) setCounts(data.counts);
+    const page = (offset: number, limit: number) => {
+      const sp = new URLSearchParams();
+      if (q) sp.set("q", q);
+      if (kind) sp.set("kind", kind);
+      if (topic) sp.set("topic", topic);
+      sp.set("offset", String(offset));
+      sp.set("limit", String(limit));
+      return fetch(`/api/dumps?${sp}`, { cache: "no-store" });
+    };
+    // Revalidate the whole loaded window in cap-sized pages — a merge past the cap
+    // can't tell a displaced card from a deleted one, so every loaded position is
+    // refetched and the list replaced outright.
+    const want = Math.max(itemsRef.current.length, PAGE_SIZE);
+    const rows: Dump[] = [];
+    let resp: { items: Dump[]; hasMore: boolean; counts?: Counts; ai: boolean } | undefined;
+    for (let offset = 0; offset < want; offset += LIMIT_CAP) {
+      const res = await page(offset, Math.min(want - offset, LIMIT_CAP));
+      if (!res.ok) return;
+      resp = (await res.json()) as { items: Dump[]; hasMore: boolean; counts?: Counts; ai: boolean };
+      rows.push(...resp.items);
+      if (!resp.hasMore) break;
+    }
+    const seen = new Set<string>();
+    setItems(rows.filter((d) => !seen.has(d.id) && !!seen.add(d.id)));
+    setAiOn(resp!.ai);
+    setHasMore(resp!.hasMore);
+    if (resp!.counts) setCounts(resp!.counts);
     setLoaded(true);
 
-    for (const d of data.items) {
+    for (const d of rows) {
       if (pendingToasts.current.has(d.id) && d.status !== "processing") {
         pendingToasts.current.delete(d.id);
         if (d.status === "failed")
