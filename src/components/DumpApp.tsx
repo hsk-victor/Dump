@@ -244,18 +244,20 @@ export default function DumpApp() {
     const want = Math.max(itemsRef.current.length, PAGE_SIZE);
     const rows: Dump[] = [];
     let resp: { items: Dump[]; hasMore: boolean; counts?: Counts; ai: boolean } | undefined;
+    let newCounts: Counts | undefined; // only the offset=0 page carries counts
     for (let offset = 0; offset < want; offset += LIMIT_CAP) {
       const res = await page(offset, Math.min(want - offset, LIMIT_CAP));
       if (!res.ok) return;
       resp = (await res.json()) as { items: Dump[]; hasMore: boolean; counts?: Counts; ai: boolean };
       rows.push(...resp.items);
+      newCounts ??= resp.counts;
       if (!resp.hasMore) break;
     }
     const seen = new Set<string>();
     setItems(rows.filter((d) => !seen.has(d.id) && !!seen.add(d.id)));
     setAiOn(resp!.ai);
     setHasMore(resp!.hasMore);
-    if (resp!.counts) setCounts(resp!.counts);
+    if (newCounts) setCounts(newCounts);
     setLoaded(true);
 
     for (const d of rows) {
