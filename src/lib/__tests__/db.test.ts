@@ -46,3 +46,40 @@ describe("db + search", () => {
     expect(pages.map((d) => d.id)).toEqual(all.map((d) => d.id));
   });
 });
+
+describe("topics", () => {
+  it("seeds the builtin categories", () => {
+    const ts = db.listTopics();
+    expect(ts.length).toBeGreaterThanOrEqual(20);
+    expect(ts.find((t) => t.id === "other")?.label).toBe("Everything else");
+    expect(ts.find((t) => t.id === "tech")?.description).toBeTruthy();
+  });
+
+  it("creates, updates and deletes a category, re-filing and unlocking its dumps", () => {
+    const t = db.createTopic({ label: "Test Category" });
+    expect(t.id).toBe("test-category");
+    const dump = db.createDump({ kind: "note", topic: t.id, title: "in test cat" });
+    db.updateDump(dump.id, { topicLocked: true });
+    db.updateTopic(t.id, { label: "Renamed Cat", color: "#123abc", description: "things for tests" });
+    expect(db.getTopic(t.id)).toMatchObject({ label: "Renamed Cat", color: "#123abc", description: "things for tests" });
+    const res = db.deleteTopic(t.id);
+    expect(res?.moved).toBe(1);
+    const after = db.getDump(dump.id);
+    expect(after?.topic).toBe("other");
+    expect(after?.topicLocked).toBe(false);
+  });
+
+  it("rejects deleting the catch-all and empty labels", () => {
+    expect(() => db.deleteTopic("other")).toThrow();
+    expect(() => db.createTopic({ label: "  " })).toThrow();
+  });
+
+  it("dedupes slugs", () => {
+    const a = db.createTopic({ label: "Dup Cat" });
+    const b = db.createTopic({ label: "Dup Cat" });
+    expect(a.id).toBe("dup-cat");
+    expect(b.id).toBe("dup-cat-2");
+    db.deleteTopic(a.id);
+    db.deleteTopic(b.id);
+  });
+});

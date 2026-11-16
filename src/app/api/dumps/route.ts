@@ -1,9 +1,9 @@
 import { after, NextResponse, type NextRequest } from "next/server";
-import { counts, listDumps } from "@/lib/db";
+import { counts, listDumps, listTopics } from "@/lib/db";
 import { createFromFile, createFromText, InputError } from "@/lib/create";
 import { enrichDump } from "@/lib/enrich";
 import { aiEnabled } from "@/lib/llm";
-import { isKind, isTopic } from "@/lib/taxonomy";
+import { isKind } from "@/lib/taxonomy";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -26,7 +26,8 @@ export async function GET(req: NextRequest) {
   const rows = listDumps({
     q: sp.get("q"),
     kind: isKind(kind) ? kind : null,
-    topic: isTopic(topic) ? topic : null,
+    // Raw string is safe (bound param) and a stale/deleted id correctly matches nothing.
+    topic,
     limit: limit + 1,
     offset,
   });
@@ -35,7 +36,7 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     items: rows.slice(0, limit),
     hasMore: rows.length > limit,
-    ...(wantCounts ? { counts: counts() } : {}),
+    ...(wantCounts ? { counts: counts(), topics: listTopics() } : {}),
     ai: aiEnabled(),
   });
 }

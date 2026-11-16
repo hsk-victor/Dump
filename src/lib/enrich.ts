@@ -1,5 +1,5 @@
 import { classifyHeuristic } from "./classify";
-import { db, getDump, listResortable, updateDump, type Dump } from "./db";
+import { db, getDump, listResortable, listTopics, updateDump, type Dump } from "./db";
 import { extractUrl } from "./extract";
 import { providerFromUrl, titleFromUrl } from "./detect";
 import { classifyWithAi, identifySubject } from "./llm";
@@ -63,8 +63,9 @@ async function classify(input: Dump, useImage: boolean): Promise<Partial<Dump>> 
   // The identified subject feeds Jev's state, and its description feeds the rules so
   // image-only dumps (no other text) still get tags.
   const forAI = { ...input, subject, description: input.description ?? subject?.description ?? null };
-  const ai = await classifyWithAi({ ...forAI, useImage });
-  const rules = classifyHeuristic(forAI, ai?.topic);
+  const topics = listTopics();
+  const ai = await classifyWithAi({ ...forAI, useImage }, topics);
+  const rules = classifyHeuristic(forAI, ai?.topic, topics);
   return { topic: rules.topic, tags: rules.tags, classifiedBy: ai ? "ai" : "rules" };
 }
 

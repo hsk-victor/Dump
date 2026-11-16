@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type MouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { Menu } from "@base-ui/react/menu";
 import type { Dump } from "@/lib/db";
-import { SUBJECT_MIN_CONFIDENCE, subjectLine, TOPICS, kindMeta, providerMeta, topicMeta } from "@/lib/taxonomy";
+import { SUBJECT_MIN_CONFIDENCE, subjectLine, kindMeta, providerMeta, topicMeta, type TopicMeta } from "@/lib/taxonomy";
 import { timeAgo, shortDate } from "@/lib/format";
 import { GITHUB_TAG, githubInfo, type GithubInfo, titleFromUrl } from "@/lib/detect";
 
@@ -24,6 +24,8 @@ interface Props {
   onSaveNote: (id: string, content: string) => Promise<boolean>;
   /** Present when the card can be grabbed and reordered. */
   drag?: DragHandle;
+  /** Live category list — colors chips and fills the Move menu. */
+  topics: TopicMeta[];
 }
 
 /** The name inside a "Name on X"-style title — only when the suffix is a known
@@ -1346,7 +1348,7 @@ function LinkCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
 
 /* ================================== dispatch ================================== */
 
-export default function DumpCard({ dump, fresh, removing, onTopic, onDelete, onRetry, onPin, onSaveNote, drag }: Props) {
+export default function DumpCard({ dump, fresh, removing, onTopic, onDelete, onRetry, onPin, onSaveNote, drag, topics }: Props) {
   const [imgFailed, setImgFailed] = useState(false);
   const [revealed, setRevealed] = useState(false);
   const [editingNote, setEditingNote] = useState(false);
@@ -1383,7 +1385,7 @@ export default function DumpCard({ dump, fresh, removing, onTopic, onDelete, onR
     e.preventDefault();
     setRevealed(true);
   };
-  const topic = topicMeta(dump.topic);
+  const topic = topicMeta(dump.topic, topics);
   const kind = dump.kind;
   const provider = providerMeta(dump.provider);
   const processing = dump.status === "processing";
@@ -1432,8 +1434,9 @@ export default function DumpCard({ dump, fresh, removing, onTopic, onDelete, onR
         <Menu.Portal>
           <Menu.Positioner side="bottom" align="end" sideOffset={4}>
             <Menu.Popup className="d-menu">
-              {TOPICS.filter((t) => t.id !== dump.topic).map((t) => (
+              {topics.filter((t) => t.id !== dump.topic).map((t) => (
                 <Menu.Item key={t.id} className="d-menu-item" onClick={() => onTopic(dump.id, t.id)}>
+                  <span className="d-dot" style={{ "--topic": t.color } as CSSProperties} />
                   {t.label}
                 </Menu.Item>
               ))}

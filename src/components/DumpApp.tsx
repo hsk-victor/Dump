@@ -4,12 +4,13 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEv
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Toaster, toast as sonnerToast } from "sonner";
 import type { Dump } from "@/lib/db";
-import { KINDS, kindMeta, topicMeta } from "@/lib/taxonomy";
+import { KINDS, kindMeta, topicMeta, TOPICS, type TopicMeta } from "@/lib/taxonomy";
 import { DENSITY_KEY, MODE_KEY } from "@/lib/theme";
 import Composer from "./Composer";
 import DumpCard from "./DumpCard";
 import Logo from "./Logo";
 import SectionNav, { type Counts } from "./SectionNav";
+import CategoryManager from "./CategoryManager";
 import UpdateButton from "./UpdateButton";
 
 const PAGE_SIZE = 60;
@@ -103,6 +104,7 @@ function FeedItem({
   onRetry: (id: string) => void;
   onPin: (id: string, pinned: boolean) => void;
   onSaveNote: (id: string, content: string) => Promise<boolean>;
+  topics: TopicMeta[];
 }) {
   return (
     <div
@@ -133,6 +135,8 @@ export default function DumpApp() {
 
   const [items, setItems] = useState<Dump[]>([]);
   const [counts, setCounts] = useState<Counts>({ total: 0, kinds: {}, topics: {} });
+  const [topics, setTopics] = useState<TopicMeta[]>(() => [...TOPICS]);
+  const [catsOpen, setCatsOpen] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [search, setSearch] = useState(q);
   const [hasMore, setHasMore] = useState(false);
@@ -153,6 +157,8 @@ export default function DumpApp() {
   const cardHeights = useRef(new Map<string, number>());
   const itemsRef = useRef(items);
   itemsRef.current = items;
+  const topicsRef = useRef(topics);
+  topicsRef.current = topics;
   const dragRef = useRef<DragState | null>(null);
   const pendingRef = useRef<PendingDrag | null>(null);
   /** Set by the click that trails a real drag — eats it so it can't edit/navigate. */
@@ -243,14 +249,16 @@ export default function DumpApp() {
     // refetched and the list replaced outright.
     const want = Math.max(itemsRef.current.length, PAGE_SIZE);
     const rows: Dump[] = [];
-    let resp: { items: Dump[]; hasMore: boolean; counts?: Counts; ai: boolean } | undefined;
+    let resp: { items: Dump[]; hasMore: boolean; counts?: Counts; topics?: TopicMeta[]; ai: boolean } | undefined;
     let newCounts: Counts | undefined; // only the offset=0 page carries counts
+    let newTopics: TopicMeta[] | undefined;
     for (let offset = 0; offset < want; offset += LIMIT_CAP) {
       const res = await page(offset, Math.min(want - offset, LIMIT_CAP));
       if (!res.ok) return;
-      resp = (await res.json()) as { items: Dump[]; hasMore: boolean; counts?: Counts; ai: boolean };
+      resp = (await res.json()) as { items: Dump[]; hasMore: boolean; counts?: Counts; topics?: TopicMeta[]; ai: boolean };
       rows.push(...resp.items);
       newCounts ??= resp.counts;
+      newTopics ??= resp.topics;
       if (!resp.hasMore) break;
     }
     const seen = new Set<string>();
@@ -258,6 +266,7 @@ export default function DumpApp() {
     setAiOn(resp!.ai);
     setHasMore(resp!.hasMore);
     if (newCounts) setCounts(newCounts);
+    if (newTopics) setTopics(newTopics);
     setLoaded(true);
 
     for (const d of rows) {
@@ -265,7 +274,7 @@ export default function DumpApp() {
         pendingToasts.current.delete(d.id);
         if (d.status === "failed")
           toast("Couldn't fetch that link. Saved it anyway.", "error");
-        else toast(`Filed under ${topicMeta(d.topic).label} · ${kindMeta(d.kind).singular}`);
+        else toast(`Filed under ${topicMeta(d.topic, topicsRef.current).label} · ${kindMeta(d.kind).singular}`);
       }
     }
   }, [q, kind, topic, toast]);
@@ -438,7 +447,7 @@ export default function DumpApp() {
       return false;
     }
     const dump = (await res.json()) as Dump & { duplicate?: boolean };
-    if (dump.duplicate) toast(`Already in your dump (${topicMeta(dump.topic).label}). Moved it to the top`);
+    if (dump.duplicate) toast(`Already in your dump (${topicMeta(dump.topic, topics).label}). Moved it to the top`);
     else pendingToasts.current.add(dump.id);
     setFreshId(dump.id);
     setTimeout(() => setFreshId(null), 2500);
@@ -455,7 +464,7 @@ export default function DumpApp() {
   async function handleTopic(id: string, newTopic: string) {
     setItems((prev) => prev.map((d) => (d.id === id ? { ...d, topic: newTopic as Dump["topic"], classifiedBy: "you" } : d)));
     await fetch(`/api/dumps/${id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ topic: newTopic }) });
-    toast(`Moved to ${topicMeta(newTopic).label}`);
+    toast(`Moved to ${topicMeta(newTopic, topics).label}`);
     load();
   }
 
@@ -766,7 +775,7 @@ export default function DumpApp() {
     }
   }
 
-  const activeLabel = topic ? topicMeta(topic).label : kind ? kindMeta(kind).label : null;
+  const activeLabel = topic ? topicMeta(topic, topics).label : kind ? kindMeta(kind).label : null;
 
   return (
     <div className="d-page">
@@ -776,7 +785,7 @@ export default function DumpApp() {
             <span className="d-wordmark">dump</span>
             <span className="d-count">{counts.total}</span>
           </button>
-          <SectionNav counts={counts} topic={topic} onSelect={setFilter} />
+          <SectionNav counts={counts} topics={topics} topic={topic} onSelect={setFilter} />
 
           <label className="d-search">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
@@ -841,6 +850,12 @@ export default function DumpApp() {
                       </button>
                     </div>
                   )}
+                  <div className="d-settings-row">
+                    <span className="d-settings-label">Categories</span>
+                    <button className="d-ghost-btn" onClick={() => setCatsOpen(true)}>
+                      Manage…
+                    </button>
+                  </div>
                   <div className="d-settings-row">
                     <span className="d-settings-label">Theme</span>
                     <div className="d-seg">
@@ -934,6 +949,7 @@ export default function DumpApp() {
                 onRetry={handleRetry}
                 onPin={handlePin}
                 onSaveNote={handleSaveNote}
+                topics={topics}
               />
             ))}
           </div>
@@ -956,6 +972,19 @@ export default function DumpApp() {
       </main>
 
       <Composer onDump={handleDump} />
+
+      <CategoryManager
+        open={catsOpen}
+        onClose={() => setCatsOpen(false)}
+        topics={topics}
+        counts={counts.topics}
+        onChange={(t) => {
+          setTopics(t);
+          // Deletes move dumps, so the counts (and cards under the old topic) refresh too.
+          void load();
+        }}
+        toast={toast}
+      />
 
       <Toaster
         position="bottom-center"

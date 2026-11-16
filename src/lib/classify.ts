@@ -1,4 +1,5 @@
-import type { Topic } from "./taxonomy";
+import type { Topic, TopicMeta } from "./taxonomy";
+import { TOPICS } from "./taxonomy";
 
 export interface ClassifyInput {
   title?: string | null;
@@ -22,7 +23,7 @@ interface Lexicon {
   keywords: string[];
 }
 
-const LEXICON: Record<Exclude<Topic, "other">, Lexicon> = {
+const LEXICON: Record<string, Lexicon> = {
   ai: {
     domains: ["openai.com", "anthropic.com", "huggingface.co", "deepmind.google", "mistral.ai", "perplexity.ai", "midjourney.com", "cognition.ai"],
     keywords: ["ai", "artificial intelligence", "machine learning", "deep learning", "llm*", "gpt*", "chatgpt", "claude", "gemini", "openai", "anthropic", "neural network*", "transformer*", "prompt*", "agent*", "agentic", "fine-tun*", "diffusion", "embedding*", "inference", "copilot", "devin", "rag", "ml", "mcp"],
@@ -133,16 +134,23 @@ interface CompiledKeyword {
   label: string;
 }
 
+function compileKeywords(keywords: string[]): CompiledKeyword[] {
+  return keywords.map((k) => {
+    const prefix = k.endsWith("*");
+    const clean = prefix ? k.slice(0, -1) : k;
+    return { words: tokenize(clean), prefix, label: clean.trim() };
+  });
+}
+
 const COMPILED: Record<string, CompiledKeyword[]> = Object.fromEntries(
-  Object.entries(LEXICON).map(([topic, lex]) => [
-    topic,
-    lex.keywords.map((k) => {
-      const prefix = k.endsWith("*");
-      const clean = prefix ? k.slice(0, -1) : k;
-      return { words: tokenize(clean), prefix, label: clean.trim() };
-    }),
-  ]),
+  Object.entries(LEXICON).map(([topic, lex]) => [topic, compileKeywords(lex.keywords)]),
 );
+
+/** A user-made topic has no lexicon: its own label words are the keywords.
+ *  Exact words only — a prefix stem like "art*" would bleed into "artificial". */
+function labelKeywords(label: string): string[] {
+  return tokenize(label).filter((w) => w.length > 2);
+}
 
 function countMatches(tokens: string[], kw: CompiledKeyword): { count: number; matched: string | null } {
   const n = kw.words.length;
@@ -179,8 +187,10 @@ function domainMatches(domain: string, url: string, candidates: string[]) {
  * Keyword + domain scoring classifier. Works offline and needs no API key.
  * Title words count more than description words, which count more than body text.
  */
-/** Keyword/domain classifier. Pass `topic` when it was already decided elsewhere to get tags for that topic. */
-export function classifyHeuristic(input: ClassifyInput, decided?: Topic): Classification {
+/** Keyword/domain classifier over the live topic list. Pass `topic` when it was
+ *  already decided elsewhere to get tags for that topic. Custom topics score on
+ *  their label words only, so they need the AI (or a clear title) to be picked. */
+export function classifyHeuristic(input: ClassifyInput, decided?: Topic, topics: readonly TopicMeta[] = TOPICS): Classification {
   const fields: Array<[string, number]> = [
     [input.title ?? "", 3],
     [input.note ?? "", 3],
@@ -196,10 +206,13 @@ export function classifyHeuristic(input: ClassifyInput, decided?: Topic): Classi
   const scores: Record<string, number> = {};
   const hits: Record<string, Map<string, number>> = {};
 
-  for (const [topic, lex] of Object.entries(LEXICON)) {
-    let score = domain && domainMatches(domain, url, lex.domains) ? 6 : 0;
+  for (const t of topics) {
+    const topic = t.id;
+    const lex = LEXICON[topic];
+    const keywords = COMPILED[topic] ?? compileKeywords(labelKeywords(t.label));
+    let score = domain && lex && domainMatches(domain, url, lex.domains) ? 6 : 0;
     const topicHits = new Map<string, number>();
-    for (const kw of COMPILED[topic]) {
+    for (const kw of keywords) {
       let kwScore = 0;
       let label = kw.label;
       for (const [tokens, weight] of tokenized) {
@@ -218,7 +231,7 @@ export function classifyHeuristic(input: ClassifyInput, decided?: Topic): Classi
   }
 
   const ranked = Object.entries(scores).sort((a, b) => b[1] - a[1]);
-  const [bestTopic, bestScore] = ranked[0];
+  const [bestTopic, bestScore] = ranked[0] ?? ["other", 0];
   const secondScore = ranked[1]?.[1] ?? 0;
   const total = ranked.reduce((s, [, v]) => s + v, 0);
 

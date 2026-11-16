@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { TOPICS } from "../taxonomy";
 import { classifyHeuristic } from "../classify";
 
 describe("classifyHeuristic", () => {
@@ -34,5 +35,18 @@ describe("tags from stem keywords", () => {
     const { tags } = classifyHeuristic({ title: "Astronomers spot a new galaxy with the telescope" });
     expect(tags).toContain("astronomers");
     expect(tags.some((t) => t === "astronom")).toBe(false);
+  });
+});
+
+describe("custom categories", () => {
+  const topics = [...TOPICS, { id: "fountain-pens", label: "Fountain Pens", color: "#84cc16" }];
+  it("scores a category with no lexicon from its label words", () => {
+    expect(classifyHeuristic({ title: "My favorite fountain pens", description: "inks and nibs" }, undefined, topics).topic).toBe("fountain-pens");
+  });
+  it("does not let a custom label steal builtin matches", () => {
+    expect(classifyHeuristic({ title: "Creamy garlic pasta recipe", description: "dinner in 20 minutes" }, undefined, topics).topic).toBe("food");
+  });
+  it("a removed category no longer matches its label words", () => {
+    expect(classifyHeuristic({ title: "My favorite fountain pens" }, undefined, TOPICS).topic).not.toBe("fountain-pens");
   });
 });
