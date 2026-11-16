@@ -48,6 +48,9 @@ export default function SectionNav({ counts, topics: all, topic, onSelect, onCha
   const navRef = useRef<HTMLElement>(null);
   const popRef = useRef<HTMLDivElement>(null);
   const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // A finished long-press still emits a click on release — flag it so the
+  // pill's onClick doesn't toggle the filter after the editor opens.
+  const heldRef = useRef(false);
   /** The `topic` filter just before the current click burst — lets a double-click
    *  restore it exactly (the prop is still stale when the dblclick handler runs). */
   const preClickTopic = useRef<string | null>(null);
@@ -155,7 +158,10 @@ export default function SectionNav({ counts, topics: all, topic, onSelect, onCha
 
   function startHold(t: TopicMeta, el: HTMLElement, e: React.PointerEvent) {
     if (e.pointerType !== "touch") return;
-    holdTimer.current = setTimeout(() => anchorPop(t, el), 450);
+    holdTimer.current = setTimeout(() => {
+      heldRef.current = true;
+      anchorPop(t, el);
+    }, 450);
   }
   function endHold() {
     if (holdTimer.current) clearTimeout(holdTimer.current);
@@ -224,6 +230,10 @@ export default function SectionNav({ counts, topics: all, topic, onSelect, onCha
               style={{ "--topic": t.color } as CSSProperties}
               onClick={(e) => {
                 if (e.detail > 1) return; // second click of a double-click
+                if (heldRef.current) {
+                  heldRef.current = false;
+                  return; // trailing click after a long-press
+                }
                 preClickTopic.current = topic;
                 onSelect({ topic: topic === t.id ? null : t.id });
               }}
