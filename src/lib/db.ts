@@ -110,6 +110,12 @@ CREATE TABLE IF NOT EXISTS dumps (
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL
 );
+`;
+
+// Indexes/triggers that depend on post-v1 columns (pinned, position) must run after the
+// ALTER migrations below — databases created before those columns existed would fail
+// to open if the index DDL ran first.
+const SCHEMA_MIGRATED = `
 CREATE INDEX IF NOT EXISTS dumps_created ON dumps(created_at DESC);
 CREATE INDEX IF NOT EXISTS dumps_url ON dumps(url);
 -- The feed's ORDER BY — without a covering index every /api/dumps is a full scan + temp sort.
@@ -174,6 +180,7 @@ export function db(): Database.Database {
            OR (d2.created_at = dumps.created_at AND d2.rowid <= dumps.rowid)
       )`);
     }
+    conn.exec(SCHEMA_MIGRATED);
     globalForDb.__dumpDb = conn;
   }
   return globalForDb.__dumpDb;
