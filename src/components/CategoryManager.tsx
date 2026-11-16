@@ -102,7 +102,7 @@ export default function CategoryManager({ open, onClose, topics, counts, onChang
 
   async function create() {
     const label = newName.trim();
-    if (!label) return;
+    if (!label) return toast("Categories need a name", "error");
     const res = await fetch("/api/topics", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -165,6 +165,8 @@ export default function CategoryManager({ open, onClose, topics, counts, onChang
                       onKeyDown={(e) => {
                         if (e.key === "Enter") e.currentTarget.blur();
                         if (e.key === "Escape") {
+                          // Revert, don't dismiss: Escape means "undo this edit" inside a field.
+                          e.stopPropagation();
                           e.currentTarget.value = t.label;
                           e.currentTarget.blur();
                         }
@@ -197,6 +199,7 @@ export default function CategoryManager({ open, onClose, topics, counts, onChang
                     onKeyDown={(e) => {
                       if (e.key === "Enter") e.currentTarget.blur();
                       if (e.key === "Escape") {
+                        e.stopPropagation();
                         e.currentTarget.value = t.description ?? "";
                         e.currentTarget.blur();
                       }
