@@ -1,5 +1,5 @@
 import { classifyHeuristic } from "./classify";
-import { db, getDump, listResortable, updateDump, type Dump } from "./db";
+import { db, getDump, listResortable, listTopics, topicExists, updateDump, type Dump } from "./db";
 import { extractUrl } from "./extract";
 import { providerFromUrl, titleFromUrl } from "./detect";
 import { classifyWithAi, identifySubject } from "./llm";
@@ -27,6 +27,8 @@ function commit(id: string, patch: Partial<Dump>, snapshot?: Dump): Dump | null 
     const current = getDump(id);
     if (!current) return null;
     const { topic, classifiedBy, ...rest } = patch;
+    // A category deleted while this run was in flight files to the catch-all, not a dead id.
+    const filedTopic = topic !== undefined && !topicExists(topic) ? "other" : topic;
     const fields = rest as Partial<Dump>;
     for (const key of Object.keys(fields) as (keyof Dump)[]) {
       if (snapshot && JSON.stringify(current[key] ?? null) !== JSON.stringify(snapshot[key] ?? null)) {
@@ -48,7 +50,7 @@ function commit(id: string, patch: Partial<Dump>, snapshot?: Dump): Dump | null 
               current.classifiedBy !== snapshot.classifiedBy ||
               current.status !== snapshot.status ||
               current.updatedAt !== snapshot.updatedAt))));
-    return updateDump(id, topicStale ? fields : { ...fields, topic, classifiedBy });
+    return updateDump(id, topicStale ? fields : { ...fields, topic: filedTopic, classifiedBy });
   })();
 }
 
@@ -63,8 +65,9 @@ async function classify(input: Dump, useImage: boolean): Promise<Partial<Dump>> 
   // The identified subject feeds Jev's state, and its description feeds the rules so
   // image-only dumps (no other text) still get tags.
   const forAI = { ...input, subject, description: input.description ?? subject?.description ?? null };
-  const ai = await classifyWithAi({ ...forAI, useImage });
-  const rules = classifyHeuristic(forAI, ai?.topic);
+  const topics = listTopics();
+  const ai = await classifyWithAi({ ...forAI, useImage }, topics);
+  const rules = classifyHeuristic(forAI, ai?.topic, topics);
   return { topic: rules.topic, tags: rules.tags, classifiedBy: ai ? "ai" : "rules" };
 }
 

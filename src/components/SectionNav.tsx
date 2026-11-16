@@ -1,6 +1,6 @@
 "use client";
 
-import { TOPICS } from "@/lib/taxonomy";
+import type { TopicMeta } from "@/lib/taxonomy";
 
 export interface Counts {
   total: number;
@@ -10,13 +10,14 @@ export interface Counts {
 
 interface Props {
   counts: Counts;
+  topics: TopicMeta[];
   topic: string | null;
   onSelect: (filter: { topic?: string | null }) => void;
 }
 
 /** Topic tabs, left side of the header. */
-export default function SectionNav({ counts, topic, onSelect }: Props) {
-  const topics = TOPICS.filter((t) => counts.topics[t.id]).sort(
+export default function SectionNav({ counts, topics: all, topic, onSelect }: Props) {
+  const topics = all.filter((t) => counts.topics[t.id]).sort(
     (a, b) => Number(a.id === "other") - Number(b.id === "other") || (counts.topics[b.id] ?? 0) - (counts.topics[a.id] ?? 0),
   );
 

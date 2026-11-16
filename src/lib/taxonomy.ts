@@ -33,21 +33,51 @@ export const TOPICS = [
   { id: "other", label: "Everything else", color: "#a1a1aa" },
 ] as const;
 
-export type Topic = (typeof TOPICS)[number]["id"];
+export type Topic = string;
 
-export const TOPIC_IDS = TOPICS.map((t) => t.id) as Topic[];
-export const KIND_IDS = KINDS.map((k) => k.id) as Kind[];
-
-export function isTopic(v: unknown): v is Topic {
-  return typeof v === "string" && (TOPIC_IDS as string[]).includes(v);
+/** A topic as the app sees it — the DB's `topics` table is the source of truth;
+ *  `description` doubles as the AI's filing hint for that topic. */
+export interface TopicMeta {
+  id: string;
+  label: string;
+  color: string;
+  description?: string;
 }
+
+/** What each built-in topic means to the AI sorter — seeded as the row's description. */
+export const TOPIC_CRITERIA: Record<string, string> = {
+  tech: "Software, programming, developer tools, the web, gadgets, hardware and tech companies, when the item is not mainly about AI.",
+  ai: "Artificial intelligence: LLMs, chatbots, machine learning, AI agents and tools, AI research and AI companies.",
+  design: "Visual design, UI/UX, typography, illustration, photography, art, architecture and creative inspiration.",
+  business: "Startups, companies, careers, marketing, finance, investing, personal money, crypto and the economy.",
+  science: "Scientific research and discoveries: space, physics, biology, chemistry, climate, nature and maths.",
+  news: "Current events, politics, government, elections, world affairs and social issues.",
+  food: "Cooking, recipes, restaurants, drinks, baking and food culture.",
+  travel: "Trips, destinations, places to visit, hotels, itineraries and outdoor adventures.",
+  health: "Fitness, workouts, nutrition, diet, mental health, sleep, medicine and wellbeing.",
+  music: "Songs, albums, artists, concerts, playlists, music videos and making music.",
+  film: "Movies, TV shows and series, trailers, streaming, anime, actors and film criticism.",
+  books: "Books, reading lists, authors, essays, poetry and the craft of writing.",
+  gaming: "Video games, board games, esports, consoles and game development.",
+  sports: "Sports, teams, athletes, matches, leagues and results.",
+  shopping: "Products to buy, wishlists, deals, product reviews, gear and gift ideas.",
+  home: "Home improvement, interior decor, furniture, gardening, cleaning and DIY projects.",
+  style: "Fashion, outfits, clothing, beauty, skincare, makeup and hair.",
+  fun: "Memes, jokes, funny or viral posts and videos, and things saved purely for entertainment.",
+  personal: "The owner's own notes: reminders, to-dos, ideas, plans, errands, journal entries and personal details.",
+  other: "Fits none of the other topics.",
+};
+
+export const KIND_IDS = KINDS.map((k) => k.id) as Kind[];
 
 export function isKind(v: unknown): v is Kind {
   return typeof v === "string" && (KIND_IDS as string[]).includes(v);
 }
 
-export function topicMeta(id: string) {
-  return TOPICS.find((t) => t.id === id) ?? TOPICS[TOPICS.length - 1];
+/** Label+color for a topic id. Falls back to `other`, then to a neutral entry so a
+ *  dump filed under a since-deleted topic still renders something sane. */
+export function topicMeta(id: string, topics: readonly TopicMeta[] = TOPICS): TopicMeta {
+  return topics.find((t) => t.id === id) ?? topics.find((t) => t.id === "other") ?? { id, label: id, color: "#a1a1aa" };
 }
 
 export function kindMeta(id: string) {

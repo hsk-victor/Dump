@@ -66,10 +66,12 @@ button {
 .d-actions button,
 .d-ghost-btn,
 .d-retry,
-.d-bookmarklet {
+.d-bookmarklet,
+.d-cat-del,
+.d-cat-confirm {
   transition: scale 0.16s var(--ease-out);
 }
-:is(.d-icon-btn, .d-dock-icon, .d-actions button, .d-ghost-btn, .d-retry, .d-bookmarklet, .d-brand, .d-topic, .d-dock-btn, .d-seg-btn):active {
+:is(.d-icon-btn, .d-dock-icon, .d-actions button, .d-ghost-btn, .d-retry, .d-bookmarklet, .d-brand, .d-topic, .d-dock-btn, .d-seg-btn, .d-cat-del, .d-cat-confirm):active {
   scale: 0.97;
 }
 /* ── Header ── */
@@ -2302,6 +2304,9 @@ body.d-dragging * {
   translate: 0 -4px;
 }
 .d-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
   padding: 0.35rem 0.5rem;
   border-radius: 6px;
   cursor: pointer;
@@ -2311,6 +2316,200 @@ body.d-dragging * {
 }
 .d-menu-item[data-highlighted] {
   background: color-mix(in srgb, var(--ink) 8%, transparent);
+}
+
+/* ── Category manager dialog ── */
+
+.d-dlg-back {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgb(0 0 0 / 0.28);
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+  transition: opacity 0.16s var(--ease-out);
+}
+.d-dlg-back[data-starting-style],
+.d-dlg-back[data-ending-style] {
+  opacity: 0;
+}
+.d-dlg {
+  position: fixed;
+  z-index: 61;
+  top: 50%;
+  left: 50%;
+  translate: -50% -50%;
+  width: min(26rem, calc(100vw - 2rem));
+  max-height: min(38rem, calc(100dvh - 4rem));
+  display: flex;
+  flex-direction: column;
+  padding: 0.9rem 1rem 0.6rem;
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-hover);
+  color: var(--ink);
+  outline: none;
+  transition: opacity 0.16s var(--ease-out), scale 0.16s var(--ease-out);
+}
+.d-dlg[data-starting-style],
+.d-dlg[data-ending-style] {
+  opacity: 0;
+  scale: 0.96;
+}
+.d-dlg-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.d-dlg-title {
+  font-size: 0.95rem;
+  font-weight: 650;
+}
+.d-dlg-close {
+  margin-right: -0.35rem;
+}
+.d-dlg-hint {
+  margin: 0.25rem 0 0.6rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+.d-cat-list {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.d-cat {
+  padding: 0.4rem 0;
+}
+.d-cat + .d-cat {
+  border-top: 1px solid var(--hairline);
+}
+.d-cat-main {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.d-cat-dot {
+  width: 0.95rem;
+  height: 0.95rem;
+  flex-shrink: 0;
+  border-radius: 999px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: scale 0.16s var(--ease-out);
+}
+.d-cat-dot[aria-expanded="true"] {
+  border-color: var(--hairline);
+}
+.d-cat-dot-new {
+  box-shadow: inset 0 0 0 1px var(--hairline);
+}
+.d-cat-name {
+  flex: 1;
+  min-width: 0;
+  padding: 0.2rem 0.4rem;
+  margin-left: -0.4rem;
+  border-radius: 7px;
+  font-size: 0.85rem;
+  font-weight: 550;
+  color: var(--ink);
+  background: transparent;
+  outline: none;
+}
+.d-cat-name::placeholder {
+  color: var(--muted);
+  font-weight: 450;
+}
+@media (hover: hover) and (pointer: fine) {
+  .d-cat-name:hover {
+    background: var(--hairline);
+  }
+}
+.d-cat-name:focus-visible {
+  background: var(--hairline);
+}
+.d-cat-desc {
+  width: 100%;
+  margin-top: 0.15rem;
+  padding: 0.15rem 0.4rem 0.15rem 1.55rem;
+  border-radius: 7px;
+  font-size: 0.74rem;
+  color: var(--muted);
+  background: transparent;
+  outline: none;
+}
+.d-cat-desc::placeholder {
+  color: color-mix(in srgb, var(--muted) 70%, transparent);
+}
+.d-cat-desc:focus-visible {
+  color: var(--ink-2);
+  background: var(--hairline);
+}
+.d-cat-count {
+  flex-shrink: 0;
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+.d-cat-del {
+  flex-shrink: 0;
+  padding: 0.1rem 0.35rem;
+  border-radius: 7px;
+  font-size: 0.9rem;
+  line-height: 1;
+  color: var(--muted);
+  cursor: pointer;
+}
+@media (hover: hover) and (pointer: fine) {
+  .d-cat-del:hover {
+    color: var(--ink);
+    background: var(--hairline);
+  }
+}
+.d-cat-confirm {
+  flex-shrink: 0;
+  padding: 0.25rem 0.5rem;
+  border-radius: 7px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--hairline);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.d-cat-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  padding: 0.45rem 0.2rem 0.15rem 1.55rem;
+}
+.d-cat-swatch {
+  width: 1.05rem;
+  height: 1.05rem;
+  border-radius: 999px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: scale 0.16s var(--ease-out);
+}
+.d-cat-swatch[aria-pressed="true"] {
+  border-color: var(--ink);
+  scale: 1.12;
+}
+.d-cat-new {
+  margin-top: 0.15rem;
+  border-top: 1px solid var(--hairline);
+}
+.d-cat-add {
+  flex-shrink: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .d-dlg-back {
+    transition: opacity 0.15s;
+  }
+  .d-dlg {
+    transition: opacity 0.15s;
+    scale: none;
+  }
 }
 
 /* ── Dock composer ── */

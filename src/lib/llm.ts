@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import sharp from "sharp";
-import { isSubjectType, isTopic, SUBJECT_TYPES, type Subject, type Topic } from "./taxonomy";
+import { isSubjectType, SUBJECT_TYPES, TOPICS, TOPIC_CRITERIA, type Subject, type Topic, type TopicMeta } from "./taxonomy";
 import { UPLOAD_DIR } from "./db";
 import { fetchImage } from "./extract";
 import type { ClassifyInput } from "./classify";
@@ -23,37 +23,21 @@ export function aiEnabled() {
   return !!process.env.OPENROUTER_API_KEY;
 }
 
-const TOPIC_CRITERIA: Record<Topic, string> = {
-  tech: "Software, programming, developer tools, the web, gadgets, hardware and tech companies, when the item is not mainly about AI.",
-  ai: "Artificial intelligence: LLMs, chatbots, machine learning, AI agents and tools, AI research and AI companies.",
-  design: "Visual design, UI/UX, typography, illustration, photography, art, architecture and creative inspiration.",
-  business: "Startups, companies, careers, marketing, finance, investing, personal money, crypto and the economy.",
-  science: "Scientific research and discoveries: space, physics, biology, chemistry, climate, nature and maths.",
-  news: "Current events, politics, government, elections, world affairs and social issues.",
-  food: "Cooking, recipes, restaurants, drinks, baking and food culture.",
-  travel: "Trips, destinations, places to visit, hotels, itineraries and outdoor adventures.",
-  health: "Fitness, workouts, nutrition, diet, mental health, sleep, medicine and wellbeing.",
-  music: "Songs, albums, artists, concerts, playlists, music videos and making music.",
-  film: "Movies, TV shows and series, trailers, streaming, anime, actors and film criticism.",
-  books: "Books, reading lists, authors, essays, poetry and the craft of writing.",
-  gaming: "Video games, board games, esports, consoles and game development.",
-  sports: "Sports, teams, athletes, matches, leagues and results.",
-  shopping: "Products to buy, wishlists, deals, product reviews, gear and gift ideas.",
-  home: "Home improvement, interior decor, furniture, gardening, cleaning and DIY projects.",
-  style: "Fashion, outfits, clothing, beauty, skincare, makeup and hair.",
-  fun: "Memes, jokes, funny or viral posts and videos, and things saved purely for entertainment.",
-  personal: "The owner's own notes: reminders, to-dos, ideas, plans, errands, journal entries and personal details.",
-  other: "Fits none of the other topics.",
-};
+/** The built-in list with its filing criteria — the default when no live topic list is passed. */
+const DEFAULT_TOPIC_METAS: TopicMeta[] = TOPICS.map((t) => ({ ...t, description: TOPIC_CRITERIA[t.id] }));
 
-const QUESTIONS = {
-  topic: {
-    type: "choice",
-    instructions:
-      "This `state` is an item the owner saved to their personal library. Which topic should it be filed under? Judge by what the item is about, using its title, description, content, the owner's note and any image.",
-    criteria: TOPIC_CRITERIA,
-  },
-};
+/** The topic question is rebuilt per call so newly created/renamed categories are
+ *  what Jev actually chooses between; a topic's description is its criterion. */
+function topicQuestions(topics: readonly TopicMeta[]) {
+  return {
+    topic: {
+      type: "choice",
+      instructions:
+        "This `state` is an item the owner saved to their personal library. Which topic should it be filed under? Judge by what the item is about, using its title, description, content, the owner's note and any image.",
+      criteria: Object.fromEntries(topics.map((t) => [t.id, t.description || t.label])),
+    },
+  };
+}
 
 // Jev's image limits: 256-1568 px per side and 78,400-2,458,624 px in total.
 const MIN_SIDE = 256;
@@ -117,8 +101,8 @@ async function postOpenRouter(url: string, label: string, payload: unknown, with
   }
 }
 
-const decide = (state: unknown, withImage: boolean) =>
-  postOpenRouter(DECISIONS_URL, "Jev", { model: process.env.DUMP_MODEL || DEFAULT_MODEL, state, questions: QUESTIONS }, withImage);
+const decide = (state: unknown, withImage: boolean, questions: unknown) =>
+  postOpenRouter(DECISIONS_URL, "Jev", { model: process.env.DUMP_MODEL || DEFAULT_MODEL, state, questions }, withImage);
 
 /** Everything worth telling a model about a dump, in a compact shape for prompts/state. */
 function describeItem(input: ClassifyInput & { kind: string; subject?: Subject | null }) {
@@ -150,22 +134,24 @@ function describeItem(input: ClassifyInput & { kind: string; subject?: Subject |
 /** Files an item under a topic with a decision model (Jev). Returns null (so the caller falls back to rules) on any failure. */
 export async function classifyWithAi(
   input: ClassifyInput & { kind: string; imageUrl?: string | null; useImage?: boolean; subject?: Subject | null },
+  topics: readonly TopicMeta[] = DEFAULT_TOPIC_METAS,
 ): Promise<AiClassification | null> {
   if (!aiEnabled()) return null;
   const item = describeItem(input);
   const image = input.useImage ? await loadImage(input.imageUrl) : null;
+  const questions = topicQuestions(topics);
 
   try {
     let json;
     try {
-      json = await decide(image ? { ...item, image: { type: "image_url", image_url: { url: image } } } : item, !!image);
+      json = await decide(image ? { ...item, image: { type: "image_url", image_url: { url: image } } } : item, !!image, questions);
     } catch (err) {
       // An image Jev rejects shouldn't cost us the whole classification: retry on the text alone.
       if (!image || ![400, 413, 422].includes((err as { status?: number }).status ?? 0)) throw err;
-      json = await decide(item, false);
+      json = await decide(item, false, questions);
     }
     const answer = json?.answers?.topic;
-    if (answer?.type !== "choice" || !isTopic(answer.choice)) return null;
+    if (answer?.type !== "choice" || !topics.some((t) => t.id === answer.choice)) return null;
     return {
       topic: answer.choice,
       confidence: typeof answer.confidence === "number" ? answer.confidence : null,

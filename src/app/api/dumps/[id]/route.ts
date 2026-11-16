@@ -1,9 +1,8 @@
 import { after, NextResponse, type NextRequest } from "next/server";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { deleteDump, getDump, topPosition, updateDump, UPLOAD_DIR } from "@/lib/db";
+import { deleteDump, getDump, topPosition, topicExists, updateDump, UPLOAD_DIR } from "@/lib/db";
 import { enrichDump, noteTitle } from "@/lib/enrich";
-import { isTopic } from "@/lib/taxonomy";
 
 export const runtime = "nodejs";
 
@@ -24,7 +23,7 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
     after(() => enrichDump(id));
     return NextResponse.json(dump);
   }
-  if (isTopic(body.topic)) {
+  if (topicExists(body.topic)) {
     return NextResponse.json(updateDump(id, { topic: body.topic, topicLocked: true, classifiedBy: "you" }));
   }
   // Pin and/or manual reorder arrive together from card drags.
