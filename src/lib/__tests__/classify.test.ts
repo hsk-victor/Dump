@@ -49,4 +49,9 @@ describe("custom categories", () => {
   it("a removed category no longer matches its label words", () => {
     expect(classifyHeuristic({ title: "My favorite fountain pens" }, undefined, TOPICS).topic).not.toBe("fountain-pens");
   });
+  it("a category slugged to an Object member name still classifies", () => {
+    const ts = [...TOPICS, { id: "constructor", label: "Constructor", color: "#fff" }];
+    expect(() => classifyHeuristic({ title: "how constructors work in Java" }, undefined, ts)).not.toThrow();
+    expect(classifyHeuristic({ title: "Creamy garlic pasta recipe" }, undefined, ts).topic).toBe("food");
+  });
 });

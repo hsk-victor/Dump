@@ -208,8 +208,9 @@ export function classifyHeuristic(input: ClassifyInput, decided?: Topic, topics:
 
   for (const t of topics) {
     const topic = t.id;
-    const lex = LEXICON[topic];
-    const keywords = COMPILED[topic] ?? compileKeywords(labelKeywords(t.label));
+    // Object.hasOwn: a category named e.g. "constructor" must not inherit Object's members.
+    const lex = Object.hasOwn(LEXICON, topic) ? LEXICON[topic] : undefined;
+    const keywords = (Object.hasOwn(COMPILED, topic) ? COMPILED[topic] : undefined) ?? compileKeywords(labelKeywords(t.label));
     let score = domain && lex && domainMatches(domain, url, lex.domains) ? 6 : 0;
     const topicHits = new Map<string, number>();
     for (const kw of keywords) {
