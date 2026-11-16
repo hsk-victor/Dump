@@ -330,42 +330,35 @@ button {
   flex: 1;
   min-width: 0;
   display: flex;
-  gap: 0.3rem;
+  gap: 0.1rem;
   overflow-x: auto;
   scrollbar-width: none;
+  border-bottom: 1px solid var(--hairline);
   mask-image: linear-gradient(90deg, #000 calc(100% - 2rem), transparent);
 }
 .d-topic {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
   flex-shrink: 0;
-  height: 1.8rem;
-  padding: 0 0.65rem;
-  border-radius: 8px;
+  height: 2.05rem;
+  padding: 0 0.7rem;
+  margin-bottom: -1px;
   font-size: 0.8rem;
   font-weight: 550;
   color: var(--muted);
   white-space: nowrap;
   cursor: pointer;
-  transition: background 0.15s, color 0.15s, scale 0.16s var(--ease-out);
+  box-shadow: inset 0 -2px 0 transparent;
+  transition: color 0.15s, box-shadow 0.15s, scale 0.16s var(--ease-out);
 }
 @media (hover: hover) and (pointer: fine) {
   .d-topic:hover {
     color: var(--ink);
-    background: var(--hairline);
   }
 }
 .d-topic[aria-pressed="true"] {
   color: var(--ink);
-  background: var(--hairline);
-}
-.d-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 999px;
-  background: var(--topic, var(--muted));
-  flex-shrink: 0;
+  box-shadow: inset 0 -2px 0 var(--ink);
 }
 .d-kind-select {
   flex-shrink: 0;
@@ -387,65 +380,71 @@ button {
 }
 
 /* ── Topic strip quick-edit ──
-   Double-click renames inside the pill; the dot (click / long-press) opens a
-   color popover anchored to the pill; a "+" pill at the tail adds categories. */
+   Double-click renames inside the tab; clicking the active tab (or a
+   right-click / long-press) opens an anchored popover with the dump count
+   and delete; a "+" tab at the tail adds categories. */
 
-/* A pill mid-rename swaps its <button> for a <div> holding the live input. */
+/* A tab mid-rename swaps its <button> for a <div> holding the live input. */
 .d-topic-edit {
   color: var(--ink);
   background: var(--hairline);
-  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--topic, var(--ink)) 45%, transparent);
+  border-radius: 8px 8px 0 0;
+  box-shadow: none;
 }
 .d-topic-rn {
   min-width: 5ch;
   width: 100%;
   background: transparent;
   outline: none;
-  border-radius: 4px;
   font: inherit;
   color: inherit;
-  caret-color: var(--topic, var(--ink));
-  box-shadow: inset 0 -1.5px 0 var(--topic, var(--ink));
+  caret-color: var(--ink);
+  box-shadow: inset 0 -1.5px 0 var(--ink);
 }
 .d-topic-rn::placeholder {
   color: var(--muted);
   font-weight: 450;
 }
-/* Clickable color dot inside a pill. */
-.d-dot-btn {
-  cursor: pointer;
-  transition: scale 0.16s var(--ease-out);
+/* "+" tab pinned to the strip's tail — a small ghost chip, not a tab. */
+.d-topic-add {
+  height: 1.7rem;
+  align-self: center;
+  margin-left: 0.2rem;
+  margin-bottom: 0;
+  padding: 0 0.55rem;
+  border-radius: 8px;
+  color: var(--muted);
+  box-shadow: none;
 }
 @media (hover: hover) and (pointer: fine) {
-  .d-dot-btn:hover {
-    scale: 1.25;
+  .d-topic-add:hover {
+    color: var(--ink);
+    background: var(--hairline);
   }
-}
-.d-dot-btn:active {
-  scale: 0.9;
-}
-.d-dot-btn[aria-expanded="true"] {
-  scale: 1.25;
-}
-/* "+" pill pinned to the strip's tail. */
-.d-topic-add {
-  color: var(--muted);
-  box-shadow: inset 0 0 0 1.5px var(--hairline);
 }
 .d-topic-add svg {
   width: 0.75rem;
   height: 0.75rem;
 }
+/* The add-input variant keeps the tab shape while typing. */
+.d-topic-edit.d-topic-add {
+  align-self: stretch;
+  height: 2.05rem;
+  margin-bottom: -1px;
+  border-radius: 8px 8px 0 0;
+}
 
-/* The anchored color/delete popover. */
+/* The anchored count/delete popover. */
 .d-tpop {
   position: fixed;
   z-index: 45;
-  width: 13rem;
-  padding: 0.55rem 0.6rem 0.45rem;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.45rem 0.55rem;
   border-radius: 12px;
   background: var(--surface);
-  box-shadow: var(--shadow-hover), inset 0 0 0 1px color-mix(in srgb, var(--c, var(--ink)) 16%, transparent);
+  box-shadow: var(--shadow-hover);
   transform-origin: var(--ox, 50%) 0;
   animation: d-tpop-in 0.16s var(--ease-out);
 }
@@ -456,30 +455,9 @@ button {
     translate: 0 -4px;
   }
 }
-.d-tpop-sw {
-  padding: 0;
-  gap: 0.34rem;
-}
-.d-tpop .d-cat-swatch {
-  width: 1rem;
-  height: 1rem;
-  animation: d-tpop-sw-in 0.2s var(--ease-out) backwards;
-}
-@keyframes d-tpop-sw-in {
-  from {
-    scale: 0.4;
-    opacity: 0;
-  }
-}
-.d-tpop-foot {
-  display: flex;
-  align-items: center;
-  margin-top: 0.5rem;
-  padding-top: 0.45rem;
-  border-top: 1px solid var(--hairline);
-}
 .d-tpop-count {
-  font-size: 0.68rem;
+  padding-left: 0.25rem;
+  font-size: 0.72rem;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
 }

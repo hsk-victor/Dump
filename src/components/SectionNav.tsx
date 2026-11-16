@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
-import { TOPIC_COLORS, type TopicMeta } from "@/lib/taxonomy";
+import { type TopicMeta } from "@/lib/taxonomy";
 
 export interface Counts {
   total: number;
@@ -34,8 +34,9 @@ async function read(res: Response): Promise<{ topic?: TopicMeta; topics?: TopicM
   return res.json().catch(() => ({}));
 }
 
-/** Topic tabs, left side of the header. Double-click a pill to rename it in place;
- *  the dot (click or long-press) opens an anchored color popover with delete. */
+/** Topic tabs, left side of the header. Double-click a tab to rename it in
+ *  place; clicking the active tab (or right-click / long-press on any tab)
+ *  opens an anchored popover with the dump count and delete. */
 export default function SectionNav({ counts, topics: all, topic, onSelect, onChange, toast }: Props) {
   const topics = all.filter((t) => counts.topics[t.id]).sort(
     (a, b) => Number(a.id === "other") - Number(b.id === "other") || (counts.topics[b.id] ?? 0) - (counts.topics[a.id] ?? 0),
@@ -45,11 +46,10 @@ export default function SectionNav({ counts, topics: all, topic, onSelect, onCha
   const [adding, setAdding] = useState(false);
   const [pop, setPop] = useState<Pop | null>(null);
   const [confirmDel, setConfirmDel] = useState<string | null>(null);
-  const navRef = useRef<HTMLElement>(null);
   const popRef = useRef<HTMLDivElement>(null);
   const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // A finished long-press still emits a click on release — flag it so the
-  // pill's onClick doesn't toggle the filter after the editor opens.
+  // tab's onClick doesn't toggle the filter after the popover opens.
   const heldRef = useRef(false);
   /** The `topic` filter just before the current click burst — lets a double-click
    *  restore it exactly (the prop is still stale when the dblclick handler runs). */
@@ -67,7 +67,7 @@ export default function SectionNav({ counts, topics: all, topic, onSelect, onCha
   }
 
   function popAt(t: TopicMeta, r: DOMRect) {
-    const left = Math.min(Math.max(8, r.left), window.innerWidth - 208 - 8);
+    const left = Math.min(Math.max(8, r.left), window.innerWidth - 160);
     setPop({ id: t.id, left, top: r.bottom + 7, ox: Math.max(14, r.left + r.width / 2 - left) });
     setConfirmDel(null);
   }
@@ -76,7 +76,7 @@ export default function SectionNav({ counts, topics: all, topic, onSelect, onCha
   useEffect(() => {
     if (!pop) return;
     const onDown = (e: PointerEvent) => {
-      if (!popRef.current?.contains(e.target as Node) && !(e.target as HTMLElement).closest(".d-dot-btn")) closePop();
+      if (!popRef.current?.contains(e.target as Node)) closePop();
     };
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && closePop();
     const onScroll = () => closePop();
@@ -118,10 +118,6 @@ export default function SectionNav({ counts, topics: all, topic, onSelect, onCha
     return saved;
   }
 
-  async function recolor(t: TopicMeta, color: string) {
-    if (color !== t.color) await patch(t.id, { color });
-  }
-
   async function remove(t: TopicMeta) {
     const n = counts.topics[t.id] ?? 0;
     if (n > 0 && confirmDel !== t.id) {
@@ -136,10 +132,8 @@ export default function SectionNav({ counts, topics: all, topic, onSelect, onCha
     toast(n ? `${t.label} deleted — ${n} ${n === 1 ? "dump" : "dumps"} moved to Everything else` : `${t.label} deleted`);
   }
 
-  async function create(label: string, anchor: HTMLElement) {
+  async function create(label: string) {
     const clean = label.trim();
-    // The anchor pill unmounts the moment `adding` flips back — grab its rect first.
-    const anchorRect = anchor.getBoundingClientRect();
     setAdding(false);
     if (!clean) return;
     const res = await fetch("/api/topics", {
@@ -151,9 +145,6 @@ export default function SectionNav({ counts, topics: all, topic, onSelect, onCha
     if (!res.ok) return toast(data.error ?? "Couldn't add that", "error");
     onChange(data.topics!);
     toast(`${clean} added — the sorter will use it from now on`);
-    // The new category has no dumps yet so it won't show in the strip; anchor the
-    // color popover where the "+ New" pill was so it can be colored right away.
-    if (data.topic) popAt(data.topic, anchorRect);
   }
 
   function startHold(t: TopicMeta, el: HTMLElement, e: React.PointerEvent) {
@@ -170,33 +161,14 @@ export default function SectionNav({ counts, topics: all, topic, onSelect, onCha
 
   return (
     <div className="d-subnav">
-      <nav className="d-topics" aria-label="Topics" ref={navRef}>
+      <nav className="d-topics" aria-label="Topics">
         <button className="d-topic" aria-pressed={!topic} onClick={() => onSelect({ topic: null })}>
           All
         </button>
         {topics.map((t) =>
           renaming === t.id ? (
-            // Editing inside the pill itself: dot stays, label becomes the input.
-            <div className="d-topic d-topic-edit" key={t.id} style={{ "--topic": t.color } as CSSProperties}>
-              <button
-                className="d-dot d-dot-btn"
-                aria-label={`Color for ${t.label}`}
-                aria-expanded={pop?.id === t.id}
-                // Pointerdown (not click) so the rename input keeps focus: preventing
-                // the default here means no blur, no commit, and no lost click.
-                onPointerDown={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  if (pop?.id === t.id) closePop();
-                  else anchorPop(t, e.currentTarget.closest(".d-topic") as HTMLElement);
-                }}
-                // Keyboard only — pointer clicks already ran on pointerdown.
-                onClick={(e) => {
-                  if (e.detail !== 0) return;
-                  if (pop?.id === t.id) closePop();
-                  else anchorPop(t, e.currentTarget.closest(".d-topic") as HTMLElement);
-                }}
-              />
+            // Editing inside the tab itself: the label becomes a live input.
+            <div className="d-topic d-topic-edit" key={t.id}>
               <input
                 className="d-topic-rn"
                 defaultValue={t.label}
@@ -225,9 +197,7 @@ export default function SectionNav({ counts, topics: all, topic, onSelect, onCha
             <button
               key={t.id}
               className="d-topic"
-              data-open={pop?.id === t.id || undefined}
               aria-pressed={topic === t.id}
-              style={{ "--topic": t.color } as CSSProperties}
               onClick={(e) => {
                 if (e.detail > 1) return; // second click of a double-click
                 if (heldRef.current) {
@@ -235,6 +205,13 @@ export default function SectionNav({ counts, topics: all, topic, onSelect, onCha
                   return; // trailing click after a long-press
                 }
                 preClickTopic.current = topic;
+                // Clicking the active tab opens its popover instead of
+                // clearing the filter (use "All" to clear).
+                if (topic === t.id && t.id !== "other") {
+                  if (pop?.id === t.id) closePop();
+                  else anchorPop(t, e.currentTarget);
+                  return;
+                }
                 onSelect({ topic: topic === t.id ? null : t.id });
               }}
               onDoubleClick={(e) => {
@@ -243,37 +220,16 @@ export default function SectionNav({ counts, topics: all, topic, onSelect, onCha
                 onSelect({ topic: preClickTopic.current });
                 setRenaming(t.id);
               }}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                if (t.id === "other") return;
+                anchorPop(t, e.currentTarget);
+              }}
               onPointerDown={(e) => startHold(t, e.currentTarget, e)}
               onPointerUp={endHold}
               onPointerCancel={endHold}
               onPointerLeave={endHold}
             >
-              <span
-                className="d-dot d-dot-btn"
-                role="button"
-                tabIndex={0}
-                aria-label={`Color for ${t.label}`}
-                aria-expanded={pop?.id === t.id}
-                onPointerDown={(e) => {
-                  e.stopPropagation();
-                  if (pop?.id === t.id) closePop();
-                  else anchorPop(t, e.currentTarget.closest(".d-topic") as HTMLElement);
-                }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (e.detail !== 0) return; // pointer already ran on pointerdown
-                  if (pop?.id === t.id) closePop();
-                  else anchorPop(t, e.currentTarget.closest(".d-topic") as HTMLElement);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    if (pop?.id === t.id) closePop();
-                    else anchorPop(t, e.currentTarget.closest(".d-topic") as HTMLElement);
-                  }
-                }}
-              />
               {t.label}
             </button>
           ),
@@ -286,10 +242,7 @@ export default function SectionNav({ counts, topics: all, topic, onSelect, onCha
               aria-label="New category name"
               maxLength={60}
               autoFocus
-              onBlur={(e) => {
-                const anchor = e.currentTarget.closest(".d-topic") as HTMLElement;
-                void create(e.currentTarget.value, anchor);
-              }}
+              onBlur={(e) => void create(e.currentTarget.value)}
               onKeyDown={(e) => {
                 e.stopPropagation();
                 if (e.key === "Enter") e.currentTarget.blur();
@@ -312,35 +265,21 @@ export default function SectionNav({ counts, topics: all, topic, onSelect, onCha
             ref={popRef}
             role="dialog"
             aria-label={`Edit ${popTopic.label}`}
-            style={{ left: pop!.left, top: pop!.top, "--ox": `${pop!.ox}px`, "--c": popTopic.color } as CSSProperties}
+            style={{ left: pop!.left, top: pop!.top, "--ox": `${pop!.ox}px` } as CSSProperties}
           >
-            <div className="d-cat-swatches d-tpop-sw">
-              {TOPIC_COLORS.map((c, i) => (
-                <button
-                  key={c}
-                  className="d-cat-swatch"
-                  style={{ background: c, animationDelay: `${i * 11}ms` } as CSSProperties}
-                  aria-pressed={c === popTopic.color}
-                  aria-label={c}
-                  onClick={() => recolor(popTopic, c)}
-                />
+            <span className="d-tpop-count">
+              {counts.topics[popTopic.id] ?? 0} {(counts.topics[popTopic.id] ?? 0) === 1 ? "dump" : "dumps"}
+            </span>
+            {popTopic.id !== "other" &&
+              (confirmDel === popTopic.id ? (
+                <button className="d-tpop-armed" onClick={() => remove(popTopic)} autoFocus>
+                  Move {counts.topics[popTopic.id] ?? 0} →
+                </button>
+              ) : (
+                <button className="d-tpop-del" onClick={() => remove(popTopic)} aria-label={`Delete ${popTopic.label}`}>
+                  Delete
+                </button>
               ))}
-            </div>
-            <div className="d-tpop-foot">
-              <span className="d-tpop-count">
-                {counts.topics[popTopic.id] ?? 0} {(counts.topics[popTopic.id] ?? 0) === 1 ? "dump" : "dumps"}
-              </span>
-              {popTopic.id !== "other" &&
-                (confirmDel === popTopic.id ? (
-                  <button className="d-tpop-armed" onClick={() => remove(popTopic)} autoFocus>
-                    Move {counts.topics[popTopic.id] ?? 0} →
-                  </button>
-                ) : (
-                  <button className="d-tpop-del" onClick={() => remove(popTopic)} aria-label={`Delete ${popTopic.label}`}>
-                    Delete
-                  </button>
-                ))}
-            </div>
           </div>,
           document.body,
         )}
