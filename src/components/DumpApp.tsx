@@ -13,6 +13,8 @@ import SectionNav, { type Counts } from "./SectionNav";
 import UpdateButton from "./UpdateButton";
 
 const PAGE_SIZE = 60;
+/** Matches the server's per-request cap on /api/dumps. */
+const LIMIT_CAP = 500;
 /** Card height guess before its first measurement, plus the 6px --gap between cards. */
 const ESTIMATE_H = 260;
 const GAP_EST = 6;
@@ -136,10 +138,6 @@ export default function DumpApp() {
   const [hasMore, setHasMore] = useState(false);
   const [freshId, setFreshId] = useState<string | null>(null);
   const [removingIds, setRemovingIds] = useState<Set<string>>(new Set());
-  // How many items to show; resets to one page whenever the filters change.
-  const filterKey = `${q}|${kind}|${topic}`;
-  const [page, setPage] = useState({ key: filterKey, limit: PAGE_SIZE });
-  const limit = page.key === filterKey ? page.limit : PAGE_SIZE;
   const lastSyncedQ = useRef(q);
   const [aiOn, setAiOn] = useState(false);
   const [resorting, setResorting] = useState(false);
@@ -231,21 +229,38 @@ export default function DumpApp() {
   );
 
   const load = useCallback(async () => {
-    const sp = new URLSearchParams();
-    if (q) sp.set("q", q);
-    if (kind) sp.set("kind", kind);
-    if (topic) sp.set("topic", topic);
-    sp.set("limit", String(limit));
-    const res = await fetch(`/api/dumps?${sp}`, { cache: "no-store" });
-    if (!res.ok) return;
-    const data = (await res.json()) as { items: Dump[]; hasMore: boolean; counts: Counts; ai: boolean };
-    setItems(data.items);
-    setAiOn(data.ai);
-    setHasMore(data.hasMore);
-    setCounts(data.counts);
+    const page = (offset: number, limit: number) => {
+      const sp = new URLSearchParams();
+      if (q) sp.set("q", q);
+      if (kind) sp.set("kind", kind);
+      if (topic) sp.set("topic", topic);
+      sp.set("offset", String(offset));
+      sp.set("limit", String(limit));
+      return fetch(`/api/dumps?${sp}`, { cache: "no-store" });
+    };
+    // Revalidate the whole loaded window in cap-sized pages — a merge past the cap
+    // can't tell a displaced card from a deleted one, so every loaded position is
+    // refetched and the list replaced outright.
+    const want = Math.max(itemsRef.current.length, PAGE_SIZE);
+    const rows: Dump[] = [];
+    let resp: { items: Dump[]; hasMore: boolean; counts?: Counts; ai: boolean } | undefined;
+    let newCounts: Counts | undefined; // only the offset=0 page carries counts
+    for (let offset = 0; offset < want; offset += LIMIT_CAP) {
+      const res = await page(offset, Math.min(want - offset, LIMIT_CAP));
+      if (!res.ok) return;
+      resp = (await res.json()) as { items: Dump[]; hasMore: boolean; counts?: Counts; ai: boolean };
+      rows.push(...resp.items);
+      newCounts ??= resp.counts;
+      if (!resp.hasMore) break;
+    }
+    const seen = new Set<string>();
+    setItems(rows.filter((d) => !seen.has(d.id) && !!seen.add(d.id)));
+    setAiOn(resp!.ai);
+    setHasMore(resp!.hasMore);
+    if (newCounts) setCounts(newCounts);
     setLoaded(true);
 
-    for (const d of data.items) {
+    for (const d of rows) {
       if (pendingToasts.current.has(d.id) && d.status !== "processing") {
         pendingToasts.current.delete(d.id);
         if (d.status === "failed")
@@ -253,7 +268,26 @@ export default function DumpApp() {
         else toast(`Filed under ${topicMeta(d.topic).label} · ${kindMeta(d.kind).singular}`);
       }
     }
-  }, [q, kind, topic, limit, toast]);
+  }, [q, kind, topic, toast]);
+
+  // "Load more" fetches just the next page after what's shown and appends it —
+  // growing `limit` and refetching the window from offset 0 scaled badly.
+  const loadMore = useCallback(async () => {
+    const sp = new URLSearchParams();
+    if (q) sp.set("q", q);
+    if (kind) sp.set("kind", kind);
+    if (topic) sp.set("topic", topic);
+    sp.set("offset", String(itemsRef.current.length));
+    sp.set("limit", String(PAGE_SIZE));
+    const res = await fetch(`/api/dumps?${sp}`, { cache: "no-store" });
+    if (!res.ok) return;
+    const data = (await res.json()) as { items: Dump[]; hasMore: boolean };
+    setItems((prev) => {
+      const seen = new Set(prev.map((d) => d.id));
+      return [...prev, ...data.items.filter((d) => !seen.has(d.id))];
+    });
+    setHasMore(data.hasMore);
+  }, [q, kind, topic]);
 
   useEffect(() => {
     load();
@@ -905,7 +939,7 @@ export default function DumpApp() {
         )}
         {hasMore && (
           <div className="mt-6 flex justify-center">
-            <button type="button" onClick={() => setPage({ key: filterKey, limit: limit + PAGE_SIZE })} className="d-ghost-btn">
+            <button type="button" onClick={loadMore} className="d-ghost-btn">
               Load more
             </button>
           </div>

@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { domainOf, isDirectVideoUrl, kindFromUrl, parseInput, providerFromUrl } from "./detect";
-import { bumpDump, createDump, findByUrl, updateDump, UPLOAD_DIR, type Dump } from "./db";
+import { bumpDump, createDump, findByUrl, UPLOAD_DIR, type Dump } from "./db";
 import { noteTitle } from "./enrich";
 
 export class InputError extends Error {}
@@ -58,8 +58,8 @@ export function createFromText(raw: string, opts?: CreateOptions | string | null
       if (!existing.imageUrl && imageUrl) patch.imageUrl = imageUrl;
       const resync = !!(patch.title || patch.description || patch.imageUrl);
       if (resync) patch.status = "processing";
-      if (Object.keys(patch).length) updateDump(existing.id, patch);
-      return { ...bumpDump(existing.id)!, duplicate: true, resync };
+      // One write: the backfill patch and the move-to-top share an UPDATE (and one SELECT after).
+      return { ...bumpDump(existing.id, patch)!, duplicate: true, resync };
     }
     return createDump({
       kind: kindFromUrl(parsed.url) ?? "link",

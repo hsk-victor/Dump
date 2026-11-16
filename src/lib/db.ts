@@ -110,10 +110,24 @@ CREATE TABLE IF NOT EXISTS dumps (
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL
 );
+`;
+
+// Indexes/triggers that depend on post-v1 columns (pinned, position) must run after the
+// ALTER migrations below — databases created before those columns existed would fail
+// to open if the index DDL ran first.
+const SCHEMA_MIGRATED = `
 CREATE INDEX IF NOT EXISTS dumps_created ON dumps(created_at DESC);
-CREATE INDEX IF NOT EXISTS dumps_topic ON dumps(topic);
-CREATE INDEX IF NOT EXISTS dumps_kind ON dumps(kind);
 CREATE INDEX IF NOT EXISTS dumps_url ON dumps(url);
+-- The feed's ORDER BY — without a covering index every /api/dumps is a full scan + temp sort.
+-- The kind/topic-prefixed variants serve the same ordering under those filters.
+CREATE INDEX IF NOT EXISTS dumps_feed ON dumps(pinned DESC, position DESC, created_at DESC, id);
+CREATE INDEX IF NOT EXISTS dumps_feed_kind ON dumps(kind, pinned DESC, position DESC, created_at DESC, id);
+CREATE INDEX IF NOT EXISTS dumps_feed_topic ON dumps(topic, pinned DESC, position DESC, created_at DESC, id);
+-- MAX(position) for top-position inserts/re-dumps; the pinned-leading composite can't serve it.
+CREATE INDEX IF NOT EXISTS dumps_position ON dumps(position);
+-- Fully covered by the feed_* prefixes above.
+DROP INDEX IF EXISTS dumps_kind;
+DROP INDEX IF EXISTS dumps_topic;
 
 CREATE VIRTUAL TABLE IF NOT EXISTS dumps_fts USING fts5(
   title, description, content, note, summary, tags, domain, author, site_name,
@@ -128,7 +142,10 @@ CREATE TRIGGER IF NOT EXISTS dumps_ad AFTER DELETE ON dumps BEGIN
   INSERT INTO dumps_fts(dumps_fts, rowid, title, description, content, note, summary, tags, domain, author, site_name)
   VALUES ('delete', old.rowid, old.title, old.description, old.content, old.note, old.summary, old.tags, old.domain, old.author, old.site_name);
 END;
-CREATE TRIGGER IF NOT EXISTS dumps_au AFTER UPDATE ON dumps BEGIN
+-- Only FTS-indexed columns trigger a row rewrite: position/pin/status updates
+-- would otherwise delete and reinsert the whole FTS row on every reorder.
+DROP TRIGGER IF EXISTS dumps_au;
+CREATE TRIGGER dumps_au AFTER UPDATE OF title, description, content, note, summary, tags, domain, author, site_name ON dumps BEGIN
   INSERT INTO dumps_fts(dumps_fts, rowid, title, description, content, note, summary, tags, domain, author, site_name)
   VALUES ('delete', old.rowid, old.title, old.description, old.content, old.note, old.summary, old.tags, old.domain, old.author, old.site_name);
   INSERT INTO dumps_fts(rowid, title, description, content, note, summary, tags, domain, author, site_name)
@@ -163,6 +180,7 @@ export function db(): Database.Database {
            OR (d2.created_at = dumps.created_at AND d2.rowid <= dumps.rowid)
       )`);
     }
+    conn.exec(SCHEMA_MIGRATED);
     globalForDb.__dumpDb = conn;
   }
   return globalForDb.__dumpDb;
@@ -314,13 +332,16 @@ export function findByUrl(url: string): Dump | null {
   return row ? toDump(row) : null;
 }
 
-/** Moves an existing dump back to the top of the feed. */
-export function bumpDump(id: string): Dump | null {
+/** Moves an existing dump back to the top of the feed, folding any patch into the same write. */
+export function bumpDump(id: string, patch: Patch = {}): Dump | null {
+  const cols = toColumns(patch);
+  const names = Object.keys(cols);
+  const assigns = names.length ? `${names.map((n) => `${n} = @${n}`).join(", ")}, ` : "";
   db()
     .prepare(
-      "UPDATE dumps SET created_at = @now, updated_at = @now, position = (SELECT COALESCE(MAX(position), 0) + 1 FROM dumps) WHERE id = @id",
+      `UPDATE dumps SET ${assigns}created_at = @now, updated_at = @now, position = (SELECT COALESCE(MAX(position), 0) + 1 FROM dumps) WHERE id = @id`,
     )
-    .run({ now: Date.now(), id });
+    .run({ ...cols, now: Date.now(), id });
   return getDump(id);
 }
 
@@ -349,6 +370,14 @@ export interface ListOptions {
   offset?: number;
 }
 
+// Feed rows name their columns instead of SELECT *: `content` holds up to 50KB of
+// extracted article text per row, but only note cards ever render it.
+const FEED_COLS = `d.id, d.kind, d.topic, d.status, d.url, d.domain, d.provider, d.title, d.description,
+  CASE WHEN d.kind = 'note' THEN d.content END AS content,
+  d.note, d.image_url, d.image_urls, d.site_name, d.author, d.author_handle, d.author_avatar_url,
+  d.video_url, d.video_poster_url, d.video_type, d.summary, d.subject, d.tags,
+  d.classified_by, d.topic_locked, d.pinned, d.position, d.created_at, d.updated_at`;
+
 export function listDumps({ q, kind, topic, limit = 200, offset = 0 }: ListOptions = {}): Dump[] {
   const where: string[] = [];
   const params: Record<string, unknown> = { limit, offset };
@@ -365,12 +394,12 @@ export function listDumps({ q, kind, topic, limit = 200, offset = 0 }: ListOptio
   let sql: string;
   if (fts) {
     params.fts = fts;
-    sql = `SELECT d.* FROM dumps_fts f JOIN dumps d ON d.rowid = f.rowid
+    sql = `SELECT ${FEED_COLS} FROM dumps_fts f JOIN dumps d ON d.rowid = f.rowid
            WHERE dumps_fts MATCH @fts ${where.length ? `AND ${where.join(" AND ")}` : ""}
            ORDER BY d.pinned DESC, bm25(dumps_fts, 10.0, 4.0, 1.0, 4.0, 3.0, 6.0, 2.0, 2.0, 2.0), d.created_at DESC, d.id
            LIMIT @limit OFFSET @offset`;
   } else {
-    sql = `SELECT d.* FROM dumps d ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
+    sql = `SELECT ${FEED_COLS} FROM dumps d ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
            ORDER BY d.pinned DESC, d.position DESC, d.created_at DESC, d.id LIMIT @limit OFFSET @offset`;
   }
   return (db().prepare(sql).all(params) as Row[]).map(toDump);

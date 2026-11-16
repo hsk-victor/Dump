@@ -33,7 +33,22 @@ function commit(id: string, patch: Partial<Dump>, snapshot?: Dump): Dump | null 
         delete (fields as Record<string, unknown>)[key];
       }
     }
-    return updateDump(id, current.topicLocked ? fields : { ...fields, topic, classifiedBy });
+    // topic/classifiedBy get the same staleness guard as the other fields, but only for
+    // commits that don't end a processing run themselves (resort carries no status):
+    // a row that re-entered processing, or moved on since this run's snapshot, must not
+    // be filed under a classification computed from older data. Enrich commits set the
+    // final status, so 'processing' mid-run is expected for them, not stale.
+    const finishesRun = patch.status !== undefined;
+    const topicStale =
+      current.topicLocked ||
+      (!finishesRun &&
+        (current.status === "processing" ||
+          (!!snapshot &&
+            (current.topic !== snapshot.topic ||
+              current.classifiedBy !== snapshot.classifiedBy ||
+              current.status !== snapshot.status ||
+              current.updatedAt !== snapshot.updatedAt))));
+    return updateDump(id, topicStale ? fields : { ...fields, topic, classifiedBy });
   })();
 }
 
@@ -138,7 +153,8 @@ async function runEnrich(id: string): Promise<Dump | null> {
 /** Re-files a dump from what's already stored, without fetching it again. Null if Jev couldn't answer. */
 export async function resortDump(id: string): Promise<{ before: string; after: string } | null> {
   const dump = getDump(id);
-  if (!dump || dump.topicLocked) return null;
+  // Re-check status here too: listResortable's snapshot can predate a reprocess.
+  if (!dump || dump.topicLocked || dump.status === "processing") return null;
   const classification = await classify({ ...dump, title: dump.title ?? (dump.url ? titleFromUrl(dump.url) : null) }, dump.kind === "image");
   if (classification.classifiedBy !== "ai") return null;
   const out = commit(id, classification, dump);
