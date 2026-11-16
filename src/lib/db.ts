@@ -197,8 +197,11 @@ export function db(): Database.Database {
   return globalForDb.__dumpDb;
 }
 
-/** First-run seed: the built-in taxonomy, its colors and the AI's filing criteria. */
+/** First-run seed: the built-in taxonomy, its colors and the AI's filing criteria.
+ *  Skipped once any row exists — deletions must stick across restarts. */
 function seedTopics(conn: Database.Database) {
+  const { n } = conn.prepare("SELECT COUNT(*) AS n FROM topics").get() as { n: number };
+  if (n > 0) return;
   const insert = conn.prepare(
     "INSERT OR IGNORE INTO topics (id, label, color, description, position, created_at) VALUES (?, ?, ?, ?, ?, ?)",
   );
