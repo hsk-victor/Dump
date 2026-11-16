@@ -785,7 +785,18 @@ export default function DumpApp() {
             <span className="d-wordmark">dump</span>
             <span className="d-count">{counts.total}</span>
           </button>
-          <SectionNav counts={counts} topics={topics} topic={topic} onSelect={setFilter} />
+          <SectionNav
+            counts={counts}
+            topics={topics}
+            topic={topic}
+            onSelect={setFilter}
+            onChange={(t) => {
+              setTopics(t);
+              // Deletes move dumps, so the counts (and cards under the old topic) refresh too.
+              void load();
+            }}
+            toast={toast}
+          />
 
           <label className="d-search">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>

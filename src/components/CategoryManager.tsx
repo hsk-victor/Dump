@@ -2,14 +2,9 @@
 
 import { useState, type CSSProperties } from "react";
 import { Dialog } from "@base-ui/react/dialog";
-import type { TopicMeta } from "@/lib/taxonomy";
+import { TOPIC_COLORS, type TopicMeta } from "@/lib/taxonomy";
 
-/** Swatch choices: the built-in palette plus a few extras. */
-const COLORS = [
-  "#3b82f6", "#8b5cf6", "#ec4899", "#f43f5e", "#ef4444", "#f97316", "#facc15", "#eab308",
-  "#84cc16", "#22c55e", "#10b981", "#14b8a6", "#06b6d4", "#0ea5e9", "#6366f1", "#a855f7",
-  "#b45309", "#78716c", "#64748b", "#a1a1aa",
-];
+const COLORS = TOPIC_COLORS;
 
 interface Props {
   open: boolean;

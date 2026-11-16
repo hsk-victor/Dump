@@ -44,6 +44,13 @@ export interface TopicMeta {
   description?: string;
 }
 
+/** Swatch choices offered wherever a topic can be recolored (dialog + topic strip). */
+export const TOPIC_COLORS = [
+  "#3b82f6", "#8b5cf6", "#ec4899", "#f43f5e", "#ef4444", "#f97316", "#facc15", "#eab308",
+  "#84cc16", "#22c55e", "#10b981", "#14b8a6", "#06b6d4", "#0ea5e9", "#6366f1", "#a855f7",
+  "#b45309", "#78716c", "#64748b", "#a1a1aa",
+];
+
 /** What each built-in topic means to the AI sorter — seeded as the row's description. */
 export const TOPIC_CRITERIA: Record<string, string> = {
   tech: "Software, programming, developer tools, the web, gadgets, hardware and tech companies, when the item is not mainly about AI.",
