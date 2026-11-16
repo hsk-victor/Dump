@@ -9,6 +9,8 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const PAGE_SIZE = 60;
+/** Hard cap on a single page — "load more" pages forward with offset, so nothing needs more. */
+const MAX_LIMIT = 500;
 
 function intParam(value: string | null, fallback: number, max: number) {
   const n = Number(value);
@@ -19,15 +21,23 @@ export async function GET(req: NextRequest) {
   const sp = req.nextUrl.searchParams;
   const kind = sp.get("kind");
   const topic = sp.get("topic");
-  const limit = intParam(sp.get("limit"), PAGE_SIZE, 100_000) || PAGE_SIZE;
+  const limit = intParam(sp.get("limit"), PAGE_SIZE, MAX_LIMIT) || PAGE_SIZE;
+  const offset = intParam(sp.get("offset"), 0, Number.MAX_SAFE_INTEGER);
   const rows = listDumps({
     q: sp.get("q"),
     kind: isKind(kind) ? kind : null,
     topic: isTopic(topic) ? topic : null,
     limit: limit + 1,
-    offset: intParam(sp.get("offset"), 0, Number.MAX_SAFE_INTEGER),
+    offset,
   });
-  return NextResponse.json({ items: rows.slice(0, limit), hasMore: rows.length > limit, counts: counts(), ai: aiEnabled() });
+  // The three aggregate scans only matter to the header/nav — skip them for paged fetches.
+  const wantCounts = offset === 0 || sp.get("counts") === "1";
+  return NextResponse.json({
+    items: rows.slice(0, limit),
+    hasMore: rows.length > limit,
+    ...(wantCounts ? { counts: counts() } : {}),
+    ai: aiEnabled(),
+  });
 }
 
 export async function POST(req: NextRequest) {

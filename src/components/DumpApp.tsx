@@ -13,6 +13,8 @@ import SectionNav, { type Counts } from "./SectionNav";
 import UpdateButton from "./UpdateButton";
 
 const PAGE_SIZE = 60;
+/** Matches the server's per-request cap on /api/dumps. */
+const LIMIT_CAP = 500;
 /** Card height guess before its first measurement, plus the 6px --gap between cards. */
 const ESTIMATE_H = 260;
 const GAP_EST = 6;
@@ -136,10 +138,6 @@ export default function DumpApp() {
   const [hasMore, setHasMore] = useState(false);
   const [freshId, setFreshId] = useState<string | null>(null);
   const [removingIds, setRemovingIds] = useState<Set<string>>(new Set());
-  // How many items to show; resets to one page whenever the filters change.
-  const filterKey = `${q}|${kind}|${topic}`;
-  const [page, setPage] = useState({ key: filterKey, limit: PAGE_SIZE });
-  const limit = page.key === filterKey ? page.limit : PAGE_SIZE;
   const lastSyncedQ = useRef(q);
   const [aiOn, setAiOn] = useState(false);
   const [resorting, setResorting] = useState(false);
@@ -235,14 +233,21 @@ export default function DumpApp() {
     if (q) sp.set("q", q);
     if (kind) sp.set("kind", kind);
     if (topic) sp.set("topic", topic);
-    sp.set("limit", String(limit));
+    // Revalidate the loaded window, bounded by the server's per-request cap.
+    sp.set("limit", String(Math.min(Math.max(itemsRef.current.length, PAGE_SIZE), LIMIT_CAP)));
     const res = await fetch(`/api/dumps?${sp}`, { cache: "no-store" });
     if (!res.ok) return;
-    const data = (await res.json()) as { items: Dump[]; hasMore: boolean; counts: Counts; ai: boolean };
-    setItems(data.items);
+    const data = (await res.json()) as { items: Dump[]; hasMore: boolean; counts?: Counts; ai: boolean };
+    setItems((prev) => {
+      if (data.items.length >= prev.length) return data.items;
+      // More was loaded than the cap returns: keep the unrevalidated tail,
+      // minus ids the fresh window already covers.
+      const seen = new Set(data.items.map((d) => d.id));
+      return [...data.items, ...prev.filter((d) => !seen.has(d.id))];
+    });
     setAiOn(data.ai);
     setHasMore(data.hasMore);
-    setCounts(data.counts);
+    if (data.counts) setCounts(data.counts);
     setLoaded(true);
 
     for (const d of data.items) {
@@ -253,7 +258,26 @@ export default function DumpApp() {
         else toast(`Filed under ${topicMeta(d.topic).label} · ${kindMeta(d.kind).singular}`);
       }
     }
-  }, [q, kind, topic, limit, toast]);
+  }, [q, kind, topic, toast]);
+
+  // "Load more" fetches just the next page after what's shown and appends it —
+  // growing `limit` and refetching the window from offset 0 scaled badly.
+  const loadMore = useCallback(async () => {
+    const sp = new URLSearchParams();
+    if (q) sp.set("q", q);
+    if (kind) sp.set("kind", kind);
+    if (topic) sp.set("topic", topic);
+    sp.set("offset", String(itemsRef.current.length));
+    sp.set("limit", String(PAGE_SIZE));
+    const res = await fetch(`/api/dumps?${sp}`, { cache: "no-store" });
+    if (!res.ok) return;
+    const data = (await res.json()) as { items: Dump[]; hasMore: boolean };
+    setItems((prev) => {
+      const seen = new Set(prev.map((d) => d.id));
+      return [...prev, ...data.items.filter((d) => !seen.has(d.id))];
+    });
+    setHasMore(data.hasMore);
+  }, [q, kind, topic]);
 
   useEffect(() => {
     load();
@@ -905,7 +929,7 @@ export default function DumpApp() {
         )}
         {hasMore && (
           <div className="mt-6 flex justify-center">
-            <button type="button" onClick={() => setPage({ key: filterKey, limit: limit + PAGE_SIZE })} className="d-ghost-btn">
+            <button type="button" onClick={loadMore} className="d-ghost-btn">
               Load more
             </button>
           </div>
