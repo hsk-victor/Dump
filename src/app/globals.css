@@ -386,6 +386,139 @@ button {
   }
 }
 
+/* ── Topic strip quick-edit ──
+   Double-click renames inside the pill; the dot (click / long-press) opens a
+   color popover anchored to the pill; a "+" pill at the tail adds categories. */
+
+/* A pill mid-rename swaps its <button> for a <div> holding the live input. */
+.d-topic-edit {
+  color: var(--ink);
+  background: var(--hairline);
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--topic, var(--ink)) 45%, transparent);
+}
+.d-topic-rn {
+  min-width: 5ch;
+  width: 100%;
+  background: transparent;
+  outline: none;
+  border-radius: 4px;
+  font: inherit;
+  color: inherit;
+  caret-color: var(--topic, var(--ink));
+  box-shadow: inset 0 -1.5px 0 var(--topic, var(--ink));
+}
+.d-topic-rn::placeholder {
+  color: var(--muted);
+  font-weight: 450;
+}
+/* Clickable color dot inside a pill. */
+.d-dot-btn {
+  cursor: pointer;
+  transition: scale 0.16s var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .d-dot-btn:hover {
+    scale: 1.25;
+  }
+}
+.d-dot-btn:active {
+  scale: 0.9;
+}
+.d-dot-btn[aria-expanded="true"] {
+  scale: 1.25;
+}
+/* "+" pill pinned to the strip's tail. */
+.d-topic-add {
+  color: var(--muted);
+  box-shadow: inset 0 0 0 1.5px var(--hairline);
+}
+.d-topic-add svg {
+  width: 0.75rem;
+  height: 0.75rem;
+}
+
+/* The anchored color/delete popover. */
+.d-tpop {
+  position: fixed;
+  z-index: 45;
+  width: 13rem;
+  padding: 0.55rem 0.6rem 0.45rem;
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: var(--shadow-hover), inset 0 0 0 1px color-mix(in srgb, var(--c, var(--ink)) 16%, transparent);
+  transform-origin: var(--ox, 50%) 0;
+  animation: d-tpop-in 0.16s var(--ease-out);
+}
+@keyframes d-tpop-in {
+  from {
+    opacity: 0;
+    scale: 0.95;
+    translate: 0 -4px;
+  }
+}
+.d-tpop-sw {
+  padding: 0;
+  gap: 0.34rem;
+}
+.d-tpop .d-cat-swatch {
+  width: 1rem;
+  height: 1rem;
+  animation: d-tpop-sw-in 0.2s var(--ease-out) backwards;
+}
+@keyframes d-tpop-sw-in {
+  from {
+    scale: 0.4;
+    opacity: 0;
+  }
+}
+.d-tpop-foot {
+  display: flex;
+  align-items: center;
+  margin-top: 0.5rem;
+  padding-top: 0.45rem;
+  border-top: 1px solid var(--hairline);
+}
+.d-tpop-count {
+  font-size: 0.68rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.d-tpop-del {
+  margin-left: auto;
+  padding: 0.28rem 0.55rem;
+  border-radius: 7px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+  transition: scale 0.16s var(--ease-out), color 0.15s, background 0.15s;
+}
+@media (hover: hover) and (pointer: fine) {
+  .d-tpop-del:hover {
+    color: #e5484d;
+    background: color-mix(in srgb, #e5484d 10%, transparent);
+  }
+}
+.d-tpop-del:active {
+  scale: 0.95;
+}
+.d-tpop-armed {
+  margin-left: auto;
+  padding: 0.28rem 0.55rem;
+  border-radius: 7px;
+  font-size: 0.72rem;
+  font-weight: 650;
+  color: #fff;
+  background: #e5484d;
+  white-space: nowrap;
+  cursor: pointer;
+  animation: d-tpop-in 0.16s var(--ease-out);
+  transition: scale 0.16s var(--ease-out);
+}
+.d-tpop-armed:active {
+  scale: 0.95;
+}
+
 /* ── Grid & cards ── */
 
 .d-main {
