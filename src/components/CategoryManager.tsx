@@ -60,12 +60,19 @@ export default function CategoryManager({ open, onClose, topics, counts, onChang
     return data;
   }
 
-  async function rename(t: TopicMeta, label: string) {
+  /** Returns the label as saved, or null when the rename failed. */
+  async function rename(t: TopicMeta, label: string): Promise<string | null> {
     const clean = label.trim();
-    if (clean === t.label) return;
-    if (!clean) return toast("Categories need a name", "error");
+    if (clean === t.label) return t.label;
+    if (!clean) {
+      toast("Categories need a name", "error");
+      return null;
+    }
     const data = await patch(t.id, { label: clean });
-    if (data) toast(`Renamed to ${data.topics!.find((x) => x.id === t.id)?.label ?? clean}`);
+    if (!data) return null;
+    const saved = data.topics!.find((x) => x.id === t.id)?.label ?? clean;
+    toast(`Renamed to ${saved}`);
+    return saved;
   }
 
   async function recolor(t: TopicMeta, color: string) {
@@ -74,7 +81,8 @@ export default function CategoryManager({ open, onClose, topics, counts, onChang
   }
 
   async function describe(t: TopicMeta, description: string) {
-    if (description.trim() !== (t.description ?? "")) await patch(t.id, { description });
+    if (description.trim() === (t.description ?? "")) return true;
+    return !!(await patch(t.id, { description }));
   }
 
   async function remove(t: TopicMeta) {
@@ -146,8 +154,13 @@ export default function CategoryManager({ open, onClose, topics, counts, onChang
                       aria-label={`Name for ${t.label}`}
                       maxLength={60}
                       onBlur={(e) => {
-                        rename(t, e.currentTarget.value);
-                        e.currentTarget.value = t.label;
+                        const el = e.currentTarget;
+                        if (el.value.trim() === t.label) return;
+                        // Write back what the server saved (or revert on failure): the input is
+                        // uncontrolled, so a plain defaultValue update wouldn't reach it.
+                        void rename(t, el.value).then((saved) => {
+                          el.value = saved ?? t.label;
+                        });
                       }}
                       onKeyDown={(e) => {
                         if (e.key === "Enter") e.currentTarget.blur();
@@ -175,7 +188,12 @@ export default function CategoryManager({ open, onClose, topics, counts, onChang
                     placeholder={t.id === "other" ? "Fits none of the other topics." : "What belongs here — guides auto-sorting"}
                     aria-label={`Sorting hint for ${t.label}`}
                     maxLength={300}
-                    onBlur={(e) => describe(t, e.currentTarget.value)}
+                    onBlur={(e) => {
+                      const el = e.currentTarget;
+                      void describe(t, el.value).then((ok) => {
+                        if (!ok) el.value = t.description ?? "";
+                      });
+                    }}
                     onKeyDown={(e) => {
                       if (e.key === "Enter") e.currentTarget.blur();
                       if (e.key === "Escape") {
