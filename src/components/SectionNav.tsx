@@ -54,6 +54,9 @@ export default function SectionNav({ counts, topics: all, topic, onSelect, onCha
   /** The `topic` filter just before the current click burst — lets a double-click
    *  restore it exactly (the prop is still stale when the dblclick handler runs). */
   const preClickTopic = useRef<string | null>(null);
+  /** Topic id whose popover the current pointerdown just closed — lets the
+   *  anchor's click read as "dismiss" instead of reopening the popover. */
+  const dismissClick = useRef<string | null>(null);
 
   const popTopic = pop ? all.find((t) => t.id === pop.id) : null;
 
@@ -67,6 +70,7 @@ export default function SectionNav({ counts, topics: all, topic, onSelect, onCha
   }
 
   function popAt(t: TopicMeta, r: DOMRect) {
+    dismissClick.current = null;
     const left = Math.min(Math.max(8, r.left), window.innerWidth - 160);
     setPop({ id: t.id, left, top: r.bottom + 7, ox: Math.max(14, r.left + r.width / 2 - left) });
     setConfirmDel(null);
@@ -76,7 +80,12 @@ export default function SectionNav({ counts, topics: all, topic, onSelect, onCha
   useEffect(() => {
     if (!pop) return;
     const onDown = (e: PointerEvent) => {
-      if (!popRef.current?.contains(e.target as Node)) closePop();
+      if (popRef.current?.contains(e.target as Node)) return;
+      // A pointerdown on the popover's own tab still emits a click — flag it so
+      // onClick doesn't reopen the popover it was just asked to close.
+      const tid = (e.target as HTMLElement).closest?.("[data-tid]")?.getAttribute("data-tid");
+      if (tid === pop.id) dismissClick.current = tid;
+      closePop();
     };
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && closePop();
     const onScroll = () => closePop();
@@ -197,12 +206,17 @@ export default function SectionNav({ counts, topics: all, topic, onSelect, onCha
             <button
               key={t.id}
               className="d-topic"
+              data-tid={t.id}
               aria-pressed={topic === t.id}
               onClick={(e) => {
                 if (e.detail > 1) return; // second click of a double-click
                 if (heldRef.current) {
                   heldRef.current = false;
                   return; // trailing click after a long-press
+                }
+                if (dismissClick.current === t.id) {
+                  dismissClick.current = null;
+                  return; // pointerdown just closed this tab's popover — a dismiss click
                 }
                 preClickTopic.current = topic;
                 // Clicking the active tab opens its popover instead of
