@@ -2082,6 +2082,34 @@ button {
   display: block;
 }
 
+/* Video posts: the player IS the card — same bare treatment as the render. */
+.d-xvid {
+  padding: 0;
+  background: transparent;
+  border-radius: 0;
+  box-shadow: none;
+  overflow: visible;
+}
+.d-xvid .d-post-video-frame {
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+  transition: box-shadow 0.2s;
+}
+@media (hover: hover) and (pointer: fine) {
+  .d-xvid:hover .d-post-video-frame {
+    box-shadow: var(--shadow-hover);
+  }
+}
+.d-xvid .d-post-video {
+  margin-top: 0;
+  border: 0;
+  border-radius: 0;
+}
+.d-xvid .d-animation-toggle {
+  border-radius: 0;
+}
+
 /* Notes — index card: a catalog header (uppercase title + date) over ruled
    writing lines, with a red margin rule on the leading edge. Card stock stays
    plain — the topic tint lives in the meta row, not the paper. */

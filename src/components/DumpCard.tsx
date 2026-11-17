@@ -401,8 +401,9 @@ function XCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
   // usable render — fall back to the built card.
   const xr = hasMedia || xrFailed || !dump.xRender?.light ? null : dump.xRender;
   const media = images.length > 0 || !!dump.videoUrl;
+  const bare = media && !images.length && !!dump.videoUrl;
   return (
-    <article {...bits.cardProps} className={`d-card d-post group${xr ? " d-xpost" : ""}`}>
+    <article {...bits.cardProps} className={`d-card d-post group${xr ? " d-xpost" : bare ? " d-xvid" : ""}`}>
       {bits.actions}
       {xr ? (
         /* The post as x.com draws it — a snapshot rendered at save time. */
