@@ -1,7 +1,7 @@
 import { after, NextResponse, type NextRequest } from "next/server";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { deleteDump, getDump, topPosition, topicExists, updateDump, UPLOAD_DIR } from "@/lib/db";
+import { db, deleteDump, getDump, topPosition, topicExists, updateDump, UPLOAD_DIR } from "@/lib/db";
 import { enrichDump, noteTitle } from "@/lib/enrich";
 
 export const runtime = "nodejs";
@@ -52,8 +52,12 @@ export async function DELETE(_req: NextRequest, { params }: Ctx) {
   if (dump.imageUrl?.startsWith("/api/files/")) {
     await fs.rm(path.join(UPLOAD_DIR, path.basename(dump.imageUrl)), { force: true });
   }
+  // Photo files are content-addressed: another dump may reference the same
+  // file, so only remove ones no remaining dump points at.
   for (const src of dump.xRender?.photos ?? []) {
-    await fs.rm(path.join(UPLOAD_DIR, path.basename(src)), { force: true });
+    const name = path.basename(src);
+    const inUse = db().prepare("SELECT 1 FROM dumps WHERE x_render LIKE ? LIMIT 1").get(`%${name}%`);
+    if (!inUse) await fs.rm(path.join(UPLOAD_DIR, name), { force: true });
   }
   return new NextResponse(null, { status: 204 });
 }
