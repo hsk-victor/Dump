@@ -392,7 +392,7 @@ function XCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
   // A lost uploads dir leaves stale xRender URLs — fall back to the built card.
   const xr = xrFailed ? null : dump.xRender;
   return (
-    <article {...bits.cardProps} className="d-card d-post group">
+    <article {...bits.cardProps} className={`d-card d-post group${xr ? " d-xpost" : ""}`}>
       {bits.actions}
       {xr ? (
         /* The post as x.com draws it — a snapshot rendered at save time. */

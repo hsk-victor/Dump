@@ -2025,11 +2025,28 @@ button {
 .d-post .d-annotation {
   margin-top: 0.6rem;
 }
-/* xeet render: the post drawn exactly as x.com draws it — the PNG is already a
-   card, so it sits bare in the card body rather than framed again. */
+/* xeet render: the post drawn exactly as x.com draws it. The PNG IS the card —
+   the article carries no chrome of its own; radius + shadow move onto the
+   image so the grid silhouette and hover lift stay identical. */
+.d-xpost {
+  padding: 0;
+  background: transparent;
+  border-radius: 0;
+  box-shadow: none;
+  overflow: visible;
+}
 .d-xrender {
   display: block;
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+  transition: box-shadow 0.2s;
   line-height: 0;
+}
+@media (hover: hover) and (pointer: fine) {
+  .d-xpost:hover .d-xrender {
+    box-shadow: var(--shadow-hover);
+  }
 }
 .d-xrender-img {
   display: block;

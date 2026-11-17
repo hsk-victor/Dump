@@ -1,5 +1,5 @@
 import { after, NextResponse, type NextRequest } from "next/server";
-import { counts, listDumps, listTopics } from "@/lib/db";
+import { counts, listDumps, listTopics, staleXRenderIds } from "@/lib/db";
 import { createFromFile, createFromText, InputError } from "@/lib/create";
 import { enrichDump } from "@/lib/enrich";
 import { aiEnabled } from "@/lib/llm";
@@ -9,6 +9,10 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const PAGE_SIZE = 60;
+
+/** Once per process: re-enrich X dumps whose render predates the current
+ *  output (or was never rendered) so old saves pick up the latest shape. */
+let xRenderRefreshQueued = false;
 /** Hard cap on a single page — "load more" pages forward with offset, so nothing needs more. */
 const MAX_LIMIT = 500;
 
@@ -33,6 +37,10 @@ export async function GET(req: NextRequest) {
   });
   // The three aggregate scans only matter to the header/nav — skip them for paged fetches.
   const wantCounts = offset === 0 || sp.get("counts") === "1";
+  if (offset === 0 && !xRenderRefreshQueued) {
+    xRenderRefreshQueued = true;
+    for (const id of staleXRenderIds()) after(() => enrichDump(id));
+  }
   return NextResponse.json({
     items: rows.slice(0, limit),
     hasMore: rows.length > limit,

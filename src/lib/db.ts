@@ -558,3 +558,16 @@ export function deleteTopic(id: string): { id: string; moved: number } | null {
   })();
   return { id, moved };
 }
+
+/**
+ * Ids of X dumps whose render predates the current output (missing, or a
+ * pre-hash filename) — re-enriched once per process on feed load so older
+ * saves pick up the current render shape without a manual reprocess.
+ */
+export function staleXRenderIds(): string[] {
+  const rows = db()
+    .prepare(`SELECT id FROM dumps WHERE provider = 'x' AND url IS NOT NULL AND status != 'deleted'
+              AND (x_render IS NULL OR x_render NOT LIKE '%-light-________.png%')`)
+    .all() as { id: string }[];
+  return rows.map((r) => r.id);
+}
