@@ -2025,9 +2025,9 @@ button {
 .d-post .d-annotation {
   margin-top: 0.6rem;
 }
-/* xeet render: the post drawn exactly as x.com draws it. The PNG IS the card —
-   the article carries no chrome of its own; radius + shadow move onto the
-   image so the grid silhouette and hover lift stay identical. */
+/* X post rebuilt as DOM from the structured snapshot — the post IS the card:
+   the article carries no chrome of its own; X's surface, radius and shadow
+   live on .d-xpost-body so the grid silhouette and hover lift stay identical. */
 .d-xpost {
   padding: 0;
   background: transparent;
@@ -2035,32 +2035,277 @@ button {
   box-shadow: none;
   overflow: visible;
 }
-.d-xrender {
-  display: block;
+.d-xpost-body {
+  --xt: #0f1419;
+  --xsub: #536471;
+  --xlink: #1d9bf0;
+  --xline: #eff3f4;
+  --xpoll: #cfd9de;
+  background: #fff;
+  color: var(--xt);
   border-radius: var(--radius);
-  overflow: hidden;
   box-shadow: var(--shadow);
+  padding: 12px;
+  font-size: 0.94rem;
+  line-height: 1.34;
   transition: box-shadow 0.2s;
-  line-height: 0;
+}
+[data-mode="dark"] .d-xpost-body {
+  --xt: #e7e9ea;
+  --xsub: #71767b;
+  --xline: #2f3336;
+  --xpoll: #425364;
+  background: #000;
 }
 @media (hover: hover) and (pointer: fine) {
-  .d-xpost:hover .d-xrender {
+  .d-xpost:hover .d-xpost-body {
     box-shadow: var(--shadow-hover);
   }
 }
-.d-xrender-img {
+.d-xpost-head {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+.d-xpost-ava {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--xline);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--xsub);
+}
+.d-xpost-ava-sq {
+  border-radius: 8px;
+}
+.d-xpost-ava img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.d-xpost-ava .d-prov {
+  width: 1.2rem;
+  height: 1.2rem;
+}
+.d-xpost-names {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+.d-xpost-name {
+  font-weight: 700;
+  color: var(--xt);
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+@media (hover: hover) and (pointer: fine) {
+  .d-xpost-name:hover {
+    text-decoration: underline;
+  }
+}
+.d-xpost-badge {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+.d-xpost-sub {
+  color: var(--xsub);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.d-xpost-context {
+  margin: 0 0 2px;
+  font-size: 0.83rem;
+  color: var(--xsub);
+}
+.d-xpost-text {
+  margin: 0;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+.d-xpost-clamp {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 12;
+  overflow: hidden;
+}
+.d-xpost-more {
+  display: inline;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--xlink);
+  font: inherit;
+  cursor: pointer;
+}
+.d-xpost-link {
+  color: var(--xlink);
+  text-decoration: none;
+}
+@media (hover: hover) and (pointer: fine) {
+  .d-xpost-link:hover {
+    text-decoration: underline;
+  }
+}
+.d-xpost-media {
   display: block;
+  margin-top: 10px;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid var(--xline);
+  line-height: 0;
+}
+.d-xpost-media img {
   width: 100%;
   height: auto;
-}
-.d-xrender-dark {
-  display: none;
-}
-[data-mode="dark"] .d-xrender .d-xrender-img {
-  display: none;
-}
-[data-mode="dark"] .d-xrender .d-xrender-dark {
   display: block;
+}
+.d-xpost-media.d-xpost-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px;
+}
+.d-xpost .d-post-video-frame {
+  margin-top: 10px;
+  border-radius: 16px;
+}
+.d-xpost-quote {
+  display: block;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--xline);
+  border-radius: 16px;
+  color: inherit;
+  text-decoration: none;
+}
+.d-xpost-qhead {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  font-size: 0.9rem;
+}
+.d-xpost-qname {
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.d-xpost-qhead .d-xpost-badge {
+  width: 15px;
+  height: 15px;
+}
+.d-xpost-qsub {
+  color: var(--xsub);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.d-xpost-qtext {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  overflow: hidden;
+  margin-top: 2px;
+  font-size: 0.9rem;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+.d-xpost-qmedia {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.8rem;
+  color: var(--xsub);
+}
+.d-xpost-poll {
+  margin-top: 10px;
+  display: grid;
+  gap: 6px;
+}
+.d-xpost-choice {
+  position: relative;
+  border: 1px solid var(--xline);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 0.9rem;
+  overflow: hidden;
+}
+.d-xpost-choice-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--xpoll);
+  opacity: 0.5;
+}
+.d-xpost-choice-label {
+  position: relative;
+}
+.d-xpost-choice-pct {
+  position: relative;
+  float: right;
+  font-weight: 700;
+}
+.d-xpost-card {
+  display: block;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--xline);
+  border-radius: 16px;
+  color: inherit;
+  text-decoration: none;
+}
+.d-xpost-card-title {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.d-xpost-card-desc {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  color: var(--xsub);
+  font-size: 0.9rem;
+}
+.d-xpost-card-domain {
+  display: block;
+  color: var(--xsub);
+  font-size: 0.85rem;
+}
+.d-xpost-acts {
+  display: flex;
+  justify-content: space-between;
+  gap: 4px;
+  margin-top: 10px;
+  max-width: 320px;
+  color: var(--xsub);
+  text-decoration: none;
+  font-size: 0.82rem;
+}
+.d-xpost-acts > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.d-xpost-ic {
+  width: 17px;
+  height: 17px;
+}
+.d-xpost .d-meta,
+.d-xpost .d-annotation {
+  padding-inline: 0.2rem;
 }
 
 /* Notes — index card: a catalog header (uppercase title + date) over ruled
