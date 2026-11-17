@@ -192,6 +192,25 @@ function apply() {
       ? st
       : null;
 
+  // The build currently serving is the only thing keeping a failed update from
+  // taking the app down — park it before any path can wipe .next.
+  const nextDir = path.join(REPO, ".next");
+  const bakDir = `${nextDir}.prev`;
+  // A previous apply may have died mid-swap: if the parked build is the only
+  // one left, put it back before the rmSync below deletes it.
+  if (!builtAt(REPO) && fs.existsSync(path.join(bakDir, "BUILD_ID"))) {
+    fs.renameSync(bakDir, nextDir);
+  }
+  fs.rmSync(bakDir, { recursive: true, force: true });
+  if (builtAt(REPO)) fs.renameSync(nextDir, bakDir);
+  const restoreServed = () => {
+    log("no build could be produced; restoring the previously serving build");
+    fs.rmSync(nextDir, { recursive: true, force: true });
+    try {
+      fs.renameSync(bakDir, nextDir);
+    } catch {}
+  };
+
   if (staged) {
     try {
       // Only when the lockfile moved do node_modules change — and the worktree
@@ -234,6 +253,7 @@ function apply() {
         git("worktree", "remove", "--force", staged.dir);
       } catch {}
       writeState({ phase: "applied", sha: staged.sha });
+      fs.rmSync(bakDir, { recursive: true, force: true });
       log(`swapped in staged build ${staged.sha.slice(0, 7)}`);
       return;
     } catch (e) {
@@ -241,19 +261,30 @@ function apply() {
     }
   }
 
-  // No staged build: the original behaviour — install if needed, build, and on
-  // failure roll back to the previous commit and rebuild that. `npm ci` must be
-  // inside the try too: it wipes node_modules first, so a registry failure
-  // without the rollback leaves the stopped app unable to restart.
+  // No staged build: install if needed, build, and on failure roll back to the
+  // previous commit and rebuild that. `npm ci` must be inside the try too: it
+  // wipes node_modules first, so a registry failure without the rollback
+  // leaves the stopped app unable to restart. If even the rollback fails the
+  // parked build goes back, so `next start` still serves the old version.
   try {
     if (lockChanged(old, head) || !fs.existsSync(path.join(REPO, "node_modules"))) npmIn(REPO, ["ci"]);
+    // Drop staged partials and any poisoned cache — the parked build is safe.
+    fs.rmSync(nextDir, { recursive: true, force: true });
     npmIn(REPO, ["run", "build"]);
+    fs.rmSync(bakDir, { recursive: true, force: true });
     log(`built ${head}`);
   } catch {
     log(`build of ${head} failed; rolling back to ${old}`);
-    git("reset", "--keep", old);
-    npmIn(REPO, ["ci"]);
-    npmIn(REPO, ["run", "build"]);
+    try {
+      git("reset", "--keep", old);
+      npmIn(REPO, ["ci"]);
+      fs.rmSync(nextDir, { recursive: true, force: true });
+      npmIn(REPO, ["run", "build"]);
+      fs.rmSync(bakDir, { recursive: true, force: true });
+    } catch (e2) {
+      restoreServed();
+      throw e2;
+    }
   }
 }
 
