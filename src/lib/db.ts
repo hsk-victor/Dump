@@ -573,6 +573,8 @@ export function staleXRenderIds(): { id: string; status: Status }[] {
     // it finishes — a row stuck in processing keeps the feed polling.
     .prepare(`SELECT id, status FROM dumps WHERE url IS NOT NULL AND status != 'processing'
               AND (provider = 'x' OR url LIKE '%x.com/%' OR url LIKE '%twitter.com/%')
-              AND (x_render IS NULL OR x_render NOT LIKE '%-light-________.png%')`)
+              AND (x_render IS NULL OR x_render NOT LIKE '%-light-________.png%')
+              -- Media posts show the media itself and get no render by design.
+              AND image_urls IS NULL AND image_url IS NULL AND video_url IS NULL`)
     .all() as { id: string; status: Status }[];
 }
