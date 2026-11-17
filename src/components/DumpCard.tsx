@@ -389,8 +389,9 @@ function XCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
     bits.title && !bits.processing && bits.title !== postText && !attributionName(dump.title, dump) ? bits.title : null;
   const allImages = dump.imageUrls.length ? dump.imageUrls : dump.imageUrl ? [dump.imageUrl] : [];
   const images = allImages.filter((_, i) => !failedIdx.has(i));
-  // A lost uploads dir leaves stale xRender URLs — fall back to the built card.
-  const xr = xrFailed ? null : dump.xRender;
+  // A lost uploads dir or a foreign-shape snapshot (no light PNG) leaves no
+  // usable render — fall back to the built card.
+  const xr = xrFailed || !dump.xRender?.light ? null : dump.xRender;
   return (
     <article {...bits.cardProps} className={`d-card d-post group${xr ? " d-xpost" : ""}`}>
       {bits.actions}
