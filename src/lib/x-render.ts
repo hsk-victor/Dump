@@ -26,10 +26,14 @@ function xeet(): Promise<Xeet> {
  *  then renders even when extraction hotlinks go stale or were never captured.
  *  Avatars/link-card thumbs stay hot-linked (tiny, replaceable). */
 async function persistPhotos(post: Post): Promise<string[] | undefined> {
+  // All or nothing: a partial set would mask the remaining extraction images,
+  // so an incomplete download falls back to those URLs entirely.
+  const imgs = (post.media ?? []).filter((m) => m.kind === "image");
+  const datas = imgs.map((m) => m.data).filter((d): d is string => !!d);
+  if (!imgs.length || datas.length !== imgs.length) return undefined;
   const photos: string[] = [];
-  for (const m of post.media ?? []) {
-    if (m.kind !== "image" || !m.data) continue;
-    const bytes = Buffer.from(m.data, "base64");
+  for (const data of datas) {
+    const bytes = Buffer.from(data, "base64");
     const ext = bytes[0] === 0x89 ? "png" : bytes[0] === 0x52 ? "webp" : "jpg";
     const name = `xmedia-${crypto.createHash("sha256").update(bytes).digest("hex").slice(0, 24)}.${ext}`;
     await fs.writeFile(path.join(UPLOAD_DIR, name), bytes);
