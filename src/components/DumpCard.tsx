@@ -411,6 +411,8 @@ function xTextSegments(text: string, entities: Entity[], hidden: Hidden[]): XSeg
 
 const compact = new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 });
 
+const X_ACT_LABELS = { reply: "Reply", repost: "Repost", heart: "Like", chart: "Views", bookmark: "Bookmark" } as const;
+
 function XVerifiedBadge({ kind }: { kind?: Author["verified"] }) {
   if (!kind || kind === "none") return null;
   const color = kind === "business" ? "#f7b928" : kind === "government" ? "#829aab" : "#1d9bf0";
@@ -549,7 +551,7 @@ function XPostView({ snap, dump, bits, images, allImages, failedIdx, setFailedId
           {(["reply", "repost", "heart", "chart", "bookmark"] as const).map((k) => {
             const n = { reply: counts?.replies, repost: counts?.reposts, heart: counts?.likes, chart: counts?.views, bookmark: counts?.bookmarks }[k];
             return (
-              <a key={k} href={bits.href ?? undefined} target="_blank" rel="noreferrer" className={`d-xpost-act d-xpost-act-${k}`}>
+              <a key={k} href={bits.href ?? undefined} target="_blank" rel="noreferrer" className={`d-xpost-act d-xpost-act-${k}`} aria-label={X_ACT_LABELS[k]}>
                 <span className="d-xpost-act-ic"><Glyph name={k} className="d-xpost-ic" /></span>
                 {n ? compact.format(n) : null}
               </a>
