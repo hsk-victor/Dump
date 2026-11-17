@@ -52,5 +52,8 @@ export async function DELETE(_req: NextRequest, { params }: Ctx) {
   if (dump.imageUrl?.startsWith("/api/files/")) {
     await fs.rm(path.join(UPLOAD_DIR, path.basename(dump.imageUrl)), { force: true });
   }
+  for (const src of dump.xRender?.photos ?? []) {
+    await fs.rm(path.join(UPLOAD_DIR, path.basename(src)), { force: true });
+  }
   return new NextResponse(null, { status: 204 });
 }
