@@ -359,7 +359,7 @@ function LoopVideo({
   );
 }
 
-function XVideo({ dump, author }: { dump: Dump; author: string | null }) {
+function XVideo({ dump, author, href }: { dump: Dump; author: string | null; href?: string | null }) {
   const animated = dump.videoType === "animated_gif";
   return (
     <div className="d-post-video-frame">
@@ -370,6 +370,12 @@ function XVideo({ dump, author }: { dump: Dump; author: string | null }) {
         controls={!animated}
         label={`${animated ? "Animation" : "Video"} by ${author ?? "X author"}`}
       />
+      {href && (
+        /* The video can't itself be a link (controls), so the post gets a corner chip. */
+        <a className="d-x-vlink" href={href} target="_blank" rel="noreferrer" aria-label="Open post on X">
+          <ProviderIcon provider="x" />
+        </a>
+      )}
     </div>
   );
 }
@@ -411,7 +417,7 @@ function XCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
       ) : media ? (
         /* Just the media — it still links through to the post. */
         <>
-          {dump.videoUrl && <XVideo dump={dump} author={author} />}
+          {dump.videoUrl && <XVideo dump={dump} author={author} href={bits.href} />}
           {images.length > 0 && (
             <a href={bits.href ?? undefined} target="_blank" rel="noreferrer" className={`d-post-gallery${images.length > 1 ? " d-post-grid" : ""}`}>
               {allImages.map((src, i) => !failedIdx.has(i) && (
