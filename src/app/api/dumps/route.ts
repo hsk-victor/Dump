@@ -1,7 +1,7 @@
 import { after, NextResponse, type NextRequest } from "next/server";
-import { counts, listDumps, listTopics } from "@/lib/db";
+import { counts, listDumps, listTopics, staleXRenderIds, updateDump } from "@/lib/db";
 import { createFromFile, createFromText, InputError } from "@/lib/create";
-import { enrichDump } from "@/lib/enrich";
+import { enrichDump, refreshXRender } from "@/lib/enrich";
 import { aiEnabled } from "@/lib/llm";
 import { isKind } from "@/lib/taxonomy";
 
@@ -9,6 +9,10 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const PAGE_SIZE = 60;
+
+/** Once per process: re-enrich X dumps whose render predates the current
+ *  output (or was never rendered) so old saves pick up the latest shape. */
+let xRenderRefreshQueued = false;
 /** Hard cap on a single page — "load more" pages forward with offset, so nothing needs more. */
 const MAX_LIMIT = 500;
 
@@ -23,6 +27,14 @@ export async function GET(req: NextRequest) {
   const topic = sp.get("topic");
   const limit = intParam(sp.get("limit"), PAGE_SIZE, MAX_LIMIT) || PAGE_SIZE;
   const offset = intParam(sp.get("offset"), 0, Number.MAX_SAFE_INTEGER);
+  if (offset === 0 && !xRenderRefreshQueued) {
+    xRenderRefreshQueued = true;
+    // Parking them 'processing' before listing makes this response reflect that
+    // fresh renders are on the way — an open feed polls until they land.
+    const stale = staleXRenderIds();
+    for (const { id } of stale) updateDump(id, { status: "processing" });
+    for (const { id, status } of stale) after(() => refreshXRender(id, status));
+  }
   const rows = listDumps({
     q: sp.get("q"),
     kind: isKind(kind) ? kind : null,

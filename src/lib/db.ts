@@ -8,6 +8,12 @@ import { providerFromUrl } from "./detect";
 
 export type Status = "processing" | "ready" | "failed";
 
+/** xeet-rendered post PNGs, one per theme — /api/files/ paths into uploads. JSON in the DB. */
+export interface XRender {
+  light: string;
+  dark?: string;
+}
+
 export interface Dump {
   id: string;
   kind: Kind;
@@ -31,6 +37,8 @@ export interface Dump {
   videoUrl: string | null;
   videoPosterUrl: string | null;
   videoType: "video" | "animated_gif" | null;
+  /** The post rendered as it looks on x.com (X dumps only). Null = fall back to the built card. */
+  xRender: XRender | null;
   summary: string | null;
   /** Identified subject for clips/images, e.g. {"type":"show","name":"Severance"}. JSON in the DB. */
   subject: Subject | null;
@@ -65,6 +73,7 @@ interface Row {
   video_url: string | null;
   video_poster_url: string | null;
   video_type: string | null;
+  x_render: string | null;
   summary: string | null;
   subject: string | null;
   tags: string;
@@ -101,6 +110,7 @@ CREATE TABLE IF NOT EXISTS dumps (
   video_url TEXT,
   video_poster_url TEXT,
   video_type TEXT,
+  x_render TEXT,
   summary TEXT,
   subject TEXT,
   tags TEXT NOT NULL DEFAULT '[]',
@@ -176,7 +186,7 @@ export function db(): Database.Database {
     if (!cols.some((c) => c.name === "subject")) conn.exec("ALTER TABLE dumps ADD COLUMN subject TEXT");
     if (!cols.some((c) => c.name === "provider")) conn.exec("ALTER TABLE dumps ADD COLUMN provider TEXT");
     if (!cols.some((c) => c.name === "image_urls")) conn.exec("ALTER TABLE dumps ADD COLUMN image_urls TEXT");
-    for (const name of ["author_handle", "author_avatar_url", "video_url", "video_poster_url", "video_type"]) {
+    for (const name of ["author_handle", "author_avatar_url", "video_url", "video_poster_url", "video_type", "x_render"]) {
       if (!cols.some((c) => c.name === name)) conn.exec(`ALTER TABLE dumps ADD COLUMN ${name} TEXT`);
     }
     if (!cols.some((c) => c.name === "pinned")) conn.exec("ALTER TABLE dumps ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0");
@@ -234,6 +244,7 @@ function toDump(r: Row): Dump {
     videoUrl: r.video_url,
     videoPosterUrl: r.video_poster_url,
     videoType: r.video_type as Dump["videoType"],
+    xRender: safeJsonObject(r.x_render) as XRender | null,
     summary: r.summary,
     subject: safeJsonObject(r.subject),
     tags: safeJsonArray(r.tags),
@@ -291,6 +302,7 @@ const COLUMN: Record<string, string> = {
   videoUrl: "video_url",
   videoPosterUrl: "video_poster_url",
   videoType: "video_type",
+  xRender: "x_render",
   summary: "summary",
   subject: "subject",
   tags: "tags",
@@ -309,7 +321,7 @@ function toColumns(patch: Patch): Record<string, unknown> {
     if (!col || value === undefined) continue;
     if (key === "tags") out[col] = JSON.stringify(value);
     else if (key === "imageUrls") out[col] = (value as string[] | null)?.length ? JSON.stringify(value) : null;
-    else if (key === "subject") out[col] = value ? JSON.stringify(value) : null;
+    else if (key === "subject" || key === "xRender") out[col] = value ? JSON.stringify(value) : null;
     else if (key === "topicLocked" || key === "pinned") out[col] = value ? 1 : 0;
     else out[col] = value;
   }
@@ -400,7 +412,7 @@ export interface ListOptions {
 const FEED_COLS = `d.id, d.kind, d.topic, d.status, d.url, d.domain, d.provider, d.title, d.description,
   CASE WHEN d.kind = 'note' THEN d.content END AS content,
   d.note, d.image_url, d.image_urls, d.site_name, d.author, d.author_handle, d.author_avatar_url,
-  d.video_url, d.video_poster_url, d.video_type, d.summary, d.subject, d.tags,
+  d.video_url, d.video_poster_url, d.video_type, d.x_render, d.summary, d.subject, d.tags,
   d.classified_by, d.topic_locked, d.pinned, d.position, d.created_at, d.updated_at`;
 
 export function listDumps({ q, kind, topic, limit = 200, offset = 0 }: ListOptions = {}): Dump[] {
@@ -545,4 +557,22 @@ export function deleteTopic(id: string): { id: string; moved: number } | null {
     return r.changes;
   })();
   return { id, moved };
+}
+
+/**
+ * Ids of X dumps whose render predates the current output (missing, or a
+ * pre-hash filename) — re-enriched once per process on feed load so older
+ * saves pick up the current render shape without a manual reprocess.
+ * Matches on the URL as well as the provider column: saves predating that
+ * column carry NULL there even though they're X posts.
+ */
+export function staleXRenderIds(): { id: string; status: Status }[] {
+  return db()
+    // Rows mid-enrich are skipped on purpose: the running enrich produces the
+    // current render shape, and parking them would restore 'processing' after
+    // it finishes — a row stuck in processing keeps the feed polling.
+    .prepare(`SELECT id, status FROM dumps WHERE url IS NOT NULL AND status != 'processing'
+              AND (provider = 'x' OR url LIKE '%x.com/%' OR url LIKE '%twitter.com/%')
+              AND (x_render IS NULL OR x_render NOT LIKE '%-light-________.png%')`)
+    .all() as { id: string; status: Status }[];
 }
