@@ -359,7 +359,7 @@ function LoopVideo({
   );
 }
 
-function XVideo({ dump, author }: { dump: Dump; author: string | null }) {
+function XVideo({ dump, author, href }: { dump: Dump; author: string | null; href?: string | null }) {
   const animated = dump.videoType === "animated_gif";
   return (
     <div className="d-post-video-frame">
@@ -370,6 +370,12 @@ function XVideo({ dump, author }: { dump: Dump; author: string | null }) {
         controls={!animated}
         label={`${animated ? "Animation" : "Video"} by ${author ?? "X author"}`}
       />
+      {href && (
+        /* The video can't itself be a link (controls), so the post gets a corner chip. */
+        <a className="d-x-vlink" href={href} target="_blank" rel="noreferrer" aria-label="Open post on X">
+          <ProviderIcon provider="x" />
+        </a>
+      )}
     </div>
   );
 }
@@ -389,9 +395,12 @@ function XCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
     bits.title && !bits.processing && bits.title !== postText && !attributionName(dump.title, dump) ? bits.title : null;
   const allImages = dump.imageUrls.length ? dump.imageUrls : dump.imageUrl ? [dump.imageUrl] : [];
   const images = allImages.filter((_, i) => !failedIdx.has(i));
+  // Media posts show the media itself; the render is for text-only posts.
+  const hasMedia = allImages.length > 0 || !!dump.videoUrl;
   // A lost uploads dir or a foreign-shape snapshot (no light PNG) leaves no
   // usable render — fall back to the built card.
-  const xr = xrFailed || !dump.xRender?.light ? null : dump.xRender;
+  const xr = hasMedia || xrFailed || !dump.xRender?.light ? null : dump.xRender;
+  const media = images.length > 0 || !!dump.videoUrl;
   return (
     <article {...bits.cardProps} className={`d-card d-post group${xr ? " d-xpost" : ""}`}>
       {bits.actions}
@@ -405,6 +414,19 @@ function XCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
             <img src={xr.dark} alt={text ?? `Post by ${author ?? "an X author"}`} className="d-xrender-img d-xrender-dark" loading="lazy" onError={() => setXrFailed(true)} />
           )}
         </a>
+      ) : media ? (
+        /* Just the media — it still links through to the post. */
+        <>
+          {dump.videoUrl && <XVideo dump={dump} author={author} href={bits.href} />}
+          {images.length > 0 && (
+            <a href={bits.href ?? undefined} target="_blank" rel="noreferrer" className={`d-post-gallery${images.length > 1 ? " d-post-grid" : ""}`}>
+              {allImages.map((src, i) => !failedIdx.has(i) && (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img key={src} src={src} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setFailedIdx((s) => new Set(s).add(i))} />
+              ))}
+            </a>
+          )}
+        </>
       ) : (
         <>
           <a href={bits.href ?? undefined} target="_blank" rel="noreferrer" className="d-post-head">
@@ -431,17 +453,6 @@ function XCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
             </>
           )}
         </>
-      )}
-      {dump.videoUrl && (
-        <XVideo dump={dump} author={author} />
-      )}
-      {!xr && images.length > 0 && (
-        <a href={bits.href ?? undefined} target="_blank" rel="noreferrer" className={`d-post-gallery${images.length > 1 ? " d-post-grid" : ""}`}>
-          {allImages.map((src, i) => !failedIdx.has(i) && (
-            /* eslint-disable-next-line @next/next/no-img-element */
-            <img key={src} src={src} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setFailedIdx((s) => new Set(s).add(i))} />
-          ))}
-        </a>
       )}
       {dump.note && <p className="d-annotation" dir="auto">{dump.note}</p>}
       {bits.meta}

@@ -150,8 +150,10 @@ async function runEnrich(id: string): Promise<Dump | null> {
         videoPosterUrl: ex.videoPosterUrl ?? dump.videoPosterUrl,
         videoType: ex.videoType !== undefined ? ex.videoType : dump.videoType,
       };
-      // The native-look render is a snapshot: a failed render keeps any older one.
-      if (fields.provider === "x") {
+      // The native-look render is a snapshot: a failed render keeps any older
+      // one. Posts with media show the media itself, so the render is only
+      // worth generating for text-only posts.
+      if (fields.provider === "x" && !fields.imageUrls?.length && !fields.imageUrl && !fields.videoUrl) {
         const xRender = await renderXPostImage(dump.url).catch(() => null);
         if (xRender) fields.xRender = xRender;
       }

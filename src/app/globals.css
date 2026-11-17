@@ -2013,6 +2013,25 @@ button {
 .d-post-video-frame {
   position: relative;
 }
+/* Video posts: the player can't be a link, so this chip carries the click-through. */
+.d-x-vlink {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 999px;
+  color: #fff;
+  background: rgb(0 0 0 / 0.55);
+  backdrop-filter: blur(6px);
+  transition: background-color 0.15s ease;
+}
+.d-x-vlink:hover {
+  background: rgb(0 0 0 / 0.78);
+}
 .d-animation-toggle {
   position: absolute;
   inset: 0;
