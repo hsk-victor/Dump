@@ -388,36 +388,51 @@ function XCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
     bits.title && !bits.processing && bits.title !== postText && !attributionName(dump.title, dump) ? bits.title : null;
   const allImages = dump.imageUrls.length ? dump.imageUrls : dump.imageUrl ? [dump.imageUrl] : [];
   const images = allImages.filter((_, i) => !failedIdx.has(i));
+  const xr = dump.xRender;
   return (
     <article {...bits.cardProps} className="d-card d-post group">
       {bits.actions}
-      <a href={bits.href ?? undefined} target="_blank" rel="noreferrer" className="d-post-head">
-        <span className="d-avatar">
-          {dump.authorAvatarUrl ? (
+      {xr ? (
+        /* The post as x.com draws it — a snapshot rendered at save time. */
+        <a href={bits.href ?? undefined} target="_blank" rel="noreferrer" className="d-xrender">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={xr.light} alt={text ?? `Post by ${author ?? "an X author"}`} className="d-xrender-img" loading="lazy" />
+          {xr.dark && (
             /* eslint-disable-next-line @next/next/no-img-element */
-            <img src={dump.authorAvatarUrl} alt="" referrerPolicy="no-referrer" onError={(e) => { e.currentTarget.hidden = true; }} />
-          ) : author ? initials(author) : <ProviderIcon provider="x" />}
-        </span>
-        <span className="min-w-0">
-          <span className="d-author-name" dir="auto">{author ?? "Post"}</span>
-          <span className="d-author-site" dir="auto">{byline}</span>
-        </span>
-        <ProviderIcon provider="x" className="d-prov d-post-prov" />
-      </a>
-      {bits.processing && !text ? (
-        shimmerLines()
-      ) : dump.status === "failed" && !text ? (
-        <p className="d-tomb">This post doesn&rsquo;t exist.</p>
+            <img src={xr.dark} alt="" aria-hidden className="d-xrender-img d-xrender-dark" loading="lazy" />
+          )}
+        </a>
       ) : (
         <>
-          {headline && <p className="d-post-headline" dir="auto">{headline}</p>}
-          {text && <p className="d-post-text" dir="auto">{text}</p>}
+          <a href={bits.href ?? undefined} target="_blank" rel="noreferrer" className="d-post-head">
+            <span className="d-avatar">
+              {dump.authorAvatarUrl ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img src={dump.authorAvatarUrl} alt="" referrerPolicy="no-referrer" onError={(e) => { e.currentTarget.hidden = true; }} />
+              ) : author ? initials(author) : <ProviderIcon provider="x" />}
+            </span>
+            <span className="min-w-0">
+              <span className="d-author-name" dir="auto">{author ?? "Post"}</span>
+              <span className="d-author-site" dir="auto">{byline}</span>
+            </span>
+            <ProviderIcon provider="x" className="d-prov d-post-prov" />
+          </a>
+          {bits.processing && !text ? (
+            shimmerLines()
+          ) : dump.status === "failed" && !text ? (
+            <p className="d-tomb">This post doesn&rsquo;t exist.</p>
+          ) : (
+            <>
+              {headline && <p className="d-post-headline" dir="auto">{headline}</p>}
+              {text && <p className="d-post-text" dir="auto">{text}</p>}
+            </>
+          )}
         </>
       )}
       {dump.videoUrl && (
         <XVideo dump={dump} author={author} />
       )}
-      {images.length > 0 && (
+      {!xr && images.length > 0 && (
         <a href={bits.href ?? undefined} target="_blank" rel="noreferrer" className={`d-post-gallery${images.length > 1 ? " d-post-grid" : ""}`}>
           {allImages.map((src, i) => !failedIdx.has(i) && (
             /* eslint-disable-next-line @next/next/no-img-element */

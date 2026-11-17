@@ -2025,6 +2025,28 @@ button {
 .d-post .d-annotation {
   margin-top: 0.6rem;
 }
+/* xeet render: the post drawn exactly as x.com draws it, one PNG per theme. */
+.d-xrender {
+  display: block;
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+  overflow: hidden;
+  line-height: 0;
+}
+.d-xrender-img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.d-xrender-dark {
+  display: none;
+}
+[data-mode="dark"] .d-xrender .d-xrender-img {
+  display: none;
+}
+[data-mode="dark"] .d-xrender .d-xrender-dark {
+  display: block;
+}
 
 /* Notes — index card: a catalog header (uppercase title + date) over ruled
    writing lines, with a red margin rule on the leading edge. Card stock stays

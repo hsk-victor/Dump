@@ -25,10 +25,19 @@ export interface SyndicationTweet {
   }[];
 }
 
-export function syndicationUrl(url: string): string | null {
-  const parsed = new URL(url);
+export function xStatusId(url: string): string | null {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return null;
+  }
   if (!/(^|\.)(x|twitter)\.com$/.test(parsed.hostname)) return null;
-  const id = parsed.pathname.match(/\/status(?:es)?\/(\d+)/)?.[1];
+  return parsed.pathname.match(/\/status(?:es)?\/(\d+)/)?.[1] ?? null;
+}
+
+export function syndicationUrl(url: string): string | null {
+  const id = xStatusId(url);
   if (!id) return null;
   const token = ((Number(id) / 1e15) * Math.PI).toString(36).replace(/(0+|\.)/g, "");
   return `https://cdn.syndication.twimg.com/tweet-result?id=${id}&token=${token}`;

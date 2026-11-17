@@ -1,6 +1,7 @@
 import { classifyHeuristic } from "./classify";
 import { db, getDump, listResortable, listTopics, topicExists, updateDump, type Dump } from "./db";
 import { extractUrl } from "./extract";
+import { renderXPostImage } from "./x-render";
 import { providerFromUrl, titleFromUrl } from "./detect";
 import { classifyWithAi, identifySubject } from "./llm";
 import { SUBJECT_MIN_CONFIDENCE, type Subject } from "./taxonomy";
@@ -125,6 +126,11 @@ async function runEnrich(id: string): Promise<Dump | null> {
         videoPosterUrl: ex.videoPosterUrl ?? dump.videoPosterUrl,
         videoType: ex.videoType !== undefined ? ex.videoType : dump.videoType,
       };
+      // The native-look render is a snapshot: a failed render keeps any older one.
+      if (fields.provider === "x") {
+        const xRender = await renderXPostImage(dump.url).catch(() => null);
+        if (xRender) fields.xRender = xRender;
+      }
     }
     const merged = { ...dump, ...fields };
 
