@@ -484,6 +484,16 @@ function XPostView({ snap, dump, bits, images, allImages, failedIdx, setFailedId
   const segs = xTextSegments(post.text, snap.entities, snap.hidden);
   const card = snap.attachment?.shown === "card" && snap.attachment.url ? post.links?.[snap.attachment.url] : null;
   const counts = post.counts;
+  // The "Replying to" row points at the parent post, not this one.
+  const replyHref = post.replyTo
+    ? `https://x.com/i/status/${post.replyTo}`
+    : post.replyToHandle ? `https://x.com/${post.replyToHandle.replace(/^@/, "")}` : undefined;
+  // The quoted post's own link: the hidden quote_url range's entity carries the
+  // t.co URL that resolves to it; fall back to the quoted author's profile.
+  const quoteHidden = snap.hidden.find((h) => h.why === "quote_url");
+  const quoteHref =
+    (quoteHidden && snap.entities.find((e) => e.range[0] < quoteHidden.range[1] && quoteHidden.range[0] < e.range[1])?.text) ||
+    (post.quote?.author?.handle ? `https://x.com/${post.quote.author.handle.replace(/^@/, "")}` : undefined);
   return (
     <div className="d-xpost-body">
       <div className="d-xpost-head">
@@ -505,7 +515,7 @@ function XPostView({ snap, dump, bits, images, allImages, failedIdx, setFailedId
       </div>
       {post.replyToHandle && (
         <p className="d-xpost-context">
-          Replying to <a href={bits.href ?? undefined} target="_blank" rel="noreferrer" className="d-xpost-link">@{post.replyToHandle}</a>
+          Replying to <a href={replyHref} target="_blank" rel="noreferrer" className="d-xpost-link">@{post.replyToHandle}</a>
         </p>
       )}
       <p className={`d-xpost-text${snap.showMore && !expanded ? " d-xpost-clamp" : ""}`} dir="auto">
@@ -526,7 +536,7 @@ function XPostView({ snap, dump, bits, images, allImages, failedIdx, setFailedId
         </a>
       )}
       {dump.videoUrl && <XVideo dump={dump} author={a?.name ?? dump.author} />}
-      {snap.attachment?.shown === "quote" && post.quote && <XQuote post={post.quote} href={bits.href ?? undefined} />}
+      {snap.attachment?.shown === "quote" && post.quote && <XQuote post={post.quote} href={quoteHref} />}
       {snap.attachment?.shown === "poll" && post.poll && <XPoll poll={post.poll} />}
       {post.cardState !== "dismissed" && card && <XLinkCard link={card} href={snap.attachment?.url ?? bits.href ?? undefined} />}
       {counts && (counts.replies || counts.reposts || counts.likes || counts.views || counts.bookmarks) ? (
