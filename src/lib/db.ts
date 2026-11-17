@@ -568,7 +568,10 @@ export function deleteTopic(id: string): { id: string; moved: number } | null {
  */
 export function staleXRenderIds(): { id: string; status: Status }[] {
   return db()
-    .prepare(`SELECT id, status FROM dumps WHERE url IS NOT NULL
+    // Rows mid-enrich are skipped on purpose: the running enrich produces the
+    // current render shape, and parking them would restore 'processing' after
+    // it finishes — a row stuck in processing keeps the feed polling.
+    .prepare(`SELECT id, status FROM dumps WHERE url IS NOT NULL AND status != 'processing'
               AND (provider = 'x' OR url LIKE '%x.com/%' OR url LIKE '%twitter.com/%')
               AND (x_render IS NULL OR x_render NOT LIKE '%-light-________.png%')`)
     .all() as { id: string; status: Status }[];
