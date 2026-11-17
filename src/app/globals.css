@@ -2025,9 +2025,11 @@ button {
 .d-post .d-annotation {
   margin-top: 0.6rem;
 }
-/* X post rebuilt as DOM from the structured snapshot — the post IS the card:
-   the article carries no chrome of its own; X's surface, radius and shadow
-   live on .d-xpost-body so the grid silhouette and hover lift stay identical. */
+/* X post rebuilt as DOM from the structured snapshot — 1:1 with the x.com
+   timeline cell: avatar column, indented content column, X's metrics
+   (15px/20px text, 40px avatar + 12px gap, 16px media radius, 18.75px
+   action icons in 34.75px hover circles). The post IS the card: the
+   article carries no chrome; surface + shadow live on .d-xpost-body. */
 .d-xpost {
   padding: 0;
   background: transparent;
@@ -2040,20 +2042,24 @@ button {
   --xsub: #536471;
   --xlink: #1d9bf0;
   --xline: #eff3f4;
+  --xmedia-line: #cfd9de;
   --xpoll: #cfd9de;
+  display: flex;
   background: #fff;
   color: var(--xt);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
-  padding: 12px;
-  font-size: 0.94rem;
-  line-height: 1.34;
+  padding: 12px 16px;
+  font-family: "TwitterChirp", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 15px;
+  line-height: 20px;
   transition: box-shadow 0.2s;
 }
 [data-mode="dark"] .d-xpost-body {
   --xt: #e7e9ea;
   --xsub: #71767b;
   --xline: #2f3336;
+  --xmedia-line: #2f3336;
   --xpoll: #425364;
   background: #000;
 }
@@ -2062,27 +2068,23 @@ button {
     box-shadow: var(--shadow-hover);
   }
 }
-.d-xpost-head {
-  display: flex;
-  gap: 10px;
-  margin-bottom: 4px;
-}
 .d-xpost-ava {
   flex-shrink: 0;
   width: 40px;
   height: 40px;
-  border-radius: 50%;
+  margin-right: 12px;
+  border-radius: 9999px;
   overflow: hidden;
   background: var(--xline);
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: 700;
-  font-size: 0.9rem;
+  font-size: 15px;
   color: var(--xsub);
 }
 .d-xpost-ava-sq {
-  border-radius: 8px;
+  border-radius: 6px;
 }
 .d-xpost-ava img {
   width: 100%;
@@ -2093,12 +2095,16 @@ button {
   width: 1.2rem;
   height: 1.2rem;
 }
+.d-xpost-col {
+  flex: 1;
+  min-width: 0;
+}
 .d-xpost-names {
   display: flex;
   align-items: center;
   gap: 4px;
   min-width: 0;
-  flex-wrap: wrap;
+  overflow: hidden;
 }
 .d-xpost-name {
   font-weight: 700;
@@ -2107,7 +2113,6 @@ button {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 100%;
 }
 @media (hover: hover) and (pointer: fine) {
   .d-xpost-name:hover {
@@ -2115,39 +2120,45 @@ button {
   }
 }
 .d-xpost-badge {
-  width: 18px;
-  height: 18px;
+  width: 18.75px;
+  height: 18.75px;
   flex-shrink: 0;
 }
+/* The name is kept longest; the handle + timestamp ellipsizes first, like X. */
 .d-xpost-sub {
   color: var(--xsub);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  flex-shrink: 3;
 }
 .d-xpost-context {
-  margin: 0 0 2px;
-  font-size: 0.83rem;
+  margin: 0;
+  font-size: 13px;
+  line-height: 16px;
   color: var(--xsub);
 }
 .d-xpost-text {
   margin: 0;
+  font-size: 15px;
+  line-height: 20px;
   white-space: pre-wrap;
-  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 .d-xpost-clamp {
   display: -webkit-box;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 12;
+  -webkit-line-clamp: 10;
   overflow: hidden;
 }
 .d-xpost-more {
-  display: inline;
+  display: block;
   padding: 0;
   border: 0;
   background: none;
   color: var(--xlink);
   font: inherit;
+  font-size: 15px;
   cursor: pointer;
 }
 .d-xpost-link {
@@ -2161,10 +2172,10 @@ button {
 }
 .d-xpost-media {
   display: block;
-  margin-top: 10px;
+  margin-top: 12px;
   border-radius: 16px;
   overflow: hidden;
-  border: 1px solid var(--xline);
+  border: 1px solid var(--xmedia-line);
   line-height: 0;
 }
 .d-xpost-media img {
@@ -2178,24 +2189,25 @@ button {
   gap: 2px;
 }
 .d-xpost .d-post-video-frame {
-  margin-top: 10px;
+  margin-top: 12px;
   border-radius: 16px;
 }
 .d-xpost-quote {
   display: block;
-  margin-top: 10px;
-  padding: 10px 12px;
-  border: 1px solid var(--xline);
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--xmedia-line);
   border-radius: 16px;
   color: inherit;
   text-decoration: none;
+  font-size: 15px;
+  line-height: 20px;
 }
 .d-xpost-qhead {
   display: flex;
   align-items: center;
   gap: 4px;
   min-width: 0;
-  font-size: 0.9rem;
 }
 .d-xpost-qname {
   font-weight: 700;
@@ -2204,8 +2216,8 @@ button {
   text-overflow: ellipsis;
 }
 .d-xpost-qhead .d-xpost-badge {
-  width: 15px;
-  height: 15px;
+  width: 16px;
+  height: 16px;
 }
 .d-xpost-qsub {
   color: var(--xsub);
@@ -2218,35 +2230,32 @@ button {
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 4;
   overflow: hidden;
-  margin-top: 2px;
-  font-size: 0.9rem;
   white-space: pre-wrap;
-  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 .d-xpost-qmedia {
   display: block;
   margin-top: 4px;
-  font-size: 0.8rem;
+  font-size: 13px;
   color: var(--xsub);
 }
 .d-xpost-poll {
-  margin-top: 10px;
+  margin-top: 12px;
   display: grid;
-  gap: 6px;
+  gap: 4px;
 }
 .d-xpost-choice {
   position: relative;
-  border: 1px solid var(--xline);
-  border-radius: 8px;
-  padding: 6px 10px;
-  font-size: 0.9rem;
+  padding: 4px 8px;
+  font-size: 15px;
+  line-height: 20px;
   overflow: hidden;
 }
 .d-xpost-choice-fill {
   position: absolute;
   inset: 0 auto 0 0;
   background: var(--xpoll);
-  opacity: 0.5;
+  opacity: 0.6;
 }
 .d-xpost-choice-label {
   position: relative;
@@ -2258,15 +2267,16 @@ button {
 }
 .d-xpost-card {
   display: block;
-  margin-top: 10px;
-  padding: 10px 12px;
-  border: 1px solid var(--xline);
+  margin-top: 12px;
+  border: 1px solid var(--xmedia-line);
   border-radius: 16px;
+  overflow: hidden;
   color: inherit;
   text-decoration: none;
 }
 .d-xpost-card-title {
   display: block;
+  padding: 12px 12px 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2276,33 +2286,54 @@ button {
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   overflow: hidden;
+  padding: 0 12px;
   color: var(--xsub);
-  font-size: 0.9rem;
 }
 .d-xpost-card-domain {
   display: block;
+  padding: 0 12px 12px;
   color: var(--xsub);
-  font-size: 0.85rem;
 }
 .d-xpost-acts {
   display: flex;
   justify-content: space-between;
-  gap: 4px;
-  margin-top: 10px;
-  max-width: 320px;
+  margin-top: 12px;
+  margin-left: -8px;
+  max-width: 425px;
   color: var(--xsub);
-  text-decoration: none;
-  font-size: 0.82rem;
+  font-size: 13px;
+  line-height: 16px;
 }
-.d-xpost-acts > span {
-  display: inline-flex;
+.d-xpost-act {
+  display: flex;
   align-items: center;
-  gap: 5px;
+  color: inherit;
+  text-decoration: none;
+}
+.d-xpost-act-ic {
+  width: 34.75px;
+  height: 34.75px;
+  margin: -8.75px 0;
+  border-radius: 9999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.15s ease, color 0.15s ease;
 }
 .d-xpost-ic {
-  width: 17px;
-  height: 17px;
+  width: 18.75px;
+  height: 18.75px;
 }
+.d-xpost-act-reply:hover { color: var(--xlink); }
+.d-xpost-act-reply:hover .d-xpost-act-ic { background: rgba(29, 155, 240, 0.1); }
+.d-xpost-act-chart:hover { color: var(--xlink); }
+.d-xpost-act-chart:hover .d-xpost-act-ic { background: rgba(29, 155, 240, 0.1); }
+.d-xpost-act-bookmark:hover { color: var(--xlink); }
+.d-xpost-act-bookmark:hover .d-xpost-act-ic { background: rgba(29, 155, 240, 0.1); }
+.d-xpost-act-repost:hover { color: #00ba7c; }
+.d-xpost-act-repost:hover .d-xpost-act-ic { background: rgba(0, 186, 124, 0.1); }
+.d-xpost-act-heart:hover { color: #f91880; }
+.d-xpost-act-heart:hover .d-xpost-act-ic { background: rgba(249, 24, 128, 0.1); }
 .d-xpost .d-meta,
 .d-xpost .d-annotation {
   padding-inline: 0.2rem;

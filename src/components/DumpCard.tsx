@@ -414,10 +414,10 @@ const compact = new Intl.NumberFormat("en", { notation: "compact", maximumFracti
 function XVerifiedBadge({ kind }: { kind?: Author["verified"] }) {
   if (!kind || kind === "none") return null;
   const color = kind === "business" ? "#f7b928" : kind === "government" ? "#829aab" : "#1d9bf0";
+  // X's scalloped seal + check, one filled path.
   return (
     <svg viewBox="0 0 24 24" className="d-xpost-badge" aria-label="Verified">
-      <circle cx="12" cy="12" r="9.5" fill={color} />
-      <path d="M8.5 12.4l2.4 2.4 4.6-5" stroke="#fff" strokeWidth="1.9" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+      <path fill={color} d="M22.25 12c0-1.43-.88-2.67-2.19-3.34.46-1.39.2-2.9-.81-3.91s-2.52-1.27-3.91-.81c-.66-1.31-1.91-2.19-3.34-2.19s-2.67.88-3.33 2.19c-1.4-.46-2.91-.2-3.92.81s-1.26 2.52-.8 3.91c-1.31.67-2.2 1.91-2.2 3.34s.89 2.67 2.2 3.34c-.46 1.39-.21 2.9.8 3.91s2.52 1.26 3.91.81c.67 1.31 1.91 2.19 3.34 2.19s2.68-.88 3.34-2.19c1.39.46 2.9.2 3.91-.81s1.27-2.52.81-3.91c1.31-.67 2.19-1.91 2.19-3.34zm-11.71 4.2L6.8 12.46l1.41-1.42 2.26 2.26 4.8-5.23 1.47 1.36-6.2 6.77z" />
     </svg>
   );
 }
@@ -496,13 +496,13 @@ function XPostView({ snap, dump, bits, images, allImages, failedIdx, setFailedId
     (post.quote?.author?.handle ? `https://x.com/${post.quote.author.handle.replace(/^@/, "")}` : undefined);
   return (
     <div className="d-xpost-body">
-      <div className="d-xpost-head">
-        <a href={bits.href ?? undefined} target="_blank" rel="noreferrer" className={`d-xpost-ava${a?.squareAvatar ? " d-xpost-ava-sq" : ""}`}>
-          {dump.authorAvatarUrl ? (
-            /* eslint-disable-next-line @next/next/no-img-element */
-            <img src={dump.authorAvatarUrl} alt="" referrerPolicy="no-referrer" loading="lazy" onError={(e) => { e.currentTarget.hidden = true; }} />
-          ) : a?.name ? initials(a.name) : <ProviderIcon provider="x" />}
-        </a>
+      <a href={bits.href ?? undefined} target="_blank" rel="noreferrer" className={`d-xpost-ava${a?.squareAvatar ? " d-xpost-ava-sq" : ""}`}>
+        {dump.authorAvatarUrl ? (
+          /* eslint-disable-next-line @next/next/no-img-element */
+          <img src={dump.authorAvatarUrl} alt="" referrerPolicy="no-referrer" loading="lazy" onError={(e) => { e.currentTarget.hidden = true; }} />
+        ) : a?.name ? initials(a.name) : <ProviderIcon provider="x" />}
+      </a>
+      <div className="d-xpost-col">
         <span className="d-xpost-names">
           <a href={bits.href ?? undefined} target="_blank" rel="noreferrer" className="d-xpost-name" dir="auto">
             {a?.name ?? dump.author ?? "Post"}
@@ -512,22 +512,21 @@ function XPostView({ snap, dump, bits, images, allImages, failedIdx, setFailedId
             {handle}{when ? ` · ${when}` : ""}
           </span>
         </span>
-      </div>
-      {post.replyToHandle && (
-        <p className="d-xpost-context">
-          Replying to <a href={replyHref} target="_blank" rel="noreferrer" className="d-xpost-link">@{post.replyToHandle}</a>
+        {post.replyToHandle && (
+          <p className="d-xpost-context">
+            Replying to <a href={replyHref} target="_blank" rel="noreferrer" className="d-xpost-link">@{post.replyToHandle}</a>
+          </p>
+        )}
+        <p className={`d-xpost-text${snap.showMore && !expanded ? " d-xpost-clamp" : ""}`} dir="auto">
+          {segs.map((s, i) => s.href ? (
+            <a key={i} href={s.href} target="_blank" rel="noreferrer" className="d-xpost-link">{s.display}</a>
+          ) : s.text)}
         </p>
-      )}
-      <p className={`d-xpost-text${snap.showMore && !expanded ? " d-xpost-clamp" : ""}`} dir="auto">
-        {segs.map((s, i) => s.href ? (
-          <a key={i} href={s.href} target="_blank" rel="noreferrer" className="d-xpost-link">{s.display}</a>
-        ) : s.text)}
-      </p>
-      {snap.showMore && !expanded && (
-        <button type="button" className="d-xpost-more" onClick={() => setExpanded(true)}>Show more</button>
-      )}
-      {post.mediaTags?.length ? <p className="d-xpost-context">Tagging {post.mediaTags.join(", ")}</p> : null}
-      {snap.photos?.length ? (
+        {snap.showMore && !expanded && (
+          <button type="button" className="d-xpost-more" onClick={() => setExpanded(true)}>Show more</button>
+        )}
+        {post.mediaTags?.length ? <p className="d-xpost-context">Tagging {post.mediaTags.join(", ")}</p> : null}
+        {snap.photos?.length ? (
         <a href={bits.href ?? undefined} target="_blank" rel="noreferrer" className={`d-xpost-media${snap.photos.length > 1 ? " d-xpost-grid" : ""}`}>
           {snap.photos.map((src) => (
             /* eslint-disable-next-line @next/next/no-img-element */
@@ -546,15 +545,18 @@ function XPostView({ snap, dump, bits, images, allImages, failedIdx, setFailedId
       {snap.attachment?.shown === "quote" && post.quote && <XQuote post={post.quote} href={quoteHref} />}
       {snap.attachment?.shown === "poll" && post.poll && <XPoll poll={post.poll} />}
       {post.cardState !== "dismissed" && card && <XLinkCard link={card} href={snap.attachment?.url ?? bits.href ?? undefined} />}
-      {counts && (counts.replies || counts.reposts || counts.likes || counts.views || counts.bookmarks) ? (
-        <a href={bits.href ?? undefined} target="_blank" rel="noreferrer" className="d-xpost-acts">
-          {!!counts.replies && <span><Glyph name="reply" className="d-xpost-ic" />{compact.format(counts.replies)}</span>}
-          {!!counts.reposts && <span><Glyph name="repost" className="d-xpost-ic" />{compact.format(counts.reposts)}</span>}
-          {!!counts.likes && <span><Glyph name="heart" className="d-xpost-ic" />{compact.format(counts.likes)}</span>}
-          {!!counts.views && <span><Glyph name="chart" className="d-xpost-ic" />{compact.format(counts.views)}</span>}
-          {!!counts.bookmarks && <span><Glyph name="bookmark" className="d-xpost-ic" />{compact.format(counts.bookmarks)}</span>}
-        </a>
-      ) : null}
+        <div className="d-xpost-acts">
+          {(["reply", "repost", "heart", "chart", "bookmark"] as const).map((k) => {
+            const n = { reply: counts?.replies, repost: counts?.reposts, heart: counts?.likes, chart: counts?.views, bookmark: counts?.bookmarks }[k];
+            return (
+              <a key={k} href={bits.href ?? undefined} target="_blank" rel="noreferrer" className={`d-xpost-act d-xpost-act-${k}`}>
+                <span className="d-xpost-act-ic"><Glyph name={k} className="d-xpost-ic" /></span>
+                {n ? compact.format(n) : null}
+              </a>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }
