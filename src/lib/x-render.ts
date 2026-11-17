@@ -37,22 +37,21 @@ export async function renderXPostImage(url: string): Promise<XRender | null> {
     const photos = post.media.filter((m) => m.kind === "image");
     post.media = photos.length ? photos : undefined;
   }
-  const options = { width: 390, dpr: 2, expanded: true } as const;
+  // expanded: false keeps X's own "Show more" clamp so note tweets stay card-sized.
+  const options = { width: 390, dpr: 2, expanded: false } as const;
   const [light, dark] = [
     renderer.render(post, { ...options, theme: "light" }),
     renderer.render(post, { ...options, theme: "dark" }),
   ];
   await fs.mkdir(UPLOAD_DIR, { recursive: true });
-  // /api/files is immutable-cached, so a re-render needs a fresh URL to be seen.
+  // /api/files is immutable-cached, so the content hash in the name gives each new
+  // render a fresh URL. Older renders for the same post stay on disk on purpose:
+  // a differently-shaped saved URL can share the post id and still points at them.
   const tag = createHash("sha256").update(light.png).update(dark.png).digest("hex").slice(0, 8);
   const names = { light: `xeet-${id}-light-${tag}.png`, dark: `xeet-${id}-dark-${tag}.png` };
-  const stale = (await fs.readdir(UPLOAD_DIR)).filter(
-    (f) => f.startsWith(`xeet-${id}-`) && f !== names.light && f !== names.dark,
-  );
   await Promise.all([
     fs.writeFile(path.join(UPLOAD_DIR, names.light), light.png),
     fs.writeFile(path.join(UPLOAD_DIR, names.dark), dark.png),
-    ...stale.map((f) => fs.unlink(path.join(UPLOAD_DIR, f)).catch(() => {})),
   ]);
   return { light: `/api/files/${names.light}`, dark: `/api/files/${names.dark}` };
 }

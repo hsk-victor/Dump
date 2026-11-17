@@ -2025,12 +2025,10 @@ button {
 .d-post .d-annotation {
   margin-top: 0.6rem;
 }
-/* xeet render: the post drawn exactly as x.com draws it, one PNG per theme. */
+/* xeet render: the post drawn exactly as x.com draws it — the PNG is already a
+   card, so it sits bare in the card body rather than framed again. */
 .d-xrender {
   display: block;
-  border: 1px solid var(--hairline);
-  border-radius: 12px;
-  overflow: hidden;
   line-height: 0;
 }
 .d-xrender-img {
