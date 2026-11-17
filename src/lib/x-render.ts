@@ -1,7 +1,10 @@
+import fs from "node:fs/promises";
+import crypto from "node:crypto";
+import path from "node:path";
 import { loadXeet, type Xeet } from "@xeet/core/node";
 import { whatwgHost } from "@xeet/core/resolve";
 import type { Post } from "@xeet/core";
-import type { XRender } from "./db";
+import { UPLOAD_DIR, type XRender } from "./db";
 import { fetchWithTimeout } from "./extract";
 import { xStatusId } from "./x-post";
 
@@ -19,8 +22,24 @@ function xeet(): Promise<Xeet> {
   return (xeetPromise ??= loadXeet());
 }
 
-/** Media and avatar bytes are downloaded separately by the existing pipeline —
- *  the snapshot keeps structure only, not duplicated base64 blobs. */
+/** Photo bytes are persisted as immutable content-addressed files — the snapshot
+ *  then renders even when extraction hotlinks go stale or were never captured.
+ *  Avatars/link-card thumbs stay hot-linked (tiny, replaceable). */
+async function persistPhotos(post: Post): Promise<string[] | undefined> {
+  const photos: string[] = [];
+  for (const m of post.media ?? []) {
+    if (m.kind !== "image" || !m.data) continue;
+    const bytes = Buffer.from(m.data, "base64");
+    const ext = bytes[0] === 0x89 ? "png" : bytes[0] === 0x52 ? "webp" : "jpg";
+    const name = `xmedia-${crypto.createHash("sha256").update(bytes).digest("hex").slice(0, 24)}.${ext}`;
+    await fs.writeFile(path.join(UPLOAD_DIR, name), bytes);
+    photos.push(`/api/files/${name}`);
+  }
+  return photos.length ? photos : undefined;
+}
+
+/** Media and avatar base64 are dropped from the snapshot itself — photos were
+ *  already persisted to disk, and avatars are hot-linked by the card. */
 function slim(post: Post) {
   if (post.author) {
     delete post.author.avatar;
@@ -42,21 +61,23 @@ export async function resolveXPost(url: string): Promise<XRender | null> {
   const id = xStatusId(url);
   if (!id) return null;
   const renderer = await xeet();
-  const { post } = await renderer.resolve(url, { media: false }, whatwgHost({ fetch: guardedFetch }));
+  const { post } = await renderer.resolve(url, { media: true }, whatwgHost({ fetch: guardedFetch }));
   // Video/GIF posts keep the card's inline player, so posters don't belong in
   // the snapshot too — keep only photo entries.
   if (post.media?.some((m) => m.kind !== "image")) {
     const photos = post.media.filter((m) => m.kind === "image");
     post.media = photos.length ? photos : undefined;
   }
+  const photos = await persistPhotos(post);
   slim(post);
   const report = renderer.explain(post, { width: 390, expanded: false, surface: "web-timeline" });
   return {
-    v: 2,
+    v: 3,
     post,
     entities: report.entities,
     hidden: report.hidden,
     showMore: report.text.hasShowMore,
     attachment: report.attachment,
+    photos,
   };
 }

@@ -527,14 +527,21 @@ function XPostView({ snap, dump, bits, images, allImages, failedIdx, setFailedId
         <button type="button" className="d-xpost-more" onClick={() => setExpanded(true)}>Show more</button>
       )}
       {post.mediaTags?.length ? <p className="d-xpost-context">Tagging {post.mediaTags.join(", ")}</p> : null}
-      {images.length > 0 && (
+      {snap.photos?.length ? (
+        <a href={bits.href ?? undefined} target="_blank" rel="noreferrer" className={`d-xpost-media${snap.photos.length > 1 ? " d-xpost-grid" : ""}`}>
+          {snap.photos.map((src) => (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img key={src} src={src} alt="" loading="lazy" onError={(e) => { e.currentTarget.hidden = true; }} />
+          ))}
+        </a>
+      ) : images.length > 0 ? (
         <a href={bits.href ?? undefined} target="_blank" rel="noreferrer" className={`d-xpost-media${images.length > 1 ? " d-xpost-grid" : ""}`}>
           {allImages.map((src, i) => !failedIdx.has(i) && (
             /* eslint-disable-next-line @next/next/no-img-element */
             <img key={src} src={src} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setFailedIdx(i)} />
           ))}
         </a>
-      )}
+      ) : null}
       {dump.videoUrl && <XVideo dump={dump} author={a?.name ?? dump.author} />}
       {snap.attachment?.shown === "quote" && post.quote && <XQuote post={post.quote} href={quoteHref} />}
       {snap.attachment?.shown === "poll" && post.poll && <XPoll poll={post.poll} />}
@@ -568,7 +575,7 @@ function XCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
   const images = allImages.filter((_, i) => !failedIdx.has(i));
   // Snapshots before the DOM rebuild are treated as absent — the feed's
   // once-per-process refresh resolves them into the new shape.
-  const xr = dump.xRender?.v === 2 ? dump.xRender : null;
+  const xr = dump.xRender?.v === 3 ? dump.xRender : null;
   return (
     <article {...bits.cardProps} className={`d-card d-post group${xr ? " d-xpost" : ""}`}>
       {bits.actions}

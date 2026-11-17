@@ -12,7 +12,7 @@ export type Status = "processing" | "ready" | "failed";
 /** Structured snapshot of an X post — the card renders it as real DOM
  *  (clickable entities, working Show more), not an image. JSON in the DB. */
 export interface XRender {
-  v: 2;
+  v: 3;
   post: Post;
   entities: Entity[];
   hidden: Hidden[];
@@ -20,6 +20,8 @@ export interface XRender {
   showMore: boolean;
   /** Which attachment X's precedence rules picked (card vs media vs quote vs poll). */
   attachment: Attachment | null;
+  /** Locally persisted photo URLs (/api/files/…) — used when extraction images are absent or dead. */
+  photos?: string[];
 }
 
 export interface Dump {
@@ -581,6 +583,6 @@ export function staleXRenderIds(): { id: string; status: Status }[] {
     // it finishes — a row stuck in processing keeps the feed polling.
     .prepare(`SELECT id, status FROM dumps WHERE url IS NOT NULL AND status != 'processing'
               AND (provider = 'x' OR url LIKE '%x.com/%' OR url LIKE '%twitter.com/%')
-              AND (x_render IS NULL OR x_render NOT LIKE '%"v":2%')`)
+              AND (x_render IS NULL OR x_render NOT LIKE '%"v":3%')`)
     .all() as { id: string; status: Status }[];
 }
