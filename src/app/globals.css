@@ -2016,8 +2016,9 @@ button {
 /* Video posts: the player can't be a link, so this chip carries the click-through. */
 .d-x-vlink {
   position: absolute;
+  /* Left corner — the card's hover actions row owns the right corner. */
   top: 0.5rem;
-  right: 0.5rem;
+  left: 0.5rem;
   z-index: 2;
   display: grid;
   place-items: center;
