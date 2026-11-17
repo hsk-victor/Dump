@@ -2025,11 +2025,9 @@ button {
 .d-post .d-annotation {
   margin-top: 0.6rem;
 }
-/* X post rebuilt as DOM from the structured snapshot — 1:1 with the x.com
-   timeline cell: avatar column, indented content column, X's metrics
-   (15px/20px text, 40px avatar + 12px gap, 16px media radius, 18.75px
-   action icons in 34.75px hover circles). The post IS the card: the
-   article carries no chrome; surface + shadow live on .d-xpost-body. */
+/* xeet render: the post drawn exactly as x.com draws it. The PNG IS the card —
+   the article carries no chrome of its own; radius + shadow move onto the
+   image so the grid silhouette and hover lift stay identical. */
 .d-xpost {
   padding: 0;
   background: transparent;
@@ -2037,306 +2035,32 @@ button {
   box-shadow: none;
   overflow: visible;
 }
-.d-xpost-body {
-  --xt: #0f1419;
-  --xsub: #536471;
-  --xlink: #1d9bf0;
-  --xline: #eff3f4;
-  --xmedia-line: #cfd9de;
-  --xpoll: #cfd9de;
-  display: flex;
-  background: #fff;
-  color: var(--xt);
+.d-xrender {
+  display: block;
   border-radius: var(--radius);
+  overflow: hidden;
   box-shadow: var(--shadow);
-  padding: 12px 16px;
-  font-family: "TwitterChirp", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  font-size: 15px;
-  line-height: 20px;
   transition: box-shadow 0.2s;
-}
-[data-mode="dark"] .d-xpost-body {
-  --xt: #e7e9ea;
-  --xsub: #71767b;
-  --xline: #2f3336;
-  --xmedia-line: #2f3336;
-  --xpoll: #425364;
-  background: #000;
+  line-height: 0;
 }
 @media (hover: hover) and (pointer: fine) {
-  .d-xpost:hover .d-xpost-body {
+  .d-xpost:hover .d-xrender {
     box-shadow: var(--shadow-hover);
   }
 }
-.d-xpost-ava {
-  flex-shrink: 0;
-  width: 40px;
-  height: 40px;
-  margin-right: 12px;
-  border-radius: 9999px;
-  overflow: hidden;
-  background: var(--xline);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 700;
-  font-size: 15px;
-  color: var(--xsub);
-}
-.d-xpost-ava-sq {
-  border-radius: 6px;
-}
-.d-xpost-ava img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-.d-xpost-ava .d-prov {
-  width: 1.2rem;
-  height: 1.2rem;
-}
-.d-xpost-col {
-  flex: 1;
-  min-width: 0;
-}
-.d-xpost-names {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  min-width: 0;
-  overflow: hidden;
-}
-.d-xpost-name {
-  font-weight: 700;
-  color: var(--xt);
-  text-decoration: none;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-@media (hover: hover) and (pointer: fine) {
-  .d-xpost-name:hover {
-    text-decoration: underline;
-  }
-}
-.d-xpost-badge {
-  width: 18.75px;
-  height: 18.75px;
-  flex-shrink: 0;
-}
-/* The name is kept longest; the handle + timestamp ellipsizes first, like X. */
-.d-xpost-sub {
-  color: var(--xsub);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  flex-shrink: 3;
-}
-.d-xpost-context {
-  margin: 0;
-  font-size: 13px;
-  line-height: 16px;
-  color: var(--xsub);
-}
-.d-xpost-text {
-  margin: 0;
-  font-size: 15px;
-  line-height: 20px;
-  white-space: pre-wrap;
-  overflow-wrap: break-word;
-}
-.d-xpost-clamp {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 10;
-  overflow: hidden;
-}
-.d-xpost-more {
+.d-xrender-img {
   display: block;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--xlink);
-  font: inherit;
-  font-size: 15px;
-  cursor: pointer;
-}
-.d-xpost-link {
-  color: var(--xlink);
-  text-decoration: none;
-}
-@media (hover: hover) and (pointer: fine) {
-  .d-xpost-link:hover {
-    text-decoration: underline;
-  }
-}
-.d-xpost-media {
-  display: block;
-  margin-top: 12px;
-  border-radius: 16px;
-  overflow: hidden;
-  border: 1px solid var(--xmedia-line);
-  line-height: 0;
-}
-.d-xpost-media img {
   width: 100%;
   height: auto;
+}
+.d-xrender-dark {
+  display: none;
+}
+[data-mode="dark"] .d-xrender .d-xrender-img {
+  display: none;
+}
+[data-mode="dark"] .d-xrender .d-xrender-dark {
   display: block;
-}
-.d-xpost-media.d-xpost-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 2px;
-}
-.d-xpost .d-post-video-frame {
-  margin-top: 12px;
-  border-radius: 16px;
-}
-.d-xpost-quote {
-  display: block;
-  margin-top: 12px;
-  padding: 12px;
-  border: 1px solid var(--xmedia-line);
-  border-radius: 16px;
-  color: inherit;
-  text-decoration: none;
-  font-size: 15px;
-  line-height: 20px;
-}
-.d-xpost-qhead {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  min-width: 0;
-}
-.d-xpost-qname {
-  font-weight: 700;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.d-xpost-qhead .d-xpost-badge {
-  width: 16px;
-  height: 16px;
-}
-.d-xpost-qsub {
-  color: var(--xsub);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.d-xpost-qtext {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 4;
-  overflow: hidden;
-  white-space: pre-wrap;
-  overflow-wrap: break-word;
-}
-.d-xpost-qmedia {
-  display: block;
-  margin-top: 4px;
-  font-size: 13px;
-  color: var(--xsub);
-}
-.d-xpost-poll {
-  margin-top: 12px;
-  display: grid;
-  gap: 4px;
-}
-.d-xpost-choice {
-  position: relative;
-  padding: 4px 8px;
-  font-size: 15px;
-  line-height: 20px;
-  overflow: hidden;
-}
-.d-xpost-choice-fill {
-  position: absolute;
-  inset: 0 auto 0 0;
-  background: var(--xpoll);
-  opacity: 0.6;
-}
-.d-xpost-choice-label {
-  position: relative;
-}
-.d-xpost-choice-pct {
-  position: relative;
-  float: right;
-  font-weight: 700;
-}
-.d-xpost-card {
-  display: block;
-  margin-top: 12px;
-  border: 1px solid var(--xmedia-line);
-  border-radius: 16px;
-  overflow: hidden;
-  color: inherit;
-  text-decoration: none;
-}
-.d-xpost-card-title {
-  display: block;
-  padding: 12px 12px 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.d-xpost-card-desc {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  overflow: hidden;
-  padding: 0 12px;
-  color: var(--xsub);
-}
-.d-xpost-card-domain {
-  display: block;
-  padding: 0 12px 12px;
-  color: var(--xsub);
-}
-.d-xpost-acts {
-  display: flex;
-  justify-content: space-between;
-  margin-top: 12px;
-  margin-left: -8px;
-  max-width: 425px;
-  color: var(--xsub);
-  font-size: 13px;
-  line-height: 16px;
-}
-.d-xpost-act {
-  display: flex;
-  align-items: center;
-  color: inherit;
-  text-decoration: none;
-}
-.d-xpost-act-ic {
-  width: 34.75px;
-  height: 34.75px;
-  margin: -8.75px 0;
-  border-radius: 9999px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background-color 0.15s ease, color 0.15s ease;
-}
-.d-xpost-ic {
-  width: 18.75px;
-  height: 18.75px;
-}
-.d-xpost-act-reply:hover { color: var(--xlink); }
-.d-xpost-act-reply:hover .d-xpost-act-ic { background: rgba(29, 155, 240, 0.1); }
-.d-xpost-act-chart:hover { color: var(--xlink); }
-.d-xpost-act-chart:hover .d-xpost-act-ic { background: rgba(29, 155, 240, 0.1); }
-.d-xpost-act-bookmark:hover { color: var(--xlink); }
-.d-xpost-act-bookmark:hover .d-xpost-act-ic { background: rgba(29, 155, 240, 0.1); }
-.d-xpost-act-repost:hover { color: #00ba7c; }
-.d-xpost-act-repost:hover .d-xpost-act-ic { background: rgba(0, 186, 124, 0.1); }
-.d-xpost-act-heart:hover { color: #f91880; }
-.d-xpost-act-heart:hover .d-xpost-act-ic { background: rgba(249, 24, 128, 0.1); }
-.d-xpost .d-meta,
-.d-xpost .d-annotation {
-  padding-inline: 0.2rem;
 }
 
 /* Notes — index card: a catalog header (uppercase title + date) over ruled

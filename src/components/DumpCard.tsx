@@ -2,8 +2,7 @@
 
 import { useEffect, useRef, useState, type CSSProperties, type MouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { Menu } from "@base-ui/react/menu";
-import type { Dump, XRender } from "@/lib/db";
-import type { Author, Entity, Hidden, LinkMeta, Post } from "@xeet/core";
+import type { Dump } from "@/lib/db";
 import { SUBJECT_MIN_CONFIDENCE, subjectLine, kindMeta, providerMeta, topicMeta, type TopicMeta } from "@/lib/taxonomy";
 import { timeAgo, shortDate } from "@/lib/format";
 import { GITHUB_TAG, githubInfo, type GithubInfo, titleFromUrl } from "@/lib/detect";
@@ -375,197 +374,10 @@ function XVideo({ dump, author }: { dump: Dump; author: string | null }) {
   );
 }
 
-/* — X post rebuilt as real DOM from the saved snapshot: clickable links,
- *   mentions and hashtags, selectable text, a functional "Show more" — while
- *   xeet's rules (entity ranges, hidden ranges, truncation, attachment
- *   precedence) keep it looking the way x.com draws it. — */
-
-function xEntityHref(e: Entity): string {
-  const t = e.text;
-  if (e.kind === "mention") return `https://x.com/${t.replace(/^@/, "")}`;
-  if (e.kind === "hashtag") return `https://x.com/hashtag/${t.replace(/^#/, "")}`;
-  if (e.kind === "cashtag") return `https://x.com/search?q=${encodeURIComponent(t)}`;
-  return /^https?:/i.test(t) ? t : `https://${t}`;
-}
-
-interface XSeg { text: string; href?: string; display?: string }
-
-/** Splits post text into plain and linked segments: hidden ranges (reply
- *  mentions, media/quote URLs) drop out, entity ranges become anchors. */
-function xTextSegments(text: string, entities: Entity[], hidden: Hidden[]): XSeg[] {
-  const inHidden = (a: number, b: number) => hidden.some(({ range: [s, e] }) => a < e && s < b);
-  const bounds = new Set<number>([0, text.length]);
-  for (const e of entities) { bounds.add(e.range[0]); bounds.add(e.range[1]); }
-  for (const h of hidden) { bounds.add(h.range[0]); bounds.add(h.range[1]); }
-  const pts = [...bounds].sort((x, y) => x - y);
-  const segs: XSeg[] = [];
-  for (let i = 0; i < pts.length - 1; i++) {
-    const [a, b] = [pts[i], pts[i + 1]];
-    if (a === b || inHidden(a, b)) continue;
-    const ent = entities.find((e) => e.range[0] <= a && b <= e.range[1]);
-    const slice = text.slice(a, b);
-    segs.push(ent ? { text: slice, href: xEntityHref(ent), display: ent.display ?? slice } : { text: slice });
-  }
-  return segs;
-}
-
-const compact = new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 });
-
-const X_ACT_LABELS = { reply: "Reply", repost: "Repost", heart: "Like", chart: "Views", bookmark: "Bookmark" } as const;
-
-function XVerifiedBadge({ kind }: { kind?: Author["verified"] }) {
-  if (!kind || kind === "none") return null;
-  const color = kind === "business" ? "#f7b928" : kind === "government" ? "#829aab" : "#1d9bf0";
-  // X's scalloped seal + check, one filled path.
-  return (
-    <svg viewBox="0 0 24 24" className="d-xpost-badge" aria-label="Verified">
-      <path fill={color} d="M22.25 12c0-1.43-.88-2.67-2.19-3.34.46-1.39.2-2.9-.81-3.91s-2.52-1.27-3.91-.81c-.66-1.31-1.91-2.19-3.34-2.19s-2.67.88-3.33 2.19c-1.4-.46-2.91-.2-3.92.81s-1.26 2.52-.8 3.91c-1.31.67-2.2 1.91-2.2 3.34s.89 2.67 2.2 3.34c-.46 1.39-.21 2.9.8 3.91s2.52 1.26 3.91.81c.67 1.31 1.91 2.19 3.34 2.19s2.68-.88 3.34-2.19c1.39.46 2.9.2 3.91-.81s1.27-2.52.81-3.91c1.31-.67 2.19-1.91 2.19-3.34zm-11.71 4.2L6.8 12.46l1.41-1.42 2.26 2.26 4.8-5.23 1.47 1.36-6.2 6.77z" />
-    </svg>
-  );
-}
-
-/** A quoted post inside the parent — one level of nesting, plain text. */
-function XQuote({ post, href }: { post: Post; href?: string }) {
-  const a = post.author;
-  return (
-    <a href={href} target="_blank" rel="noreferrer" className="d-xpost-quote">
-      <span className="d-xpost-qhead">
-        <span className="d-xpost-qname" dir="auto">{a?.name ?? "Post"}</span>
-        <XVerifiedBadge kind={a?.verified} />
-        {a?.handle && <span className="d-xpost-qsub" dir="auto">@{a.handle.replace(/^@/, "")}</span>}
-      </span>
-      <span className="d-xpost-qtext" dir="auto">{post.text}</span>
-      {post.media?.length ? <span className="d-xpost-qmedia">{post.media[0].kind === "video" || post.media[0].kind === "gif" ? "Post video" : "Post photo"}</span> : null}
-    </a>
-  );
-}
-
-function XPoll({ poll }: { poll: NonNullable<Post["poll"]> }) {
-  const total = poll.votes?.reduce((s, v) => s + v, 0) ?? 0;
-  return (
-    <div className="d-xpost-poll">
-      {poll.choices.map((c, i) => {
-        const share = poll.votes && total ? Math.round((poll.votes[i] / total) * 100) : null;
-        return (
-          <div key={c} className="d-xpost-choice">
-            <span className="d-xpost-choice-fill" style={share !== null ? { width: `${share}%` } : undefined} />
-            <span className="d-xpost-choice-label" dir="auto">{c}</span>
-            {share !== null && <span className="d-xpost-choice-pct">{share}%</span>}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function XLinkCard({ link, href }: { link: LinkMeta; href?: string }) {
-  return (
-    <a href={href} target="_blank" rel="noreferrer" className="d-xpost-card">
-      {link.title && <span className="d-xpost-card-title" dir="auto">{link.title}</span>}
-      {link.description && <span className="d-xpost-card-desc" dir="auto">{link.description}</span>}
-      {link.domain && <span className="d-xpost-card-domain">From {link.domain}</span>}
-    </a>
-  );
-}
-
-/** The saved snapshot as X's timeline cell: header, rich text, attachments, actions. */
-function XPostView({ snap, dump, bits, images, allImages, failedIdx, setFailedIdx }: {
-  snap: XRender;
-  dump: Dump;
-  bits: CardBits;
-  images: string[];
-  allImages: string[];
-  failedIdx: ReadonlySet<number>;
-  setFailedIdx: (i: number) => void;
-}) {
-  const [expanded, setExpanded] = useState(false);
-  const post = snap.post;
-  const a = post.author;
-  const handle = a?.handle ? `@${a.handle.replace(/^@/, "")}` : null;
-  const when = post.createdAt ? timeAgo(Date.parse(post.createdAt)) : null;
-  const segs = xTextSegments(post.text, snap.entities, snap.hidden);
-  const card = snap.attachment?.shown === "card" && snap.attachment.url ? post.links?.[snap.attachment.url] : null;
-  const counts = post.counts;
-  // The "Replying to" row points at the parent post, not this one.
-  const replyHref = post.replyTo
-    ? `https://x.com/i/status/${post.replyTo}`
-    : post.replyToHandle ? `https://x.com/${post.replyToHandle.replace(/^@/, "")}` : undefined;
-  // The quoted post's own link: the hidden quote_url range's entity carries the
-  // t.co URL that resolves to it; fall back to the quoted author's profile.
-  const quoteHidden = snap.hidden.find((h) => h.why === "quote_url");
-  const quoteHref =
-    (quoteHidden && snap.entities.find((e) => e.range[0] < quoteHidden.range[1] && quoteHidden.range[0] < e.range[1])?.text) ||
-    (post.quote?.author?.handle ? `https://x.com/${post.quote.author.handle.replace(/^@/, "")}` : undefined);
-  return (
-    <div className="d-xpost-body">
-      <a href={bits.href ?? undefined} target="_blank" rel="noreferrer" className={`d-xpost-ava${a?.squareAvatar ? " d-xpost-ava-sq" : ""}`}>
-        {dump.authorAvatarUrl ? (
-          /* eslint-disable-next-line @next/next/no-img-element */
-          <img src={dump.authorAvatarUrl} alt="" referrerPolicy="no-referrer" loading="lazy" onError={(e) => { e.currentTarget.hidden = true; }} />
-        ) : a?.name ? initials(a.name) : <ProviderIcon provider="x" />}
-      </a>
-      <div className="d-xpost-col">
-        <span className="d-xpost-names">
-          <a href={bits.href ?? undefined} target="_blank" rel="noreferrer" className="d-xpost-name" dir="auto">
-            {a?.name ?? dump.author ?? "Post"}
-          </a>
-          <XVerifiedBadge kind={a?.verified} />
-          <span className="d-xpost-sub" dir="auto">
-            {handle}{when ? ` · ${when}` : ""}
-          </span>
-        </span>
-        {post.replyToHandle && (
-          <p className="d-xpost-context">
-            Replying to <a href={replyHref} target="_blank" rel="noreferrer" className="d-xpost-link">@{post.replyToHandle}</a>
-          </p>
-        )}
-        <p className={`d-xpost-text${snap.showMore && !expanded ? " d-xpost-clamp" : ""}`} dir="auto">
-          {segs.map((s, i) => s.href ? (
-            <a key={i} href={s.href} target="_blank" rel="noreferrer" className="d-xpost-link">{s.display}</a>
-          ) : s.text)}
-        </p>
-        {snap.showMore && !expanded && (
-          <button type="button" className="d-xpost-more" onClick={() => setExpanded(true)}>Show more</button>
-        )}
-        {post.mediaTags?.length ? <p className="d-xpost-context">Tagging {post.mediaTags.join(", ")}</p> : null}
-        {snap.photos?.length ? (
-        <a href={bits.href ?? undefined} target="_blank" rel="noreferrer" className={`d-xpost-media${snap.photos.length > 1 ? " d-xpost-grid" : ""}`}>
-          {snap.photos.map((src) => (
-            /* eslint-disable-next-line @next/next/no-img-element */
-            <img key={src} src={src} alt="" loading="lazy" onError={(e) => { e.currentTarget.hidden = true; }} />
-          ))}
-        </a>
-      ) : images.length > 0 ? (
-        <a href={bits.href ?? undefined} target="_blank" rel="noreferrer" className={`d-xpost-media${images.length > 1 ? " d-xpost-grid" : ""}`}>
-          {allImages.map((src, i) => !failedIdx.has(i) && (
-            /* eslint-disable-next-line @next/next/no-img-element */
-            <img key={src} src={src} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setFailedIdx(i)} />
-          ))}
-        </a>
-      ) : null}
-      {dump.videoUrl && <XVideo dump={dump} author={a?.name ?? dump.author} />}
-      {snap.attachment?.shown === "quote" && post.quote && <XQuote post={post.quote} href={quoteHref} />}
-      {snap.attachment?.shown === "poll" && post.poll && <XPoll poll={post.poll} />}
-      {post.cardState !== "dismissed" && card && <XLinkCard link={card} href={snap.attachment?.url ?? bits.href ?? undefined} />}
-        <div className="d-xpost-acts">
-          {(["reply", "repost", "heart", "chart", "bookmark"] as const).map((k) => {
-            const n = { reply: counts?.replies, repost: counts?.reposts, heart: counts?.likes, chart: counts?.views, bookmark: counts?.bookmarks }[k];
-            return (
-              <a key={k} href={bits.href ?? undefined} target="_blank" rel="noreferrer" className={`d-xpost-act d-xpost-act-${k}`} aria-label={X_ACT_LABELS[k]}>
-                <span className="d-xpost-act-ic"><Glyph name={k} className="d-xpost-ic" /></span>
-                {n ? compact.format(n) : null}
-              </a>
-            );
-          })}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 /** x — native post chrome with inline media; dead tweets retain their tombstone. */
 function XCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
   const [failedIdx, setFailedIdx] = useState<ReadonlySet<number>>(new Set());
+  const [xrFailed, setXrFailed] = useState(false);
   const author = postAuthor(dump);
   const raw = (dump.authorHandle ?? dump.author)?.replace(/^@/, "");
   // oEmbed author_name can be a display name ("Jane Doe"), not a handle — only @-ify real handles.
@@ -577,22 +389,21 @@ function XCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
     bits.title && !bits.processing && bits.title !== postText && !attributionName(dump.title, dump) ? bits.title : null;
   const allImages = dump.imageUrls.length ? dump.imageUrls : dump.imageUrl ? [dump.imageUrl] : [];
   const images = allImages.filter((_, i) => !failedIdx.has(i));
-  // Snapshots before the DOM rebuild are treated as absent — the feed's
-  // once-per-process refresh resolves them into the new shape.
-  const xr = dump.xRender?.v === 3 ? dump.xRender : null;
+  // A lost uploads dir leaves stale xRender URLs — fall back to the built card.
+  const xr = xrFailed ? null : dump.xRender;
   return (
     <article {...bits.cardProps} className={`d-card d-post group${xr ? " d-xpost" : ""}`}>
       {bits.actions}
       {xr ? (
-        <XPostView
-          snap={xr}
-          dump={dump}
-          bits={bits}
-          images={images}
-          allImages={allImages}
-          failedIdx={failedIdx}
-          setFailedIdx={(i) => setFailedIdx((s) => new Set(s).add(i))}
-        />
+        /* The post as x.com draws it — a snapshot rendered at save time. */
+        <a href={bits.href ?? undefined} target="_blank" rel="noreferrer" className="d-xrender">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={xr.light} alt={text ?? `Post by ${author ?? "an X author"}`} className="d-xrender-img" loading="lazy" onError={() => setXrFailed(true)} />
+          {xr.dark && (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img src={xr.dark} alt={text ?? `Post by ${author ?? "an X author"}`} className="d-xrender-img d-xrender-dark" loading="lazy" onError={() => setXrFailed(true)} />
+          )}
+        </a>
       ) : (
         <>
           <a href={bits.href ?? undefined} target="_blank" rel="noreferrer" className="d-post-head">
@@ -620,7 +431,7 @@ function XCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
           )}
         </>
       )}
-      {!xr && dump.videoUrl && (
+      {dump.videoUrl && (
         <XVideo dump={dump} author={author} />
       )}
       {!xr && images.length > 0 && (

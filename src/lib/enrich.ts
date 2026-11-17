@@ -1,7 +1,7 @@
 import { classifyHeuristic } from "./classify";
 import { db, getDump, listResortable, listTopics, topicExists, updateDump, type Dump } from "./db";
 import { extractUrl } from "./extract";
-import { resolveXPost } from "./x-render";
+import { renderXPostImage } from "./x-render";
 import { providerFromUrl, titleFromUrl } from "./detect";
 import { classifyWithAi, identifySubject } from "./llm";
 import { SUBJECT_MIN_CONFIDENCE, type Subject } from "./taxonomy";
@@ -108,7 +108,7 @@ export function refreshXRender(id: string, restoreStatus: Dump["status"]): Promi
   const job = prev.then(async () => {
     const dump = getDump(id);
     if (!dump?.url) return null;
-    const xRender = await resolveXPost(dump.url).catch(() => null);
+    const xRender = await renderXPostImage(dump.url).catch(() => null);
     // A failed render keeps whatever the row had — restoring status is the whole commit.
     return commit(id, xRender ? { xRender, status: restoreStatus } : { status: restoreStatus }, dump);
   });
@@ -152,7 +152,7 @@ async function runEnrich(id: string): Promise<Dump | null> {
       };
       // The native-look render is a snapshot: a failed render keeps any older one.
       if (fields.provider === "x") {
-        const xRender = await resolveXPost(dump.url).catch(() => null);
+        const xRender = await renderXPostImage(dump.url).catch(() => null);
         if (xRender) fields.xRender = xRender;
       }
     }

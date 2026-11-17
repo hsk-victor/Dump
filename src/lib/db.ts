@@ -5,23 +5,13 @@ import { randomUUID } from "node:crypto";
 import type { Kind, Provider, Subject, Topic, TopicMeta } from "./taxonomy";
 import { TOPICS, TOPIC_CRITERIA } from "./taxonomy";
 import { providerFromUrl } from "./detect";
-import type { Attachment, Entity, Hidden, Post } from "@xeet/core";
 
 export type Status = "processing" | "ready" | "failed";
 
-/** Structured snapshot of an X post — the card renders it as real DOM
- *  (clickable entities, working Show more), not an image. JSON in the DB. */
+/** xeet-rendered post PNGs, one per theme — /api/files/ paths into uploads. JSON in the DB. */
 export interface XRender {
-  v: 3;
-  post: Post;
-  entities: Entity[];
-  hidden: Hidden[];
-  /** True when X's rules would clamp the body behind a "Show more". */
-  showMore: boolean;
-  /** Which attachment X's precedence rules picked (card vs media vs quote vs poll). */
-  attachment: Attachment | null;
-  /** Locally persisted photo URLs (/api/files/…) — used when extraction images are absent or dead. */
-  photos?: string[];
+  light: string;
+  dark?: string;
 }
 
 export interface Dump {
@@ -583,6 +573,6 @@ export function staleXRenderIds(): { id: string; status: Status }[] {
     // it finishes — a row stuck in processing keeps the feed polling.
     .prepare(`SELECT id, status FROM dumps WHERE url IS NOT NULL AND status != 'processing'
               AND (provider = 'x' OR url LIKE '%x.com/%' OR url LIKE '%twitter.com/%')
-              AND (x_render IS NULL OR x_render NOT LIKE '%"v":3%')`)
+              AND (x_render IS NULL OR x_render NOT LIKE '%-light-________.png%')`)
     .all() as { id: string; status: Status }[];
 }
