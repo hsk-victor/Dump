@@ -1,7 +1,7 @@
 import { after, NextResponse, type NextRequest } from "next/server";
-import { counts, listDumps, listTopics, staleXRenderIds } from "@/lib/db";
+import { counts, listDumps, listTopics, staleXRenderIds, updateDump } from "@/lib/db";
 import { createFromFile, createFromText, InputError } from "@/lib/create";
-import { enrichDump } from "@/lib/enrich";
+import { enrichDump, refreshXRender } from "@/lib/enrich";
 import { aiEnabled } from "@/lib/llm";
 import { isKind } from "@/lib/taxonomy";
 
@@ -27,6 +27,14 @@ export async function GET(req: NextRequest) {
   const topic = sp.get("topic");
   const limit = intParam(sp.get("limit"), PAGE_SIZE, MAX_LIMIT) || PAGE_SIZE;
   const offset = intParam(sp.get("offset"), 0, Number.MAX_SAFE_INTEGER);
+  if (offset === 0 && !xRenderRefreshQueued) {
+    xRenderRefreshQueued = true;
+    // Parking them 'processing' before listing makes this response reflect that
+    // fresh renders are on the way — an open feed polls until they land.
+    const stale = staleXRenderIds();
+    for (const { id } of stale) updateDump(id, { status: "processing" });
+    for (const { id, status } of stale) after(() => refreshXRender(id, status));
+  }
   const rows = listDumps({
     q: sp.get("q"),
     kind: isKind(kind) ? kind : null,
@@ -37,10 +45,6 @@ export async function GET(req: NextRequest) {
   });
   // The three aggregate scans only matter to the header/nav — skip them for paged fetches.
   const wantCounts = offset === 0 || sp.get("counts") === "1";
-  if (offset === 0 && !xRenderRefreshQueued) {
-    xRenderRefreshQueued = true;
-    for (const id of staleXRenderIds()) after(() => enrichDump(id));
-  }
   return NextResponse.json({
     items: rows.slice(0, limit),
     hasMore: rows.length > limit,

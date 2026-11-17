@@ -563,11 +563,13 @@ export function deleteTopic(id: string): { id: string; moved: number } | null {
  * Ids of X dumps whose render predates the current output (missing, or a
  * pre-hash filename) — re-enriched once per process on feed load so older
  * saves pick up the current render shape without a manual reprocess.
+ * Matches on the URL as well as the provider column: saves predating that
+ * column carry NULL there even though they're X posts.
  */
-export function staleXRenderIds(): string[] {
-  const rows = db()
-    .prepare(`SELECT id FROM dumps WHERE provider = 'x' AND url IS NOT NULL AND status != 'deleted'
+export function staleXRenderIds(): { id: string; status: Status }[] {
+  return db()
+    .prepare(`SELECT id, status FROM dumps WHERE url IS NOT NULL
+              AND (provider = 'x' OR url LIKE '%x.com/%' OR url LIKE '%twitter.com/%')
               AND (x_render IS NULL OR x_render NOT LIKE '%-light-________.png%')`)
-    .all() as { id: string }[];
-  return rows.map((r) => r.id);
+    .all() as { id: string; status: Status }[];
 }

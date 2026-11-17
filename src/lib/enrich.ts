@@ -96,6 +96,30 @@ export function enrichDump(id: string): Promise<Dump | null> {
   return job;
 }
 
+/**
+ * Re-renders an existing X save's snapshot without touching its other fields —
+ * full enrichment is deliberately not re-run: re-extracting a post that has
+ * since been deleted would erase the archived text. The feed handler parks the
+ * row in 'processing' first so an open feed polls for the new image; the
+ * original status is restored whether the render succeeds or not.
+ */
+export function refreshXRender(id: string, restoreStatus: Dump["status"]): Promise<Dump | null> {
+  const prev = enrichTail.get(id) ?? Promise.resolve();
+  const job = prev.then(async () => {
+    const dump = getDump(id);
+    if (!dump?.url) return null;
+    const xRender = await renderXPostImage(dump.url).catch(() => null);
+    // A failed render keeps whatever the row had — restoring status is the whole commit.
+    return commit(id, xRender ? { xRender, status: restoreStatus } : { status: restoreStatus }, dump);
+  });
+  const tail = job.then(
+    () => { if (enrichTail.get(id) === tail) enrichTail.delete(id); },
+    () => { if (enrichTail.get(id) === tail) enrichTail.delete(id); },
+  );
+  enrichTail.set(id, tail);
+  return job;
+}
+
 async function runEnrich(id: string): Promise<Dump | null> {
   const dump = getDump(id);
   if (!dump) return null;
