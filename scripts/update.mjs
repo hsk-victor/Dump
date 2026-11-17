@@ -196,6 +196,11 @@ function apply() {
   // taking the app down — park it before any path can wipe .next.
   const nextDir = path.join(REPO, ".next");
   const bakDir = `${nextDir}.prev`;
+  // A previous apply may have died mid-swap: if the parked build is the only
+  // one left, put it back before the rmSync below deletes it.
+  if (!builtAt(REPO) && fs.existsSync(path.join(bakDir, "BUILD_ID"))) {
+    fs.renameSync(bakDir, nextDir);
+  }
   fs.rmSync(bakDir, { recursive: true, force: true });
   if (builtAt(REPO)) fs.renameSync(nextDir, bakDir);
   const restoreServed = () => {
