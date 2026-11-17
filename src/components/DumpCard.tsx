@@ -399,7 +399,7 @@ function XCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
           <img src={xr.light} alt={text ?? `Post by ${author ?? "an X author"}`} className="d-xrender-img" loading="lazy" />
           {xr.dark && (
             /* eslint-disable-next-line @next/next/no-img-element */
-            <img src={xr.dark} alt="" aria-hidden className="d-xrender-img d-xrender-dark" loading="lazy" />
+            <img src={xr.dark} alt={text ?? `Post by ${author ?? "an X author"}`} className="d-xrender-img d-xrender-dark" loading="lazy" />
           )}
         </a>
       ) : (
