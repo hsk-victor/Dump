@@ -1822,29 +1822,17 @@ button {
   color: var(--muted);
   min-width: 0;
 }
-/* Wall treatment: meta hidden until the card is hovered (or focused);
-   always visible on touch where hover doesn't exist. */
+/* Wall treatment: the meta strip always holds its space (hairline included) so
+   hovering never grows a card or shifts the grid — only its contents fade in.
+   Always fully visible on touch where hover doesn't exist, and inside the
+   glass panels (.d-mediacard, .d-mus) that already gate their own meta. */
 @media (hover: hover) and (pointer: fine) {
-  .d-meta {
+  .d-card:not(.d-mediacard):not(.d-mus) .d-meta > * {
     opacity: 0;
-    max-height: 0;
-    margin-top: 0;
-    padding-top: 0;
-    border-top-width: 0;
-    overflow: hidden;
-    transition:
-      opacity 0.18s var(--ease-out),
-      max-height 0.22s var(--ease-out),
-      margin-top 0.22s var(--ease-out),
-      padding-top 0.22s var(--ease-out);
+    transition: opacity 0.15s var(--ease-out);
   }
-  .d-card:hover .d-meta,
-  .d-card:focus-within .d-meta {
+  .d-card:not(.d-mediacard):not(.d-mus):is(:hover, :focus-within) .d-meta > * {
     opacity: 1;
-    max-height: 2.5rem;
-    margin-top: 0.6rem;
-    padding-top: 0.55rem;
-    border-top-width: 1px;
   }
 }
 .d-favicon {
