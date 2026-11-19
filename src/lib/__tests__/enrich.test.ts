@@ -144,6 +144,21 @@ describe("enrichDump", () => {
     expect(fs.existsSync(path.join(db.UPLOAD_DIR, name))).toBe(false);
   });
 
+  it("removes a re-copied thumbnail with the same bytes when the card is deleted mid-run", async () => {
+    const d = createFromText("https://www.tiktok.com/@someone/video/5");
+    const name = `${d.id}-thumb-same.jpg`;
+    db.updateDump(d.id, { imageUrl: `/api/files/${name}`, imageUrls: [`/api/files/${name}`] });
+    extractUrl.mockResolvedValue(page({ kind: "video", imageUrl: signedCover, imageUrls: [signedCover] }));
+    storeRemoteImage.mockImplementation(async () => {
+      db.deleteDump(d.id);
+      fs.mkdirSync(db.UPLOAD_DIR, { recursive: true });
+      fs.writeFileSync(path.join(db.UPLOAD_DIR, name), "x");
+      return `/api/files/${name}`;
+    });
+    expect(await enrichDump(d.id)).toBeNull();
+    expect(fs.existsSync(path.join(db.UPLOAD_DIR, name))).toBe(false);
+  });
+
   it("keeps a topic the user picked while enrichment was running", async () => {
     const d = db.createDump({ kind: "link", url: "https://example.com/pasta", domain: "example.com" });
     extractUrl.mockImplementation(async () => {

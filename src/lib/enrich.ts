@@ -155,11 +155,11 @@ async function runEnrich(id: string): Promise<Dump | null> {
       // Signed CDN thumbnails (TikTok's x-expires, Instagram's oe=) die within days, so keep a copy.
       const lead = fields.imageUrl;
       if (isExpiringUrl(lead)) {
-        const stored = (await storeRemoteImage(id, lead!).catch(() => null)) ?? (isStoredThumb(id, dump.imageUrl) ? dump.imageUrl : null);
+        newThumb = await storeRemoteImage(id, lead!).catch(() => null);
+        const stored = newThumb ?? (isStoredThumb(id, dump.imageUrl) ? dump.imageUrl : null);
         if (stored) {
           fields.imageUrl = stored;
           fields.imageUrls = [stored, ...(fields.imageUrls ?? []).filter((u) => u !== lead && u !== stored)];
-          if (stored !== dump.imageUrl) newThumb = stored;
         }
       }
       // The native-look render is a snapshot: a failed render keeps any older
