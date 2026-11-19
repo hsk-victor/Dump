@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it, vi } from "vitest";
 import type { Dump } from "@/lib/db";
 import DumpCard, { notePreview } from "./DumpCard";
+import { videoCopyAction } from "@/lib/media";
 
 const title = "Mobile reminder: book a train to Kyoto this weekend";
 const note: Dump = {
@@ -91,6 +92,16 @@ const link: Dump = {
 };
 const card = (dump: Dump, phone = false) =>
   renderToStaticMarkup(createElement(DumpCard, { dump, phone, onTopic: vi.fn(), onDelete: vi.fn(), onRetry: vi.fn(), onPin: vi.fn(), onSaveNote: vi.fn(), topics: [] }));
+
+it("offers video saving only for available originals, but allows removing a saved copy", () => {
+  const videoUrl = "https://example.com/clip.mp4";
+  const video: Dump = { ...link, kind: "video", videoUrl, sourceState: "reachable" };
+  expect(videoCopyAction(video)).toBe("Save video copy");
+  expect(videoCopyAction({ ...video, sourceState: "unavailable" })).toBeNull();
+  expect(videoCopyAction({ ...video, sourceState: "unavailable", keepVideo: true })).toBeNull();
+  expect(videoCopyAction({ ...video, sourceState: "unavailable", mediaArchive: { [videoUrl]: "/api/files/clip.mp4" } })).toBe("Remove saved video");
+  expect(videoCopyAction(link)).toBeNull();
+});
 
 it("draws a saved card with no state row or badge", () => {
   const html = card(link);
