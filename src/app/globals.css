@@ -2430,6 +2430,9 @@ body.d-dragging * {
 /* Move menu popup — same frosted material as .d-mpanel. */
 .d-menu {
   min-width: 7rem;
+  max-height: var(--available-height, calc(100dvh - 16px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 0.25rem;
   border-radius: calc(var(--radius) - 5px);
   background: var(--raised);
