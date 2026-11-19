@@ -1,14 +1,8 @@
 // Seed a realistic mixed feed for the tailored-cards integration audit.
-// Inserts rows directly into data/dump.db with status ready so enrichment
-// never overwrites them. Run: node scripts/seed-audit.mjs
-import Database from "better-sqlite3";
-import { randomUUID } from "node:crypto";
-import path from "node:path";
-import fs from "node:fs";
+// Run: node scripts/seed-audit.mjs
+import { createJiti } from "jiti";
 
-const DATA_DIR = path.resolve(process.cwd(), "data");
-fs.mkdirSync(path.join(DATA_DIR, "uploads"), { recursive: true });
-const db = new Database(path.join(DATA_DIR, "dump.db"));
+const { insertDumps } = await createJiti(import.meta.url).import("../src/lib/db.ts");
 
 const NOW = Date.now();
 const HOUR = 3600_000;
@@ -44,7 +38,7 @@ const YT = (v) => `https://i.ytimg.com/vi/${v}/hqdefault.jpg`;
 const OGH = (repo) => `https://opengraph.githubassets.com/1/${repo}`;
 
 // [hoursAgo, row]
-const R = (h, row) => ({ ...row, created: NOW - h * HOUR });
+const R = (h, row) => ({ topic: "tech", status: "ready", classifiedBy: "rules", ...row, createdAt: NOW - h * HOUR });
 const rows = [
   // ---- interleaved feed order (newest first) ----
   R(0.2, { kind: "post", provider: "hackernews", url: "https://news.ycombinator.com/item?id=42415360", domain: "news.ycombinator.com", title: "Ask HN: What are you using for local-first sync in 2026? | Hacker News", siteName: "Hacker News" }),
@@ -94,37 +88,5 @@ const rows = [
   R(21.5, { kind: "post", provider: "x", url: "https://x.com/arranfrances/status/1732001234567890123", domain: "x.com", author: "arran", title: null, description: "shipped the redesign. nobody noticed. that's the point.", imageUrl: IMGS.car, imageUrls: [IMGS.car, IMGS.desert] }),
 ];
 
-const stmt = db.prepare(`INSERT INTO dumps (id, kind, topic, status, url, domain, provider, title, description, content, note, image_url, image_urls, site_name, author, summary, subject, tags, classified_by, topic_locked, created_at, updated_at)
-  VALUES (@id, @kind, @topic, @status, @url, @domain, @provider, @title, @description, @content, @note, @image_url, @image_urls, @site_name, @author, @summary, @subject, @tags, @classified_by, @topic_locked, @created_at, @updated_at)`);
-
-const ins = db.transaction((rs) => {
-  for (const r of rs) {
-    const t = r.created;
-    stmt.run({
-      id: randomUUID(),
-      kind: r.kind,
-      topic: "tech",
-      status: r.status ?? "ready",
-      url: r.url ?? null,
-      domain: r.domain ?? null,
-      provider: r.provider ?? null,
-      title: r.title ?? null,
-      description: r.description ?? null,
-      content: r.content ?? null,
-      note: r.note ?? null,
-      image_url: r.imageUrl ?? null,
-      image_urls: r.imageUrls?.length ? JSON.stringify(r.imageUrls) : null,
-      site_name: r.siteName ?? null,
-      author: r.author ?? null,
-      summary: null,
-      subject: null,
-      tags: "[]",
-      classified_by: "rules",
-      topic_locked: 0,
-      created_at: t,
-      updated_at: t,
-    });
-  }
-});
-ins(rows);
+insertDumps(rows);
 console.log(`seeded ${rows.length} dumps`);
