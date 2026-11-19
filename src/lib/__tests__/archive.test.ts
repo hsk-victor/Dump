@@ -65,6 +65,7 @@ it("archives posters and only retains full video with opt-in; removal and delete
   const saved = db.getDump(d.id)!;
   expect(hasLocalVideo(saved)).toBe(true);
   expect(await bytes(saved.mediaArchive[videoUrl])).toEqual(Buffer.from([1, 2, 3]));
+  expect(mocks.video).toHaveBeenLastCalledWith(videoUrl, { timeoutMs: 300_000 });
   const off = new NextRequest("http://localhost", { method: "PATCH", body: JSON.stringify({ keepVideo: false }) });
   await PATCH(off, { params: Promise.resolve({ id: d.id }) });
   await expect(bytes(saved.mediaArchive[videoUrl])).rejects.toThrow();
@@ -153,4 +154,5 @@ it.skipIf(spawnSync("ffmpeg", ["-version"]).error)("extracts a frame from a guar
   const saved = db.getDump(d.id)!;
   expect(await sharp(await bytes(saved.mediaArchive[posterKey(d.videoUrl!)])).metadata()).toMatchObject({ format: "webp", width: 64, height: 48 });
   expect(saved.mediaArchive[d.videoUrl!]).toBeUndefined();
+  expect(mocks.video).toHaveBeenLastCalledWith(d.videoUrl, { timeoutMs: 60_000 });
 });

@@ -12,8 +12,8 @@ export const posterKey = (url: string) => `poster:${url}`;
 const remote = (url: string | null | undefined): url is string => !!url && /^https?:\/\//i.test(url);
 const jobs = new Map<string, Promise<void>>();
 
-export async function downloadVideo(url: string, maxBytes = 300 * 1024 * 1024): Promise<Buffer> {
-  const response = await fetchWithTimeout(url);
+export async function downloadVideo(url: string, maxBytes = 300 * 1024 * 1024, timeoutMs = 300_000): Promise<Buffer> {
+  const response = await fetchWithTimeout(url, { timeoutMs });
   if (!response.ok || !response.body) {
     await response.body?.cancel();
     throw new Error("Video download failed");
@@ -95,7 +95,7 @@ async function runArchive(id: string): Promise<void> {
   if (remote(dump.videoUrl)) {
     const url = dump.videoUrl;
     let bytes: Buffer | undefined;
-    const video = async () => bytes ??= await downloadVideo(url, (dump.keepVideo ? 300 : 64) * 1024 * 1024);
+    const video = async () => bytes ??= await downloadVideo(url, (dump.keepVideo ? 300 : 64) * 1024 * 1024, dump.keepVideo ? 300_000 : 60_000);
     if (!dump.videoPosterUrl && !dump.mediaArchive[posterKey(url)]) {
       try { await image(posterKey(url), await frame(await video())); } catch { /* Posters are best effort. */ }
     }
