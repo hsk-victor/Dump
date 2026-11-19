@@ -32,6 +32,31 @@ afterEach(() => {
 });
 
 describe("saved file storage", () => {
+  it("streams only requested video bytes and never buffers serving through read", async () => {
+    await fileStorage.put("stream.webm", new Uint8Array([0, 1, 2, 3, 4]));
+    const read = vi.spyOn(fileStorage, "read");
+    const stream = vi.spyOn(fileStorage, "openReadStream");
+    try {
+      expect(await fileStorage.stat("stream.webm")).toEqual({ size: 5 });
+      const partial = await GET(new Request("http://localhost", { headers: { range: "bytes=1-2" } }), { params: Promise.resolve({ name: "stream.webm" }) });
+      expect(partial.status).toBe(206);
+      expect(stream).toHaveBeenLastCalledWith("stream.webm", { start: 1, end: 2 });
+      expect([...new Uint8Array(await partial.arrayBuffer())]).toEqual([1, 2]);
+      const full = await getFile("stream.webm");
+      expect(stream).toHaveBeenLastCalledWith("stream.webm");
+      expect([...new Uint8Array(await full.arrayBuffer())]).toEqual([0, 1, 2, 3, 4]);
+      expect(read).not.toHaveBeenCalled();
+      await fileStorage.put("empty.mp4", new Uint8Array());
+      expect(await (await getFile("empty.mp4")).text()).toBe("");
+      expect((await getFile("missing.mp4")).status).toBe(404);
+      await expect(fileStorage.openReadStream("missing.mp4")).rejects.toMatchObject({ code: "ENOENT" });
+      await expect(fileStorage.stat("../outside.mp4")).rejects.toThrow("Invalid stored file name");
+      await expect(fileStorage.openReadStream("../outside.mp4")).rejects.toThrow("Invalid stored file name");
+    } finally {
+      read.mockRestore();
+      stream.mockRestore();
+    }
+  });
   it("writes, reads, and removes bytes at a stable URL", async () => {
     const bytes = new Uint8Array([0, 1, 255]);
     const url = await fileStorage.put("preview.jpg", bytes);
