@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type MouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { Menu } from "@base-ui/react/menu";
 import type { Dump } from "@/lib/db";
+import { mediaSources, videoPoster } from "@/lib/media";
+import { ArchiveImage } from "./Media";
 import { SUBJECT_MIN_CONFIDENCE, subjectLine, kindMeta, providerMeta, topicMeta, type TopicMeta } from "@/lib/taxonomy";
 import { timeAgo, shortDate } from "@/lib/format";
 import { GITHUB_TAG, githubInfo, type GithubInfo, titleFromUrl } from "@/lib/detect";
@@ -322,8 +324,7 @@ function shimmerLines() {
 
 function Img({ dump, bits, className, alt = "" }: { dump: Dump; bits: CardBits; className: string; alt?: string }) {
   return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img className={className} src={dump.imageUrl!} alt={alt} loading="lazy" referrerPolicy="no-referrer" onError={() => bits.setImgFailed(true)} />
+    <ArchiveImage dump={dump} className={className} src={dump.imageUrl!} alt={alt} loading="lazy" referrerPolicy="no-referrer" onError={() => bits.setImgFailed(true)} />
   );
 }
 
@@ -335,8 +336,7 @@ function FadeImg({ dump, bits, className, alt = "" }: { dump: Dump; bits: CardBi
   const all = dump.imageUrls.length ? dump.imageUrls : dump.imageUrl ? [dump.imageUrl] : [];
   const srcIdx = all.findIndex((_, i) => !failedIdx.has(i));
   return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
+    <ArchiveImage dump={dump}
       ref={(el) => {
         if (el?.complete && el.naturalWidth) setLoaded(true);
       }}
@@ -367,18 +367,34 @@ function FadeImg({ dump, bits, className, alt = "" }: { dump: Dump; bits: CardBi
  *  without `controls` (ambient animation) gets a tap-to-play overlay instead. */
 function LoopVideo({
   src,
+  dump,
   poster,
   controls,
   className,
   label,
 }: {
   src: string;
+  dump: Dump;
   poster?: string;
   controls?: boolean;
   className?: string;
   label: string;
 }) {
   const video = useRef<HTMLVideoElement>(null);
+  const sources = dump.videoUrl ? mediaSources(dump, dump.videoUrl).map((url) => url === dump.videoUrl ? src : url) : [src];
+  const [failedSources, setFailedSources] = useState<Set<string>>(new Set());
+  const currentSource = sources.find((url) => !failedSources.has(url)) ?? sources[0];
+  const [failedPosters, setFailedPosters] = useState<Set<string>>(new Set());
+  const posters = dump.videoPosterUrl ? mediaSources(dump, dump.videoPosterUrl) : [videoPoster(dump) ?? poster];
+  const shownPoster = posters.find((url) => url && !failedPosters.has(url));
+  const posterCount = posters.filter(Boolean).length;
+  useEffect(() => {
+    if (!shownPoster || posterCount < 2) return;
+    const image = new Image();
+    image.onerror = () => setFailedPosters((failed) => new Set([...failed, shownPoster]));
+    image.src = shownPoster;
+    return () => { image.onerror = null; };
+  }, [shownPoster, posterCount]);
   const [playing, setPlaying] = useState(false);
   const [reducedMotion, setReducedMotion] = useState(false);
   useEffect(() => {
@@ -415,8 +431,8 @@ function LoopVideo({
       <video
         ref={video}
         className={className}
-        src={src}
-        poster={poster}
+        src={currentSource}
+        poster={shownPoster}
         controls={controls}
         muted
         loop
@@ -425,7 +441,7 @@ function LoopVideo({
         aria-label={label}
         onPlaying={() => setPlaying(true)}
         onPause={() => setPlaying(false)}
-        onError={() => setPlaying(false)}
+        onError={() => { setPlaying(false); setFailedSources((failed) => new Set([...failed, currentSource])); }}
       />
       {!controls && (reducedMotion || !playing) && (
         <button
@@ -448,6 +464,7 @@ function XVideo({ dump, author, href }: { dump: Dump; author: string | null; hre
   return (
     <div className="d-post-video-frame">
       <LoopVideo
+        dump={dump}
         className="d-post-video"
         src={`/api/dumps/${dump.id}/video`}
         poster={dump.videoPosterUrl ?? undefined}
@@ -505,9 +522,8 @@ function XCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
           {dump.videoUrl &&
             (bits.posterOnly ? (
               <div className="d-post-video-frame d-poster-frame">
-                {dump.videoPosterUrl && (
-                  /* eslint-disable-next-line @next/next/no-img-element */
-                  <img className="d-post-video" src={dump.videoPosterUrl} alt="" loading="lazy" referrerPolicy="no-referrer" />
+                {videoPoster(dump) && (
+                  <ArchiveImage dump={dump} className="d-post-video" src={dump.videoPosterUrl ?? videoPoster(dump)} alt="" loading="lazy" referrerPolicy="no-referrer" />
                 )}
                 <PlayOrPreview bits={bits} />
               </div>
@@ -517,8 +533,7 @@ function XCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
           {images.length > 0 && (
             <a href={bits.href ?? undefined} target="_blank" rel="noreferrer" className={`d-post-gallery${images.length > 1 ? " d-post-grid" : ""}`}>
               {allImages.map((src, i) => !failedIdx.has(i) && (
-                /* eslint-disable-next-line @next/next/no-img-element */
-                <img key={src} src={src} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setFailedIdx((s) => new Set(s).add(i))} />
+                <ArchiveImage dump={dump} key={src} src={src} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setFailedIdx((s) => new Set(s).add(i))} />
               ))}
             </a>
           )}
@@ -588,8 +603,7 @@ function PostCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
       )}
       {images.length > 0 && (
         <a href={bits.href ?? undefined} target="_blank" rel="noreferrer" className="d-post-gallery">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={images[0]} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setFailedIdx((s) => new Set(s).add(shownIdx))} />
+          <ArchiveImage dump={dump} src={images[0]} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setFailedIdx((s) => new Set(s).add(shownIdx))} />
           {images.length > 1 && <span className="d-post-count">1/{images.length}</span>}
         </a>
       )}
@@ -637,8 +651,7 @@ function RedditCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
         )}
         {images.length > 0 && (
           <a href={bits.href ?? undefined} target="_blank" rel="noreferrer" className="d-rd-media">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={images[0]} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setFailedIdx((s) => new Set(s).add(shownIdx))} />
+            <ArchiveImage dump={dump} src={images[0]} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setFailedIdx((s) => new Set(s).add(shownIdx))} />
             {dump.kind === "video" && <PlayOrPreview bits={bits} />}
             {images.length > 1 && <span className="d-post-count">1/{images.length}</span>}
           </a>
@@ -887,12 +900,14 @@ function VideoCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
       <div className="d-mframe">
       {dump.videoUrl && !bits.posterOnly ? (
         <div className="d-media d-vmedia">
-          <LoopVideo src={dump.videoUrl} poster={dump.videoPosterUrl ?? undefined} controls label={t.title ?? "Video"} />
+          <LoopVideo dump={dump} src={dump.videoUrl} poster={dump.videoPosterUrl ?? undefined} controls label={t.title ?? "Video"} />
           <MediaMark dump={dump} />
         </div>
       ) : (
       <a href={bits.href ?? undefined} target="_blank" rel="noreferrer" className="d-media d-vmedia" aria-label={t.title ?? byline ?? "Open video"}>
-        {bits.showMedia ? (
+        {bits.posterOnly && videoPoster(dump) ? (
+          <ArchiveImage dump={dump} src={dump.videoPosterUrl ?? videoPoster(dump)} alt={t.title ?? ""} />
+        ) : bits.showMedia ? (
           <FadeImg dump={dump} bits={bits} alt={t.title ?? ""} />
         ) : (
           <span className="d-vph" aria-hidden>
@@ -1500,7 +1515,7 @@ export default function DumpCard({ dump, phone = false, fresh, removing, onTopic
   const subject = dump.subject && (dump.subject.confidence ?? 0) >= SUBJECT_MIN_CONFIDENCE ? dump.subject : null;
   const title = subject ? subjectLine(subject) : dump.title || (dump.url ? titleFromUrl(dump.url) : null);
   // A confirmed-gone original is a dead end: only a locally stored image still opens.
-  const localImage = dump.imageUrl?.startsWith("/api/files/") ? dump.imageUrl : null;
+  const localImage = dump.imageUrl?.startsWith("/api/files/") ? dump.imageUrl : dump.imageUrl ? dump.mediaArchive?.[dump.imageUrl] : null;
   const href = gone ? (kind === "image" ? localImage : null) : dump.url ?? (kind === "image" ? dump.imageUrl : null);
   const site = dump.siteName && dump.siteName.length < 30 ? dump.siteName : dump.domain;
   const showMedia = !!dump.imageUrl && !imgFailed;
@@ -1529,6 +1544,12 @@ export default function DumpCard({ dump, phone = false, fresh, removing, onTopic
   };
   const sourceItems = (
     <>
+      {(dump.kind === "video" || dump.videoUrl) && (
+        <Menu.Item className="d-menu-item" onClick={async () => {
+          const response = await fetch(`/api/dumps/${dump.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ keepVideo: !dump.keepVideo }) });
+          if (response.ok) window.dispatchEvent(new Event("dump-updated"));
+        }}>{dump.keepVideo ? "Remove saved video" : "Save video copy"}</Menu.Item>
+      )}
       {dump.url && (
         <Menu.Item className="d-menu-item" onClick={copyLink}>Copy original link</Menu.Item>
       )}

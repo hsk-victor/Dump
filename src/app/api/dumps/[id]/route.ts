@@ -2,6 +2,7 @@ import { after, NextResponse, type NextRequest } from "next/server";
 import { deleteDump, getDump, topPosition, topicExists, updateDump } from "@/lib/db";
 import { enrichDump, noteTitle } from "@/lib/enrich";
 import { fileStorage, storedFileName } from "@/lib/storage";
+import { archiveDump, removeArchiveFiles } from "@/lib/archive";
 
 export const runtime = "nodejs";
 
@@ -16,6 +17,16 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
   const { id } = await params;
   if (!getDump(id)) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const body = await req.json().catch(() => ({}));
+  if (typeof body.keepVideo === "boolean") {
+    const current = getDump(id)!;
+    const mediaArchive = { ...current.mediaArchive };
+    const removed = current.videoUrl ? mediaArchive[current.videoUrl] : null;
+    if (!body.keepVideo && current.videoUrl) delete mediaArchive[current.videoUrl];
+    const dump = updateDump(id, { keepVideo: body.keepVideo, mediaArchive });
+    if (!body.keepVideo && removed && !Object.values(mediaArchive).includes(removed)) await removeArchiveFiles([removed]);
+    if (body.keepVideo) after(() => archiveDump(id));
+    return NextResponse.json(dump);
+  }
 
   if (body.reprocess) {
     const dump = updateDump(id, { status: "processing" });
@@ -48,6 +59,7 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
 export async function DELETE(_req: NextRequest, { params }: Ctx) {
   const dump = deleteDump((await params).id);
   if (!dump) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  await removeArchiveFiles(Object.values(dump.mediaArchive));
   const name = storedFileName(dump.imageUrl);
   if (name) await fileStorage.remove(name);
   return new NextResponse(null, { status: 204 });

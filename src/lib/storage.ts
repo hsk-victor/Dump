@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { randomUUID } from "node:crypto";
 import { DATA_DIR } from "./data-dir";
 
 interface FileStorage {
@@ -32,7 +33,13 @@ export const fileStorage: FileStorage = {
   async put(name, bytes) {
     const file = localPath(name);
     await fs.mkdir(UPLOAD_DIR, { recursive: true });
-    await fs.writeFile(file, bytes);
+    const tmp = `${file}.${randomUUID()}.tmp`;
+    try {
+      await fs.writeFile(tmp, bytes);
+      await fs.rename(tmp, file);
+    } finally {
+      await fs.rm(tmp, { force: true });
+    }
     return `${FILE_URL_PREFIX}${name}`;
   },
   async read(name) {

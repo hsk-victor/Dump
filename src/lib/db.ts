@@ -19,6 +19,8 @@ export interface XRender {
 }
 
 export interface Dump {
+  mediaArchive: Record<string, string>;
+  keepVideo: boolean;
   id: string;
   kind: Kind;
   topic: Topic;
@@ -58,6 +60,8 @@ export interface Dump {
 }
 
 interface Row {
+  media_archive: string;
+  keep_video: number;
   id: string;
   kind: string;
   topic: string;
@@ -93,6 +97,8 @@ interface Row {
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS dumps (
+  media_archive TEXT NOT NULL DEFAULT '{}',
+  keep_video INTEGER NOT NULL DEFAULT 0,
   id TEXT PRIMARY KEY,
   kind TEXT NOT NULL,
   topic TEXT NOT NULL DEFAULT 'other',
@@ -187,6 +193,8 @@ function db(): Database.Database {
     conn.exec(SCHEMA);
     // Columns added after v1 land here for databases created before them.
     const cols = conn.prepare("PRAGMA table_info(dumps)").all() as { name: string }[];
+    if (!cols.some((c) => c.name === "media_archive")) conn.exec("ALTER TABLE dumps ADD COLUMN media_archive TEXT NOT NULL DEFAULT '{}'");
+    if (!cols.some((c) => c.name === "keep_video")) conn.exec("ALTER TABLE dumps ADD COLUMN keep_video INTEGER NOT NULL DEFAULT 0");
     if (!cols.some((c) => c.name === "subject")) conn.exec("ALTER TABLE dumps ADD COLUMN subject TEXT");
     if (!cols.some((c) => c.name === "provider")) conn.exec("ALTER TABLE dumps ADD COLUMN provider TEXT");
     if (!cols.some((c) => c.name === "image_urls")) conn.exec("ALTER TABLE dumps ADD COLUMN image_urls TEXT");
@@ -227,6 +235,8 @@ function seedTopics(conn: Database.Database) {
 
 function toDump(r: Row): Dump {
   return {
+    mediaArchive: JSON.parse(r.media_archive || "{}"),
+    keepVideo: !!r.keep_video,
     id: r.id,
     kind: r.kind as Kind,
     topic: r.topic as Topic,
@@ -288,6 +298,8 @@ function safeJsonArray(s: string): string[] {
 }
 
 const COLUMN: Record<string, string> = {
+  mediaArchive: "media_archive",
+  keepVideo: "keep_video",
   kind: "kind",
   topic: "topic",
   status: "status",
@@ -325,10 +337,10 @@ function toColumns(patch: Patch): Record<string, unknown> {
   for (const [key, value] of Object.entries(patch)) {
     const col = COLUMN[key];
     if (!col || value === undefined) continue;
-    if (key === "tags") out[col] = JSON.stringify(value);
+    if (key === "tags" || key === "mediaArchive") out[col] = JSON.stringify(value);
     else if (key === "imageUrls") out[col] = (value as string[] | null)?.length ? JSON.stringify(value) : null;
     else if (key === "subject" || key === "xRender") out[col] = value ? JSON.stringify(value) : null;
-    else if (key === "topicLocked" || key === "pinned") out[col] = value ? 1 : 0;
+    else if (key === "topicLocked" || key === "pinned" || key === "keepVideo") out[col] = value ? 1 : 0;
     else out[col] = value;
   }
   return out;
@@ -480,7 +492,7 @@ export interface ListOptions {
 const FEED_COLS = `d.id, d.kind, d.topic, d.status, d.source_state, d.url, d.domain, d.provider, d.title, d.description,
   CASE WHEN d.kind = 'note' THEN d.content END AS content,
   d.note, d.image_url, d.image_urls, d.site_name, d.author, d.author_handle, d.author_avatar_url,
-  d.video_url, d.video_poster_url, d.video_type, d.x_render, d.summary, d.subject, d.tags,
+  d.video_url, d.video_poster_url, d.video_type, d.x_render, d.summary, d.subject, d.tags, d.media_archive, d.keep_video,
   d.classified_by, d.topic_locked, d.pinned, d.position, d.created_at, d.updated_at`;
 
 export function listDumps({ q, kind, topic, limit = 200, offset = 0 }: ListOptions = {}): Dump[] {

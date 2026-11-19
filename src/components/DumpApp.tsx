@@ -304,6 +304,11 @@ export default function DumpApp() {
   useEffect(() => {
     load();
   }, [load]);
+  useEffect(() => {
+    const refresh = () => { void load(); };
+    window.addEventListener("dump-updated", refresh);
+    return () => window.removeEventListener("dump-updated", refresh);
+  }, [load]);
 
   // If the URL's search changes from outside (Back/Forward, a link), show it in the box.
   useEffect(() => {

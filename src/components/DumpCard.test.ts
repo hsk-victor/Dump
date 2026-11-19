@@ -6,6 +6,7 @@ import DumpCard, { notePreview } from "./DumpCard";
 
 const title = "Mobile reminder: book a train to Kyoto this weekend";
 const note: Dump = {
+  mediaArchive: {}, keepVideo: false,
   id: "note",
   kind: "note",
   topic: "other",
@@ -125,6 +126,29 @@ it("gives a gone poster-only video no play button", () => {
   expect(html).toContain("Preview only");
   expect(html).toContain("Video not saved");
   expect(html).not.toContain('class="d-play"');
+});
+
+it.each([
+  ["image", null], ["article", null], ["video", "youtube"], ["audio", "spotify"],
+  ["post", "x"], ["post", "bluesky"], ["post", "reddit"], ["link", "github"],
+] as const)("prefers the archived image for a gone %s/%s card", (kind, provider) => {
+  const imageUrl = "https://example.com/remote.jpg";
+  const html = card({ ...link, kind, provider, sourceState: "unavailable", imageUrl, imageUrls: [imageUrl], mediaArchive: { [imageUrl]: "/api/files/archived.webp" } });
+  expect(html).toContain('src="/api/files/archived.webp"');
+  expect(html).not.toContain(`src="${imageUrl}"`);
+  if (kind === "image") expect(html).toContain('href="/api/files/archived.webp"');
+});
+
+it("plays an archived video after source loss and retains generated poster-only frames", () => {
+  const videoUrl = "https://example.com/movie.mp4";
+  const base: Dump = { ...link, kind: "video", videoUrl, imageUrl: null, imageUrls: [], sourceState: "unavailable", mediaArchive: { [videoUrl]: "/api/files/movie.mp4", [`poster:${videoUrl}`]: "/api/files/frame.webp" } };
+  const playable = card(base);
+  expect(playable).toContain('src="/api/files/movie.mp4"');
+  expect(playable).toContain('poster="/api/files/frame.webp"');
+  expect(playable).not.toContain("Video not saved");
+  const poster = card({ ...base, mediaArchive: { [`poster:${videoUrl}`]: "/api/files/frame.webp" } });
+  expect(poster).toContain('src="/api/files/frame.webp"');
+  expect(poster).toContain("Preview only");
 });
 
 it("never shows source loss on a note", () => {

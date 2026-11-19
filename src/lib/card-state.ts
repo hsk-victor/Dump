@@ -21,8 +21,8 @@ export interface CardState {
 }
 
 /** A video file this app stores itself, rather than a remote or proxied stream. */
-export function hasLocalVideo(dump: Pick<Dump, "videoUrl">): boolean {
-  return !!dump.videoUrl?.startsWith("/api/files/");
+export function hasLocalVideo(dump: Pick<Dump, "videoUrl"> & Partial<Pick<Dump, "mediaArchive">>): boolean {
+  return !!dump.videoUrl && (dump.videoUrl.startsWith("/api/files/") || !!dump.mediaArchive?.[dump.videoUrl]);
 }
 
 /** Video dumps, and posts carrying a video (X stores those as kind "post"). */
