@@ -4,7 +4,7 @@ import { hasLocalVideo } from "./card-state";
 export function videoCopyAction(dump: Dump): "Save video copy" | "Remove saved video" | null {
   if (hasLocalVideo(dump)) return "Remove saved video";
   if (dump.sourceState === "unavailable") return null;
-  return dump.kind === "video" || dump.videoUrl ? "Save video copy" : null;
+  return dump.videoUrl && /^https?:\/\//i.test(dump.videoUrl) ? "Save video copy" : null;
 }
 
 export function mediaSources(dump: Pick<Dump, "mediaArchive" | "sourceState">, url: string): string[] {

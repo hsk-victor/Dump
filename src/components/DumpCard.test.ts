@@ -101,6 +101,12 @@ it("offers video saving only for available originals, but allows removing a save
   expect(videoCopyAction({ ...video, sourceState: "unavailable", keepVideo: true })).toBeNull();
   expect(videoCopyAction({ ...video, sourceState: "unavailable", mediaArchive: { [videoUrl]: "/api/files/clip.mp4" } })).toBe("Remove saved video");
   expect(videoCopyAction(link)).toBeNull();
+  expect(videoCopyAction({ ...video, videoUrl: null })).toBeNull();
+  expect(videoCopyAction({ ...video, videoUrl: "" })).toBeNull();
+  expect(videoCopyAction({ ...video, videoUrl: "blob:clip" })).toBeNull();
+  expect(videoCopyAction({ ...video, videoUrl: "/api/dumps/clip/video" })).toBeNull();
+  expect(videoCopyAction({ ...video, kind: "post" })).toBe("Save video copy");
+  expect(videoCopyAction({ ...video, videoUrl: "/api/files/clip.mp4" })).toBe("Remove saved video");
 });
 
 it("draws a saved card with no state row or badge", () => {
