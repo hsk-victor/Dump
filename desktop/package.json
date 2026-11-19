@@ -1,0 +1,13 @@
+{
+  "name": "dump-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "stage": "node scripts/stage-server.mjs",
+    "tauri": "tauri",
+    "build": "node scripts/stage-server.mjs && tauri build"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2"
+  }
+}
