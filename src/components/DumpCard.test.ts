@@ -167,7 +167,11 @@ it("draws audio as a way out to its service, never a pretend player", () => {
   expect(live).toContain("Open in Spotify");
   expect(live).not.toContain("d-mus-transport");
   expect(live).not.toContain("d-mus-prog");
+  // The widget alone names the song: the panel never repeats the title.
+  expect(live).not.toContain("d-mus-ptitle");
+  expect(card(song, true)).not.toContain("d-mus-ptitle");
   const gone = card({ ...song, sourceState: "unavailable" });
+  expect(gone).toContain("Lumen Avenue");
   expect(gone).not.toContain("Open in Spotify");
   expect(gone).toContain("Artwork kept · audio not saved");
 });

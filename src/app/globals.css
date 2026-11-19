@@ -1638,7 +1638,7 @@ button {
 }
 @media (hover: hover) and (pointer: fine) {
   :is(.d-mus:is(:hover, :focus-within), .d-card-shell:is(:hover, :focus-within) > .d-mus)
-    :is(.d-mus-src, .d-mus-face, .d-mus-prog) {
+    :is(.d-mus-src, .d-mus-prog) {
     opacity: 0;
   }
 }
@@ -1694,7 +1694,6 @@ button {
   translate: 0 0;
   pointer-events: auto;
 }
-.d-mus[data-open] .d-mus-face,
 .d-mus[data-open] .d-mus-prog,
 .d-mus[data-open] .d-mus-src {
   opacity: 0;
@@ -3435,12 +3434,8 @@ body.d-dragging * {
     pointer-events: auto;
     transition: none;
   }
-  /* The widget keeps showing its artwork, title and artist; the footer doesn't repeat them. */
-  .d-mus[data-exception] :is(.d-mus-face, .d-mus-src) {
+  .d-mus[data-exception] .d-mus-src {
     opacity: 1;
-  }
-  .d-mus[data-exception] .d-mus-ptitle {
-    display: none;
   }
 }
 /* Remote-only audio: a plain destination, not a player. */
