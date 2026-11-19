@@ -1609,7 +1609,7 @@ export default function DumpCard({ dump, phone = false, fresh, removing, onTopic
           </svg>
         </Menu.Trigger>
         <Menu.Portal>
-          <Menu.Positioner side="bottom" align="end" sideOffset={4}>
+          <Menu.Positioner className="d-menu-positioner" side="bottom" align="end" sideOffset={4}>
             <Menu.Popup className="d-menu">
               {destinations}
               {dump.url && destinations.length > 0 && <Menu.Separator className="d-menu-sep" />}

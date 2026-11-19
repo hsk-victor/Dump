@@ -8,6 +8,7 @@ it("bounds shared menus to available space and allows contained wheel scrolling"
   expect(menu).toContain("max-height: var(--available-height");
   expect(menu).toContain("overflow-y: auto");
   expect(menu).toContain("overscroll-behavior: contain");
+  expect(css.match(/\.d-menu-positioner\s*\{([^}]+)\}/)?.[1]).toContain("z-index: 50");
 });
 
 it("uses instant opening for keyboard navigation and activation, not pointer input", () => {

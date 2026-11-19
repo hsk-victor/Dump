@@ -2428,6 +2428,9 @@ body.d-dragging * {
 }
 
 /* Move menu popup — same frosted material as .d-mpanel. */
+.d-menu-positioner {
+  z-index: 50;
+}
 .d-menu {
   min-width: 7rem;
   max-height: var(--available-height, calc(100dvh - 16px));
