@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 import type { Kind, Provider, Subject, Topic, TopicMeta } from "./taxonomy";
 import { TOPICS, TOPIC_CRITERIA } from "./taxonomy";
 import { providerFromUrl } from "./detect";
+import { canonicalUrl } from "./canonical-url";
 
 export type Status = "processing" | "ready" | "failed";
 
@@ -365,8 +366,12 @@ export function getDump(id: string): Dump | null {
 }
 
 export function findByUrl(url: string): Dump | null {
-  const row = db().prepare("SELECT * FROM dumps WHERE url = ? ORDER BY created_at DESC LIMIT 1").get(url) as Row | undefined;
-  return row ? toDump(row) : null;
+  const key = canonicalUrl(url);
+  const rows = db().prepare("SELECT id, url FROM dumps WHERE url IS NOT NULL ORDER BY created_at DESC").iterate() as Iterable<{ id: string; url: string }>;
+  for (const row of rows) {
+    if (canonicalUrl(row.url) === key) return getDump(row.id);
+  }
+  return null;
 }
 
 /** Moves an existing dump back to the top of the feed, folding any patch into the same write. */
