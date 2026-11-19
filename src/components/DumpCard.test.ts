@@ -152,3 +152,31 @@ it("renders desktop actions in their own row outside card content", () => {
   expect(html).toContain('<div class="d-card-shell"><article');
   expect(html).toContain('</article><div class="d-actions">');
 });
+
+it("keeps a failed title-only post's author in the narrow layout", () => {
+  const post: Dump = { ...link, kind: "post", provider: "bluesky", url: "https://bsky.app/profile/nadia/post/1", domain: "bsky.app", title: "Morning thread", author: "nadia.bsky.social", description: null, status: "failed", sourceState: "unreachable" };
+  const html = card(post, true);
+  expect(html).toContain("nadia.bsky.social");
+  expect(html).toContain("Couldn&#x27;t get preview");
+  expect(html).not.toContain("Open original");
+});
+
+it("draws audio as a way out to its service, never a pretend player", () => {
+  const song: Dump = { ...link, kind: "audio", provider: "spotify", url: "https://open.spotify.com/track/1", domain: "open.spotify.com", title: "Night Drive", author: "Lumen Avenue", imageUrl: "/api/files/a.jpg", imageUrls: ["/api/files/a.jpg"] };
+  const live = card(song);
+  expect(live).toContain("Open in Spotify");
+  expect(live).not.toContain("d-mus-transport");
+  expect(live).not.toContain("d-mus-prog");
+  const gone = card({ ...song, sourceState: "unavailable" });
+  expect(gone).not.toContain("Open in Spotify");
+  expect(gone).toContain("Artwork kept · audio not saved");
+});
+
+it("puts an exception's status inside the in-flow footer on desktop media cards, above topic/date", () => {
+  const repo: Dump = { ...link, kind: "link", provider: "github", url: "https://github.com/acme/tidepool", domain: "github.com", title: "acme/tidepool", imageUrl: "/api/files/og.jpg", imageUrls: ["/api/files/og.jpg"], sourceState: "unavailable" };
+  const html = card(repo);
+  expect(html).toContain('data-exception="true"');
+  const panel = html.slice(html.indexOf('class="d-mpanel"'));
+  expect(panel.indexOf("Original unavailable")).toBeGreaterThan(-1);
+  expect(panel.indexOf("Original unavailable")).toBeLessThan(panel.indexOf('class="d-meta"'));
+});

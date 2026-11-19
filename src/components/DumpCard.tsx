@@ -1115,21 +1115,11 @@ function MusicCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
                 <span className="d-mus-title" dir="auto">{title}</span>
                 {sub && <span className="d-mus-sub" dir="auto">{sub}</span>}
               </span>
-              {!bits.gone && (
-              <span className="d-mus-transport" aria-hidden>
-                <svg viewBox="0 0 24 24"><path fill="currentColor" d="M6 5h2.4v14H6zM18 5.5v13L8.4 12z" /></svg>
-                <svg viewBox="0 0 24 24" className="d-mus-transport-pause"><path fill="currentColor" d="M7.5 5h3v14h-3zM13.5 5h3v14h-3z" /></svg>
-                <svg viewBox="0 0 24 24"><path fill="currentColor" d="M15.6 5H18v14h-2.4zM6 5.5v13L15.6 12z" /></svg>
-              </span>
-              )}
+              {/* Audio isn't saved or played here: the widget is a way out to the service. */}
+              {bits.href && <span className="d-mus-open">Open in {provider?.label ?? "player"}</span>}
             </>
           )}
         </span>
-        {!(bits.processing && !bits.title) && !bits.gone && (
-          <span className="d-mus-prog" aria-hidden>
-            <span className="d-mus-prog-fill" />
-          </span>
-        )}
         <ProviderIcon provider={dump.provider} className="d-prov d-mus-src" />
       </a>
       <div className="d-mus-panel">
@@ -1656,10 +1646,10 @@ export default function DumpCard({ dump, phone = false, fresh, removing, onTopic
         {metaLine(null)}
       </>
     ),
-    // The phone layout puts a media card's panel in normal flow, so the rows go inside it,
-    // above topic/date, as on text cards.
-    stateRows: phone ? null : stateRows,
-    panelMeta: phone ? meta : metaLine(siteLabel),
+    // The phone layout, and any exception state, puts a media card's panel in normal flow
+    // below the media, so the rows go inside it: retained details, status, then topic/date.
+    stateRows: phone || exposed ? null : stateRows,
+    panelMeta: phone || exposed ? meta : metaLine(siteLabel),
     exposed,
     gone,
     posterOnly: state.posterOnly,
@@ -1686,6 +1676,7 @@ export default function DumpCard({ dump, phone = false, fresh, removing, onTopic
       "data-fresh": fresh || undefined,
       "data-removing": removing || undefined,
       "data-pinned": dump.pinned || undefined,
+      "data-exception": exposed || undefined,
       ref: cardRef,
       onClick: onCardClick,
       onPointerDownCapture: onCardPointerDown,
@@ -1700,7 +1691,9 @@ export default function DumpCard({ dump, phone = false, fresh, removing, onTopic
 function renderCard(dump: Dump, bits: CardBits) {
   const { kind } = dump;
   if (kind === "note") return <NoteCard dump={dump} bits={bits} />;
-  if (bits.phone && bits.exposed && !bits.dek && !bits.showMedia && !dump.videoUrl && !dump.xRender) {
+  // The bare fallback is for records with nothing to show but a URL; any retained title,
+  // author or text keeps its family's own chrome.
+  if (bits.phone && bits.exposed && !bits.dek && !dump.title && !dump.author && !bits.showMedia && !dump.videoUrl && !dump.xRender) {
     return (
       <article {...bits.cardProps} className="d-card d-body">
         {bits.actions}
