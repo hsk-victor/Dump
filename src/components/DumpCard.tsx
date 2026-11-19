@@ -6,7 +6,7 @@ import type { Dump } from "@/lib/db";
 import { SUBJECT_MIN_CONFIDENCE, subjectLine, kindMeta, providerMeta, topicMeta, type TopicMeta } from "@/lib/taxonomy";
 import { timeAgo, shortDate } from "@/lib/format";
 import { GITHUB_TAG, githubInfo, type GithubInfo, titleFromUrl } from "@/lib/detect";
-import { PhoneMenu } from "./PhoneMenu";
+import { PhoneMenu, PhoneMenuRoot } from "./PhoneMenu";
 
 /** Wiring for the actions-row grip: the parent feed owns the drag lifecycle. */
 export interface DragHandle {
@@ -1396,7 +1396,9 @@ export default function DumpCard({ dump, phone = false, fresh, removing, onTopic
   useEffect(() => {
     if (!revealed) return;
     const onDown = (e: PointerEvent) => {
-      if (cardRef.current && !cardRef.current.contains(e.target as Node)) setRevealed(false);
+      const card = cardRef.current;
+      const bounds = card?.closest(".d-card-shell") ?? card;
+      if (bounds && !bounds.contains(e.target as Node)) setRevealed(false);
     };
     document.addEventListener("pointerdown", onDown, true);
     return () => document.removeEventListener("pointerdown", onDown, true);
@@ -1455,7 +1457,7 @@ export default function DumpCard({ dump, phone = false, fresh, removing, onTopic
   const actions = phone ? (
     <div className="d-phone-actions">
       {grip}
-      <Menu.Root>
+      <PhoneMenuRoot>
         <Menu.Trigger className="d-more" aria-label="Card actions">
           <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20" aria-hidden>
             <circle cx="5" cy="12" r="1.6" /><circle cx="12" cy="12" r="1.6" /><circle cx="19" cy="12" r="1.6" />
@@ -1467,17 +1469,17 @@ export default function DumpCard({ dump, phone = false, fresh, removing, onTopic
           )}
           <Menu.Item className="d-menu-item" onClick={() => onPin(dump.id, !dump.pinned)}>{dump.pinned ? "Unpin" : "Pin"}</Menu.Item>
           {destinations.length > 0 && (
-            <Menu.SubmenuRoot>
+            <PhoneMenuRoot submenu>
               <Menu.SubmenuTrigger className="d-menu-item" data-move-trigger>Move…</Menu.SubmenuTrigger>
               <PhoneMenu submenu>{destinations}</PhoneMenu>
-            </Menu.SubmenuRoot>
+            </PhoneMenuRoot>
           )}
           {dump.status === "failed" && (
             <Menu.Item className="d-menu-item" onClick={() => onRetry(dump.id)}>Retry</Menu.Item>
           )}
           <Menu.Item className="d-menu-item" onClick={() => onDelete(dump.id)}>Delete</Menu.Item>
         </PhoneMenu>
-      </Menu.Root>
+      </PhoneMenuRoot>
     </div>
   ) : (
     <div className="d-actions">
@@ -1541,7 +1543,7 @@ export default function DumpCard({ dump, phone = false, fresh, removing, onTopic
 
   const bits: CardBits = {
     phone,
-    actions,
+    actions: phone ? actions : null,
     meta,
     bareMeta: metaRow(null),
     href,
@@ -1574,16 +1576,22 @@ export default function DumpCard({ dump, phone = false, fresh, removing, onTopic
     },
   };
 
+  const card = renderCard(dump, bits);
+  return phone ? card : <div className="d-card-shell">{card}{actions}</div>;
+}
+
+function renderCard(dump: Dump, bits: CardBits) {
+  const { kind } = dump;
   if (kind === "note") return <NoteCard dump={dump} bits={bits} />;
-  if (phone && dump.status === "failed" && !showMedia && !dump.videoUrl && !dump.xRender) {
+  if (bits.phone && dump.status === "failed" && !bits.showMedia && !dump.videoUrl && !dump.xRender) {
     return (
       <article {...bits.cardProps} className="d-card d-body">
-        {actions}
-        <p className="d-kicker"><SiteMark dump={dump} />{provider?.label ?? site ?? kindMeta(kind).singular}</p>
+        {bits.actions}
+        <p className="d-kicker"><SiteMark dump={dump} />{providerMeta(dump.provider)?.label ?? bits.site ?? kindMeta(kind).singular}</p>
         <p className="d-headline" dir="auto">{dump.title || linkAddress(dump) || dump.domain || "Preview unavailable"}</p>
         {dump.note && <p className="d-annotation" dir="auto">{dump.note}</p>}
         {dump.url && <a className="d-original" href={dump.url} target="_blank" rel="noreferrer">Open original</a>}
-        {meta}
+        {bits.meta}
       </article>
     );
   }
@@ -1595,7 +1603,7 @@ export default function DumpCard({ dump, phone = false, fresh, removing, onTopic
   if (dump.provider === "instagram") return <IgCard dump={dump} bits={bits} />;
   if (kind === "audio") return <MusicCard dump={dump} bits={bits} />;
   if (kind === "video") return <VideoCard dump={dump} bits={bits} />;
-  if (kind === "image" && showMedia) return <MediaCard dump={dump} bits={bits} />;
+  if (kind === "image" && bits.showMedia) return <MediaCard dump={dump} bits={bits} />;
   if (kind === "post" || SOCIAL_PROVIDERS.has(dump.provider ?? "")) return <PostCard dump={dump} bits={bits} />;
   if (kind === "article") return <ArticleCard dump={dump} bits={bits} />;
   return <LinkCard dump={dump} bits={bits} />;

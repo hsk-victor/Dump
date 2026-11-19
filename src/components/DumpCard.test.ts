@@ -76,3 +76,18 @@ it("keeps short notes intact and offers a reading control for long notes in a na
   expect(long).toContain('aria-expanded="false">Read more</button>');
   expect(long).not.toContain("<textarea");
 });
+
+it("renders desktop actions in their own row outside card content", () => {
+  const html = renderToStaticMarkup(createElement(DumpCard, {
+    dump: note,
+    onTopic: vi.fn(),
+    onDelete: vi.fn(),
+    onRetry: vi.fn(),
+    onPin: vi.fn(),
+    onSaveNote: vi.fn(),
+    topics: [],
+  }));
+
+  expect(html).toContain('<div class="d-card-shell"><article');
+  expect(html).toContain('</article><div class="d-actions">');
+});
