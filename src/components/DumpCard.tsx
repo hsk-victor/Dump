@@ -825,7 +825,7 @@ function VideoCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
     [dump.author?.trim(), providerMeta(dump.provider)?.label].filter(Boolean).join(" · ") ||
     (dump.url ? bits.site : null);
   return (
-    <article {...bits.cardProps} className={`d-card d-mediacard d-vidcard group${dump.videoUrl ? " d-inline-video" : ""}`} data-open={dump.status === "failed" || bits.revealed || undefined}>
+    <article {...bits.cardProps} className={`d-card d-mediacard d-vidcard group${dump.videoUrl ? " d-inline-video" : ""}${dump.provider === "tiktok" ? " d-vidcard-portrait" : ""}`} data-open={dump.status === "failed" || bits.revealed || undefined}>
       {bits.actions}
       {bits.pinBadge}
       {dump.videoUrl ? (

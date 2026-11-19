@@ -852,6 +852,11 @@ button {
   object-position: center;
   transition: opacity 0.22s var(--ease-out), scale 0.4s var(--ease-out);
 }
+/* TikTok covers are 9:16: show the whole frame, letterboxed on the neutral backdrop. */
+.d-vidcard-portrait .d-media img {
+  object-fit: contain;
+  object-position: center;
+}
 .d-inline-video .d-media video {
   display: block;
   width: 100%;
