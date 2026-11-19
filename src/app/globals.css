@@ -529,7 +529,8 @@ button {
   z-index: 5;
   transition: none;
 }
-.d-item > .d-card {
+.d-item > .d-card,
+.d-card-shell > .d-card {
   margin-bottom: 0;
 }
 .d-card {
@@ -738,20 +739,20 @@ button {
   transition: opacity 0.14s var(--ease-out), translate 0.14s var(--ease-out);
 }
 @media (hover: hover) and (pointer: fine) {
-  .d-mediacard:hover .d-mpanel {
+  :is(.d-mediacard:hover, .d-card-shell:hover > .d-mediacard) .d-mpanel {
     opacity: 1;
     translate: 0 0;
     pointer-events: auto;
     transition-duration: 0.16s;
   }
-  .d-mediacard:is(:hover, :focus-within) .d-mchip {
+  :is(.d-mediacard:is(:hover, :focus-within), .d-card-shell:is(:hover, :focus-within) > .d-mediacard) .d-mchip {
     opacity: 0;
   }
   /* The panel always shows its meta row once open (Retry included); skip the row's own collapse animation. */
   .d-mpanel .d-meta {
     transition: none;
   }
-  .d-mediacard:is(:hover, :focus-within, [data-open]) .d-mpanel .d-meta {
+  :is(.d-mediacard:is(:hover, :focus-within, [data-open]), .d-card-shell:is(:hover, :focus-within) > .d-mediacard) .d-mpanel .d-meta {
     opacity: 1;
     max-height: 2.5rem;
     margin-top: 0.5rem;
@@ -759,7 +760,7 @@ button {
     border-top-width: 1px;
   }
 }
-.d-mediacard:focus-within .d-mpanel {
+:is(.d-mediacard:focus-within, .d-card-shell:focus-within > .d-mediacard) .d-mpanel {
   opacity: 1;
   translate: none;
   pointer-events: auto;
@@ -1636,11 +1637,8 @@ button {
   transition: opacity 0.15s var(--ease-out);
 }
 @media (hover: hover) and (pointer: fine) {
-  /* On hover the corner belongs to the card actions (like .d-mchip fading) and
-     the details panel takes over — the player chrome would sit under both. */
-  .d-mus:is(:hover, :focus-within) .d-mus-src,
-  .d-mus:is(:hover, :focus-within) .d-mus-face,
-  .d-mus:is(:hover, :focus-within) .d-mus-prog {
+  :is(.d-mus:is(:hover, :focus-within), .d-card-shell:is(:hover, :focus-within) > .d-mus)
+    :is(.d-mus-src, .d-mus-face, .d-mus-prog) {
     opacity: 0;
   }
 }
@@ -1672,7 +1670,7 @@ button {
   transition: opacity 0.14s var(--ease-out), translate 0.14s var(--ease-out);
 }
 @media (hover: hover) and (pointer: fine) {
-  .d-mus:is(:hover, :focus-within) .d-mus-panel {
+  :is(.d-mus:is(:hover, :focus-within), .d-card-shell:is(:hover, :focus-within) > .d-mus) .d-mus-panel {
     opacity: 1;
     translate: 0 0;
     pointer-events: auto;
@@ -1681,7 +1679,7 @@ button {
   .d-mus-panel .d-meta {
     transition: none;
   }
-  .d-mus:is(:hover, :focus-within, [data-open]) .d-mus-panel .d-meta {
+  :is(.d-mus:is(:hover, :focus-within, [data-open]), .d-card-shell:is(:hover, :focus-within) > .d-mus) .d-mus-panel .d-meta {
     opacity: 1;
     max-height: 2.5rem;
     margin-top: 0;
@@ -1819,7 +1817,7 @@ button {
     opacity: 0;
     transition: opacity 0.15s var(--ease-out);
   }
-  .d-card:not(.d-mediacard):not(.d-mus):is(:hover, :focus-within) .d-meta > * {
+  .d-card-shell:is(:hover, :focus-within) > .d-card:not(.d-mediacard, .d-mus) .d-meta > * {
     opacity: 1;
   }
 }
@@ -2253,14 +2251,16 @@ The tape strip: frosted so the paper shows through, slightly rotated.
 }
 */
 
-/* Hover actions */
+/* The action row stays in flow even while it's hidden. */
 .d-actions {
-  position: absolute;
-  z-index: 2;
-  top: 0.5rem;
-  right: 0.5rem;
   display: flex;
   align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  width: fit-content;
+  max-width: 100%;
+  margin-block-start: 4px;
+  margin-inline-start: auto;
   gap: 0.1rem;
   padding: 0.15rem;
   border-radius: 9px;
@@ -2270,48 +2270,29 @@ The tape strip: frosted so the paper shows through, slightly rotated.
   font-size: 0.72rem;
   color: var(--ink-2);
   opacity: 0;
+  pointer-events: none;
   transition: opacity 0.15s var(--ease-out);
 }
 @media (hover: hover) and (pointer: fine) {
-  .d-card:hover .d-actions {
+  .d-card-shell:hover > .d-actions {
     opacity: 1;
+    pointer-events: auto;
   }
 }
-.d-card:focus-within .d-actions {
+.d-card-shell:focus-within > .d-actions {
   opacity: 1;
+  pointer-events: auto;
+  transition: none;
 }
 @media (width > 600px) and ((hover: none) or (pointer: coarse)) {
-  /* No hover on touch: actions never cover a card at rest. Media cards reveal
-     them with the details panel (tap-to-reveal sets data-open; failed dumps pin
-     it open); every other card docks them beside the always-visible meta row —
-     with space reserved — instead of floating them over its top-right corner. */
-  .d-mediacard:not([data-open]) .d-actions,
-  .d-mus:not([data-open]) .d-actions {
-    opacity: 0;
-  }
-  .d-mediacard:is([data-open], :focus-within) .d-actions,
-  .d-mus:is([data-open], :focus-within) .d-actions {
+  .d-card-shell:has(> .d-card:is([data-open], :not(.d-mediacard, .d-mus))) > .d-actions {
     opacity: 1;
+    pointer-events: auto;
   }
-  .d-card:not(.d-mediacard):not(.d-mus) .d-actions {
-    opacity: 1;
-    top: auto;
-    bottom: 0.4rem;
-    right: 0.55rem;
-  }
-  .d-card:not(.d-mediacard):not(.d-mus) .d-meta {
-    padding-right: 6.4rem;
-  }
-  /* Notes dock an extra Edit button in the actions pill. */
-  .d-card[data-kind="note"] .d-meta {
-    padding-right: 8rem;
-  }
-  /* Same corner rule as desktop hover: once actions are revealed they own the
-     top-right — the counter/tag there steps aside. */
-  .d-mediacard[data-open] .d-mcount,
-  .d-ghcard[data-open] .d-gh-tag {
-    opacity: 0;
-  }
+}
+.d-card-shell:has(> .d-card[data-removing]) > .d-actions {
+  opacity: 0;
+  pointer-events: none;
 }
 /* Pin + edit icon buttons share the square action sizing; pin stays lit while
    the dump is pinned. */
@@ -3011,6 +2992,8 @@ body.d-dragging * {
     mask-image: linear-gradient(90deg, #000 calc(100% - 16px), transparent);
   }
   .d-topic {
+    justify-content: center;
+    min-width: 44px;
     height: 44px;
     font-size: 0.875rem;
   }
@@ -3135,9 +3118,11 @@ body.d-dragging * {
     object-position: center;
   }
   .d-card .d-vmedia:has(img),
-  .d-card .d-igreel .d-media,
-  .d-card .d-post-video-frame {
+  .d-card .d-igreel .d-media {
     max-height: min(440px, 60svh);
+  }
+  .d-card .d-post-video {
+    max-height: min(16rem, 60svh);
   }
   .d-card .d-vmedia img,
   .d-card.d-igreel .d-media img {
@@ -3148,6 +3133,14 @@ body.d-dragging * {
   }
   .d-card :is(.d-link-title a, .d-headline a)::after {
     content: none;
+  }
+  .d-card :is(.d-link-title, .d-headline, .d-rd-title, .d-mpanel-title) > a[href]::before {
+    content: "";
+    position: absolute;
+    z-index: 1;
+    inset-inline: 16px;
+    block-size: 44px;
+    margin-block-start: -8px;
   }
   .d-phone-actions {
     position: relative;
@@ -3198,6 +3191,11 @@ body.d-dragging * {
     transition-duration: 0.11s;
   }
   .d-phone-menu[data-instant] {
+    transition: none;
+  }
+  .d-phone-menu[data-keyboard-open][data-open] {
+    opacity: 1;
+    scale: none;
     transition: none;
   }
   .d-phone-menu .d-menu-item {

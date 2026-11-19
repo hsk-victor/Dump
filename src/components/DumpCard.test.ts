@@ -137,3 +137,18 @@ it("keeps a gone card's saved text in the narrow layout", () => {
   expect(html).toContain("Tide pools at dawn");
   expect(html).toContain("Original unavailable");
 });
+
+it("renders desktop actions in their own row outside card content", () => {
+  const html = renderToStaticMarkup(createElement(DumpCard, {
+    dump: note,
+    onTopic: vi.fn(),
+    onDelete: vi.fn(),
+    onRetry: vi.fn(),
+    onPin: vi.fn(),
+    onSaveNote: vi.fn(),
+    topics: [],
+  }));
+
+  expect(html).toContain('<div class="d-card-shell"><article');
+  expect(html).toContain('</article><div class="d-actions">');
+});

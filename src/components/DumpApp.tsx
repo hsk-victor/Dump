@@ -14,7 +14,7 @@ import Logo from "./Logo";
 import SectionNav, { type Counts } from "./SectionNav";
 import CategoryManager from "./CategoryManager";
 import UpdateButton from "./UpdateButton";
-import { PhoneMenu } from "./PhoneMenu";
+import { PhoneMenu, PhoneMenuRoot } from "./PhoneMenu";
 
 const PAGE_SIZE = 60;
 /** Matches the server's per-request cap on /api/dumps. */
@@ -803,7 +803,7 @@ export default function DumpApp() {
 
           {phone && (
             <div className="d-type-filter">
-              <Menu.Root>
+              <PhoneMenuRoot>
                 <Menu.Trigger className="d-phone-type" aria-label={kind ? `Type: ${kindMeta(kind).label}` : "Type: All types"}>
                   <span>{kind ? kindMeta(kind).label : "Type"}</span>
                   <svg viewBox="0 0 10 6" className="d-move-caret" aria-hidden>
@@ -818,7 +818,7 @@ export default function DumpApp() {
                     ))}
                   </Menu.RadioGroup>
                 </PhoneMenu>
-              </Menu.Root>
+              </PhoneMenuRoot>
             </div>
           )}
 
