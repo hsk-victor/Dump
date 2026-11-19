@@ -74,3 +74,11 @@ it("bounds polling if a job never settles", async () => {
   expect(fetchMock).toHaveBeenCalledTimes(601);
   expect(vi.getTimerCount()).toBe(0);
 });
+
+it.each(["request", "network"])("reports %s errors instead of failing silently", async (failure) => {
+  if (failure === "request") fetchMock.mockResolvedValueOnce(new Response(null, { status: 503 }));
+  else fetchMock.mockRejectedValueOnce(new Error("Offline"));
+  const failed = vi.fn();
+  await setVideoCopy("clip", true, vi.fn(), failed);
+  expect(failed).toHaveBeenCalledOnce();
+});

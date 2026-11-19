@@ -2,14 +2,16 @@ import { after, NextResponse, type NextRequest } from "next/server";
 import { deleteDump, getDump, topPosition, topicExists, updateDump } from "@/lib/db";
 import { enrichDump, noteTitle } from "@/lib/enrich";
 import { fileStorage, storedFileName } from "@/lib/storage";
-import { archiveDump, isArchiving, removeArchiveFiles } from "@/lib/archive";
+import { isArchiving, removeArchiveFiles } from "@/lib/archive";
+import { cancelVideoCopy, markVideoMissing, reconcileVideoCopy, saveVideoCopy } from "@/lib/video-archive";
 
 export const runtime = "nodejs";
 
 type Ctx = { params: Promise<{ id: string }> };
 
 export async function GET(_req: NextRequest, { params }: Ctx) {
-  const dump = getDump((await params).id);
+  const found = getDump((await params).id);
+  const dump = found ? await reconcileVideoCopy(found) : null;
   return dump ? NextResponse.json({ ...dump, archivePending: isArchiving(dump.id) }) : NextResponse.json({ error: "Not found" }, { status: 404 });
 }
 
@@ -17,18 +19,25 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
   const { id } = await params;
   if (!getDump(id)) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const body = await req.json().catch(() => ({}));
+  if (typeof body.failedVideoUrl === "string") {
+    return NextResponse.json(markVideoMissing(id, body.failedVideoUrl));
+  }
   if (typeof body.keepVideo === "boolean") {
     const current = getDump(id)!;
+    if (body.keepVideo && (!current.videoUrl || !/^https?:\/\//i.test(current.videoUrl) || current.sourceState === "unavailable" || current.sourceState === "unreachable" || (current.videoCopy?.state === "missing" && current.sourceState !== "reachable"))) {
+      return NextResponse.json({ error: "Original not reachable" }, { status: 409 });
+    }
     const mediaArchive = { ...current.mediaArchive };
     const removed = current.videoUrl ? mediaArchive[current.videoUrl] : null;
     if (!body.keepVideo && current.videoUrl) delete mediaArchive[current.videoUrl];
-    const dump = updateDump(id, { keepVideo: body.keepVideo, mediaArchive });
+    if (!body.keepVideo) cancelVideoCopy(id);
+    updateDump(id, { keepVideo: body.keepVideo, mediaArchive, ...(!body.keepVideo ? { videoCopy: null } : {}) });
     if (!body.keepVideo && removed && !Object.values(mediaArchive).includes(removed)) await removeArchiveFiles([removed]);
     if (body.keepVideo) {
-      const job = archiveDump(id).catch(() => {});
+      const job = saveVideoCopy(id);
       after(() => job);
     }
-    return NextResponse.json({ ...dump, archivePending: isArchiving(id) });
+    return NextResponse.json({ ...getDump(id), archivePending: isArchiving(id) });
   }
 
   if (body.reprocess) {
@@ -60,7 +69,9 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
 }
 
 export async function DELETE(_req: NextRequest, { params }: Ctx) {
-  const dump = deleteDump((await params).id);
+  const { id } = await params;
+  cancelVideoCopy(id);
+  const dump = deleteDump(id);
   if (!dump) return NextResponse.json({ error: "Not found" }, { status: 404 });
   await removeArchiveFiles(Object.values(dump.mediaArchive));
   const name = storedFileName(dump.imageUrl);

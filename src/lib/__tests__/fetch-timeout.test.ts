@@ -28,3 +28,17 @@ it("retains private-address and redirect guarding with a longer timeout", async 
   await expect(fetchWithTimeout("https://example.com/clip.mp4", { timeoutMs: 300_000 })).rejects.toThrow("private network");
   expect(undiciFetch).toHaveBeenCalledTimes(1);
 });
+
+it("keeps caller cancellation attached after response headers arrive", async () => {
+  const controller = new AbortController();
+  vi.mocked(undiciFetch).mockImplementation(async (_url, init) => {
+    const signal = init?.signal;
+    return new Response(new ReadableStream({
+      start(stream) { signal?.addEventListener("abort", () => stream.error(signal.reason), { once: true }); },
+    })) as never;
+  });
+  const response = await fetchWithTimeout("https://example.com/clip.mp4", { signal: controller.signal, timeoutMs: 300_000 });
+  const body = response.arrayBuffer();
+  controller.abort();
+  await expect(body).rejects.toMatchObject({ name: "AbortError" });
+});

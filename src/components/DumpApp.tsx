@@ -330,7 +330,7 @@ export default function DumpApp() {
 
   // Poll while anything is still being sorted in the background. Pause mid-drag so the
   // list doesn't re-render under the pointer.
-  const anyProcessing = items.some((d) => d.status === "processing") || pendingToasts.current.size > 0;
+  const anyProcessing = items.some((d) => d.status === "processing" || d.videoCopy?.state === "pending") || pendingToasts.current.size > 0;
   useEffect(() => {
     if (!anyProcessing || dragId) return;
     const t = setInterval(load, 1200);

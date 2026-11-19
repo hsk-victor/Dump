@@ -107,7 +107,7 @@ function guardedLookup(hostname: string, options: dns.LookupOptions, callback: L
 
 const dispatcher = new Agent({ connect: { lookup: guardedLookup as never } });
 
-export async function fetchWithTimeout(url: string, init: { headers?: Record<string, string>; headersOnlyTimeout?: boolean; timeoutMs?: number } = {}): Promise<Response> {
+export async function fetchWithTimeout(url: string, init: { headers?: Record<string, string>; headersOnlyTimeout?: boolean; timeoutMs?: number; signal?: AbortSignal } = {}): Promise<Response> {
   const timeout = init.timeoutMs ?? TIMEOUT_MS;
   let current = url;
   for (let hop = 0; hop < 5; hop++) {
@@ -119,7 +119,7 @@ export async function fetchWithTimeout(url: string, init: { headers?: Record<str
       res = (await undiciFetch(current, {
         dispatcher,
         redirect: "manual",
-        signal: controller?.signal ?? AbortSignal.timeout(timeout),
+        signal: init.signal ? AbortSignal.any([init.signal, controller?.signal ?? AbortSignal.timeout(timeout)]) : controller?.signal ?? AbortSignal.timeout(timeout),
         headers: { "user-agent": UA, "accept-language": "en;q=0.9,*;q=0.5", ...(init.headers ?? {}) },
       })) as unknown as Response;
     } finally {

@@ -2,8 +2,8 @@
 
 import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type MouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { Menu } from "@base-ui/react/menu";
-import type { Dump } from "@/lib/db";
-import { mediaSources, videoPoster, videoCopyAction } from "@/lib/media";
+import type { Dump, VideoCopy } from "@/lib/db";
+import { exhaustedVideoAsset, mediaSources, videoPoster, videoCopyAction, videoSources } from "@/lib/media";
 import { setVideoCopy } from "@/lib/video-copy";
 import { ArchiveImage } from "./Media";
 import { SUBJECT_MIN_CONFIDENCE, subjectLine, kindMeta, providerMeta, topicMeta, type TopicMeta } from "@/lib/taxonomy";
@@ -185,14 +185,25 @@ function PlayOrPreview({ bits }: { bits: CardBits }) {
 
 /** Exception rows under the content, above topic/date: loading, original unavailable, failed.
  *  A saved card renders none — that's the quiet default. */
-function StateRows({ state, retryName, onRetry }: { state: CardState; retryName: string; onRetry: () => void }) {
+function StateRows({ state, retryName, onRetry, videoCopy, onVideoCopy, canSaveVideo }: { state: CardState; retryName: string; onRetry: () => void; videoCopy: VideoCopy | null; onVideoCopy: (keep: boolean) => void; canSaveVideo: boolean }) {
   // One start and one outcome message: "Still …" is the same operation, not a new announcement.
   const live = state.failed?.label ?? (state.loading?.showLabel ? state.loading.label.replace(/^Still (\w)/, (_, c: string) => c.toUpperCase()) : "");
   return (
     <>
       <span className="sr-only" aria-live="polite">
-        {live}
+        {videoCopy?.state === "pending" ? "Saving video…" : videoCopy?.state === "failed" ? "Couldn't save video" : videoCopy?.state === "missing" ? "Local copy missing" : live}
       </span>
+      {videoCopy && (
+        <div className={`d-state${videoCopy.state === "failed" ? " d-state-failed" : videoCopy.state === "pending" ? " d-state-loading" : ""}`}>
+          {videoCopy.state === "pending" && <span className="d-spinner" aria-hidden />}
+          <span className="d-state-text">{videoCopy.state === "pending" ? "Saving video…" : videoCopy.state === "failed" ? "Couldn't save video" : "Local copy missing"}</span>
+          {videoCopy.state === "pending" ? (
+            <button type="button" className="d-state-retry" onClick={() => onVideoCopy(false)} aria-label={`Cancel saving video, ${retryName}`}>Cancel</button>
+          ) : canSaveVideo && (
+            <button type="button" className="d-state-retry" onClick={() => onVideoCopy(true)} aria-label={`Retry saving video, ${retryName}`}>Retry</button>
+          )}
+        </div>
+      )}
       {state.unavailable && (
         <div className="d-state d-state-gone">
           <Glyph name="unlink" className="d-state-icon" />
@@ -302,6 +313,7 @@ interface CardBits {
   /** Original confirmed gone. */
   gone: boolean;
   posterOnly: boolean;
+  onVideoMissing: (local: string) => void;
   /** Touch tap-to-reveal: first tap on a media card's face opens its panel (data-open). */
   revealed: boolean;
   cardProps: Record<string, unknown>;
@@ -373,6 +385,7 @@ function LoopVideo({
   controls,
   className,
   label,
+  onVideoMissing,
 }: {
   src: string;
   dump: Dump;
@@ -380,11 +393,12 @@ function LoopVideo({
   controls?: boolean;
   className?: string;
   label: string;
+  onVideoMissing: (local: string) => void;
 }) {
   const video = useRef<HTMLVideoElement>(null);
-  const sources = dump.videoUrl ? mediaSources(dump, dump.videoUrl).map((url) => url === dump.videoUrl ? src : url) : [src];
+  const sources = videoSources(dump, src);
   const [failedSources, setFailedSources] = useState<Set<string>>(new Set());
-  const currentSource = sources.find((url) => !failedSources.has(url)) ?? sources[0];
+  const currentSource = sources.find((url) => !failedSources.has(url));
   const [failedPosters, setFailedPosters] = useState<Set<string>>(new Set());
   const posters = dump.videoPosterUrl ? mediaSources(dump, dump.videoPosterUrl) : [videoPoster(dump) ?? poster];
   const shownPoster = posters.find((url) => url && !failedPosters.has(url));
@@ -426,7 +440,11 @@ function LoopVideo({
       observer.disconnect();
       preference.removeEventListener("change", onPreference);
     };
-  }, []);
+  }, [currentSource]);
+  if (!currentSource) return <>
+    {shownPoster && <ArchiveImage dump={dump} src={shownPoster} className={className} alt={label} />}
+    <span className="d-preview-only">Preview only</span>
+  </>;
   return (
     <>
       <video
@@ -442,7 +460,13 @@ function LoopVideo({
         aria-label={label}
         onPlaying={() => setPlaying(true)}
         onPause={() => setPlaying(false)}
-        onError={() => { setPlaying(false); setFailedSources((failed) => new Set([...failed, currentSource])); }}
+        onError={() => {
+          setPlaying(false);
+          const failed = new Set([...failedSources, currentSource]);
+          setFailedSources(failed);
+          const local = exhaustedVideoAsset(sources, failed);
+          if (local) onVideoMissing(local);
+        }}
       />
       {!controls && (reducedMotion || !playing) && (
         <button
@@ -460,12 +484,13 @@ function LoopVideo({
   );
 }
 
-function XVideo({ dump, author, href }: { dump: Dump; author: string | null; href?: string | null }) {
+function XVideo({ dump, author, href, onVideoMissing }: { dump: Dump; author: string | null; href?: string | null; onVideoMissing: (local: string) => void }) {
   const animated = dump.videoType === "animated_gif";
   return (
     <div className="d-post-video-frame">
       <LoopVideo
         dump={dump}
+        onVideoMissing={onVideoMissing}
         className="d-post-video"
         src={`/api/dumps/${dump.id}/video`}
         poster={dump.videoPosterUrl ?? undefined}
@@ -529,7 +554,7 @@ function XCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
                 <PlayOrPreview bits={bits} />
               </div>
             ) : (
-              <XVideo dump={dump} author={author} href={bits.href} />
+              <XVideo dump={dump} author={author} href={bits.href} onVideoMissing={bits.onVideoMissing} />
             ))}
           {images.length > 0 && (
             <a href={bits.href ?? undefined} target="_blank" rel="noreferrer" className={`d-post-gallery${images.length > 1 ? " d-post-grid" : ""}`}>
@@ -902,7 +927,7 @@ function VideoCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
       <div className="d-mframe">
       {dump.videoUrl && !bits.posterOnly ? (
         <div className="d-media d-vmedia">
-          <LoopVideo dump={dump} src={dump.videoUrl} poster={dump.videoPosterUrl ?? undefined} controls label={t.title ?? "Video"} />
+          <LoopVideo dump={dump} src={dump.videoUrl} poster={dump.videoPosterUrl ?? undefined} controls label={t.title ?? "Video"} onVideoMissing={bits.onVideoMissing} />
           <MediaMark dump={dump} />
         </div>
       ) : (
@@ -1466,6 +1491,18 @@ function LinkCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
 /* ================================== dispatch ================================== */
 
 export default function DumpCard({ dump, phone = false, fresh, removing, onTopic, onDelete, onRetry, onPin, onSaveNote, drag, topics }: Props) {
+  const [videoIssue, setVideoIssue] = useState<{ version: number; value: VideoCopy | null } | null>(null);
+  const videoCopy = videoIssue?.version === dump.updatedAt ? videoIssue.value : dump.videoCopy;
+  const effectiveDump = { ...dump, videoCopy };
+  const refreshVideo = () => window.dispatchEvent(new Event("dump-updated"));
+  const changeVideoCopy = (keep: boolean) => {
+    setVideoIssue({ version: dump.updatedAt, value: keep ? { state: "pending", startedAt: Date.now() } : null });
+    void setVideoCopy(dump.id, keep, refreshVideo, () => setVideoIssue({ version: dump.updatedAt, value: { state: "failed", startedAt: Date.now(), error: "Request failed" } }));
+  };
+  const onVideoMissing = (local: string) => {
+    setVideoIssue({ version: dump.updatedAt, value: { state: "missing", startedAt: Date.now() } });
+    void fetch(`/api/dumps/${dump.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ failedVideoUrl: local }) }).then(refreshVideo).catch(() => {});
+  };
   const [imgFailed, setImgFailed] = useState(false);
   const [revealed, setRevealed] = useState(false);
   const [editingNote, setEditingNote] = useState(false);
@@ -1486,9 +1523,9 @@ export default function DumpCard({ dump, phone = false, fresh, removing, onTopic
   const processing = dump.status === "processing";
   const now = useStateClock(processing, dump.updatedAt);
   const online = useOnline();
-  const state = cardState(dump, now, online);
+  const state = cardState(effectiveDump, now, online);
   const gone = !!state.unavailable;
-  const exposed = !!(state.failed || state.unavailable);
+  const exposed = !!(state.failed || state.unavailable || videoCopy);
 
   const onCardPointerDown = (e: ReactPointerEvent<HTMLElement>) => {
     if (phone || revealed || exposed) return;
@@ -1546,10 +1583,8 @@ export default function DumpCard({ dump, phone = false, fresh, removing, onTopic
   };
   const sourceItems = (
     <>
-      {videoCopyAction(dump) && (
-        <Menu.Item className="d-menu-item" onClick={async () => {
-          await setVideoCopy(dump.id, videoCopyAction(dump) === "Save video copy", () => window.dispatchEvent(new Event("dump-updated")));
-        }}>{videoCopyAction(dump)}</Menu.Item>
+      {videoCopyAction(effectiveDump) && (
+        <Menu.Item className="d-menu-item" onClick={() => changeVideoCopy(videoCopyAction(effectiveDump) === "Save video copy")}>{videoCopyAction(effectiveDump)}</Menu.Item>
       )}
       {dump.url && (
         <Menu.Item className="d-menu-item" onClick={copyLink}>Copy original link</Menu.Item>
@@ -1635,6 +1670,9 @@ export default function DumpCard({ dump, phone = false, fresh, removing, onTopic
       state={state}
       retryName={title ?? dump.domain ?? kindMeta(kind).singular}
       onRetry={() => onRetry(dump.id)}
+      videoCopy={videoCopy}
+      onVideoCopy={changeVideoCopy}
+      canSaveVideo={!!videoCopyAction(effectiveDump)}
     />
   );
   const metaLine = (siteLabel: string | null) => (
@@ -1672,6 +1710,7 @@ export default function DumpCard({ dump, phone = false, fresh, removing, onTopic
     exposed,
     gone,
     posterOnly: state.posterOnly,
+    onVideoMissing,
     href,
     title,
     dek,

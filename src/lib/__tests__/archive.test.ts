@@ -16,6 +16,7 @@ const { archiveDump, backfillArchive, posterKey, downloadVideo, isArchiving } = 
 const { fileStorage, storedFileName } = await import("../storage");
 const { mediaSources, videoPoster } = await import("../media");
 const { hasLocalVideo } = await import("../card-state");
+const { saveVideoCopy, cancelVideoCopy, reconcileVideoCopy } = await import("../video-archive");
 const { GET } = await import("@/app/api/files/[name]/route");
 const { DELETE, PATCH, GET: getDumpResponse } = await import("@/app/api/dumps/[id]/route");
 const image = await sharp({ create: { width: 2400, height: 1800, channels: 3, background: "red" } }).png().toBuffer();
@@ -27,6 +28,79 @@ beforeEach(() => {
 afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 const create = (extra = {}) => db.createDump({ kind: "image", imageUrl: "https://example.com/a.png", ...extra });
 const bytes = async (url: string) => fileStorage.read(storedFileName(url)!);
+
+it("persists a failed video save independently, retries only the video and keeps the poster", async () => {
+  const videoUrl = "https://example.com/failure.mp4";
+  const poster = "https://example.com/poster.png";
+  const d = create({ kind: "video", imageUrl: null, videoUrl, videoPosterUrl: poster, sourceState: "reachable", keepVideo: true });
+  await archiveDump(d.id);
+  const localPoster = db.getDump(d.id)!.mediaArchive[poster];
+  await fileStorage.remove(storedFileName(db.getDump(d.id)!.mediaArchive[videoUrl])!);
+  db.updateDump(d.id, { mediaArchive: { [poster]: localPoster } });
+  let finish!: (response: Response) => void;
+  mocks.video.mockReturnValueOnce(new Promise<Response>((resolve) => { finish = resolve; }));
+  const job = saveVideoCopy(d.id);
+  expect(db.getDump(d.id)!.videoCopy?.state).toBe("pending");
+  expect(db.getDump(d.id)!.status).toBe(d.status);
+  finish(new Response(null, { status: 503 }));
+  await job;
+  expect(db.getDump(d.id)!.videoCopy).toMatchObject({ state: "failed", error: "Video download failed (503)" });
+  expect(db.listDumps({ limit: 1 })[0].videoCopy?.state).toBe("failed");
+  expect(await bytes(localPoster)).toBeTruthy();
+  mocks.image.mockClear();
+  await saveVideoCopy(d.id);
+  expect(mocks.image).not.toHaveBeenCalled();
+  expect(db.getDump(d.id)!.videoCopy).toBeNull();
+  expect(db.getDump(d.id)!.mediaArchive[videoUrl]).toBeTruthy();
+  expect(db.getDump(d.id)!.mediaArchive[poster]).toBe(localPoster);
+});
+
+it("aborts an in-flight video download on cancel and clears the persisted operation", async () => {
+  const d = create({ imageUrl: null, videoUrl: "https://example.com/cancel.mp4", keepVideo: true });
+  let signal!: AbortSignal;
+  mocks.video.mockImplementationOnce((_url, init) => {
+    signal = init.signal;
+    return new Promise((_resolve, reject) => signal.addEventListener("abort", () => reject(signal.reason), { once: true }));
+  });
+  const job = saveVideoCopy(d.id);
+  expect(signal.aborted).toBe(false);
+  cancelVideoCopy(d.id);
+  await job;
+  expect(signal.aborted).toBe(true);
+  expect(db.getDump(d.id)).toMatchObject({ keepVideo: false, videoCopy: null, mediaArchive: {} });
+});
+
+it("persists timeout failures and recovers interrupted saves after restart", async () => {
+  const d = create({ imageUrl: null, videoUrl: "https://example.com/timeout.mp4", keepVideo: true });
+  mocks.video.mockRejectedValueOnce(new DOMException("timed out", "TimeoutError"));
+  await saveVideoCopy(d.id);
+  expect(db.getDump(d.id)!.videoCopy).toMatchObject({ state: "failed", error: "Video download timed out" });
+  db.updateDump(d.id, { videoCopy: { state: "pending", startedAt: Date.now() - 400_000, attempt: "lost" } });
+  expect((await reconcileVideoCopy(db.getDump(d.id)!)).videoCopy?.state).toBe("failed");
+});
+
+it("drops a missing local video mapping on GET while preserving the poster and source", async () => {
+  const videoUrl = "https://example.com/missing.mp4";
+  const poster = "https://example.com/poster.png";
+  const d = create({ imageUrl: null, videoUrl, videoPosterUrl: poster, sourceState: "unavailable", keepVideo: true, mediaArchive: { [videoUrl]: "/api/files/missing.mp4", [poster]: "/api/files/poster.webp" } });
+  const response = await getDumpResponse(new NextRequest("http://localhost"), { params: Promise.resolve({ id: d.id }) });
+  expect(await response.json()).toMatchObject({ videoUrl, keepVideo: false, mediaArchive: { [poster]: "/api/files/poster.webp" }, videoCopy: { state: "missing" } });
+  expect(db.getDump(d.id)!.mediaArchive[videoUrl]).toBeUndefined();
+  expect(hasLocalVideo(db.getDump(d.id)!)).toBe(false);
+  const retry = new NextRequest("http://localhost", { method: "PATCH", body: JSON.stringify({ keepVideo: true }) });
+  expect((await PATCH(retry, { params: Promise.resolve({ id: d.id }) })).status).toBe(409);
+  expect(mocks.video).not.toHaveBeenCalled();
+});
+
+it("reconciles exhausted local media errors without accepting an unrelated file URL", async () => {
+  const videoUrl = "https://example.com/corrupt.mp4";
+  const d = create({ imageUrl: null, videoUrl, mediaArchive: { [videoUrl]: "/api/files/corrupt.mp4" } });
+  for (const [failedVideoUrl, missing] of [["/api/files/other.mp4", false], ["/api/files/corrupt.mp4", true]] as const) {
+    const req = new NextRequest("http://localhost", { method: "PATCH", body: JSON.stringify({ failedVideoUrl }) });
+    const response = await PATCH(req, { params: Promise.resolve({ id: d.id }) });
+    expect((await response.json()).videoCopy?.state === "missing").toBe(missing);
+  }
+});
 
 it.each([true, false])("reports keep-video archival as pending until it settles (saved: %s)", async (success) => {
   const videoUrl = "https://example.com/delayed.mp4";
@@ -132,7 +206,7 @@ it("archives posters and only retains full video with opt-in; removal and delete
   const saved = db.getDump(d.id)!;
   expect(hasLocalVideo(saved)).toBe(true);
   expect(await bytes(saved.mediaArchive[videoUrl])).toEqual(Buffer.from([1, 2, 3]));
-  expect(mocks.video).toHaveBeenLastCalledWith(videoUrl, { timeoutMs: 300_000 });
+  expect(mocks.video).toHaveBeenLastCalledWith(videoUrl, expect.objectContaining({ timeoutMs: 300_000, signal: expect.any(AbortSignal) }));
   const off = new NextRequest("http://localhost", { method: "PATCH", body: JSON.stringify({ keepVideo: false }) });
   await PATCH(off, { params: Promise.resolve({ id: d.id }) });
   await expect(bytes(saved.mediaArchive[videoUrl])).rejects.toThrow();

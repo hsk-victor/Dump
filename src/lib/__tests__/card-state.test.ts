@@ -6,7 +6,7 @@ const NOW = 1_800_000_000_000;
 
 function dump(over: Partial<Dump> = {}): Dump {
   return {
-    mediaArchive: {}, keepVideo: false,
+    mediaArchive: {}, keepVideo: false, videoCopy: null,
     id: "d", kind: "link", topic: "other", status: "ready", sourceState: null, url: "https://example.com/a", domain: "example.com",
     provider: null, title: "A page", description: null, content: null, note: null, imageUrl: null, imageUrls: [], siteName: null,
     author: null, authorHandle: null, authorAvatarUrl: null, videoUrl: null, videoPosterUrl: null, videoType: null, xRender: null,

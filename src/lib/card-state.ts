@@ -21,7 +21,8 @@ export interface CardState {
 }
 
 /** A video file this app stores itself, rather than a remote or proxied stream. */
-export function hasLocalVideo(dump: Pick<Dump, "videoUrl"> & Partial<Pick<Dump, "mediaArchive">>): boolean {
+export function hasLocalVideo(dump: Pick<Dump, "videoUrl"> & Partial<Pick<Dump, "mediaArchive" | "videoCopy">>): boolean {
+  if (dump.videoCopy?.state === "missing") return false;
   return !!dump.videoUrl && (dump.videoUrl.startsWith("/api/files/") || !!dump.mediaArchive?.[dump.videoUrl]);
 }
 
@@ -41,7 +42,7 @@ function unavailableDetail(dump: Dump): string | null {
  * A dead source and a failed fetch are separate facts and can both hold at once.
  */
 export function cardState(dump: Dump, now: number, online = true): CardState {
-  const state: CardState = { loading: null, unavailable: null, failed: null, posterOnly: false };
+  const state: CardState = { loading: null, unavailable: null, failed: null, posterOnly: dump.videoCopy?.state === "missing" };
   // Notes are user-authored: no original to lose and no preview to fetch. Background
   // classification never blocks or fails them.
   // Uploads have no original either: their file is already stored, and a background
@@ -51,7 +52,7 @@ export function cardState(dump: Dump, now: number, online = true): CardState {
   const gone = dump.sourceState === "unavailable";
   if (gone) {
     state.unavailable = { detail: unavailableDetail(dump) };
-    state.posterOnly = isVideo(dump) && !hasLocalVideo(dump);
+    state.posterOnly = state.posterOnly || (isVideo(dump) && !hasLocalVideo(dump));
   }
 
   if (dump.status === "processing") {

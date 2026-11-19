@@ -5,42 +5,18 @@ import os from "node:os";
 import path from "node:path";
 import sharp from "sharp";
 import { getDump, listDumps, updateDump, type Dump } from "./db";
-import { fetchImage, fetchWithTimeout } from "./extract";
+import { fetchImage } from "./extract";
 import { fileStorage, storedFileName } from "./storage";
+import { downloadVideo, isSavingVideo, saveVideoCopy } from "./video-archive";
+
+export { downloadVideo } from "./video-archive";
 
 export const posterKey = (url: string) => `poster:${url}`;
 const remote = (url: string | null | undefined): url is string => !!url && /^https?:\/\//i.test(url);
 const jobs = new Map<string, Promise<void>>();
 
 export function isArchiving(id: string): boolean {
-  return jobs.has(id);
-}
-
-export async function downloadVideo(url: string, maxBytes = 300 * 1024 * 1024, timeoutMs = 300_000): Promise<Buffer> {
-  const response = await fetchWithTimeout(url, { timeoutMs });
-  if (!response.ok || !response.body) {
-    await response.body?.cancel();
-    throw new Error("Video download failed");
-  }
-  if (Number(response.headers.get("content-length")) > maxBytes) {
-    await response.body.cancel();
-    throw new Error("Video too large");
-  }
-  const reader = response.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let size = 0;
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      size += value.length;
-      if (size > maxBytes) throw new Error("Video too large");
-      chunks.push(value);
-    }
-    return Buffer.concat(chunks);
-  } finally {
-    await reader.cancel().catch(() => {});
-  }
+  return jobs.has(id) || isSavingVideo(id);
 }
 
 async function frame(bytes: Buffer): Promise<Buffer> {
@@ -98,16 +74,8 @@ async function runArchive(id: string): Promise<void> {
   }
   if (remote(dump.videoUrl)) {
     const url = dump.videoUrl;
-    let bytes: Buffer | undefined;
-    const video = async () => bytes ??= await downloadVideo(url, (dump.keepVideo ? 300 : 64) * 1024 * 1024, dump.keepVideo ? 300_000 : 60_000);
     if (!dump.videoPosterUrl && !dump.mediaArchive[posterKey(url)]) {
-      try { await image(posterKey(url), await frame(await video())); } catch { /* Posters are best effort. */ }
-    }
-    if (dump.keepVideo && !dump.mediaArchive[url]) {
-      try {
-        const ext = new URL(url).pathname.match(/\.(mp4|webm|mov)$/i)?.[1].toLowerCase() ?? "mp4";
-        await store(url, await video(), ext);
-      } catch { /* Full copies are best effort. */ }
+      try { await image(posterKey(url), await frame(await downloadVideo(url, 64 * 1024 * 1024, 60_000))); } catch { /* Posters are best effort. */ }
     }
   }
   const current = getDump(id);
@@ -119,6 +87,7 @@ async function runArchive(id: string): Promise<void> {
     }
     updateDump(id, { mediaArchive: { ...current.mediaArchive, ...added } });
     await removeArchiveFiles(discarded);
+    if (current.keepVideo && current.videoCopy?.state !== "failed") await saveVideoCopy(id);
   } else await removeArchiveFiles(Object.values(added));
 }
 

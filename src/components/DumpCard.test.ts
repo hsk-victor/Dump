@@ -3,11 +3,11 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it, vi } from "vitest";
 import type { Dump } from "@/lib/db";
 import DumpCard, { notePreview } from "./DumpCard";
-import { videoCopyAction } from "@/lib/media";
+import { exhaustedVideoAsset, videoCopyAction, videoSources } from "@/lib/media";
 
 const title = "Mobile reminder: book a train to Kyoto this weekend";
 const note: Dump = {
-  mediaArchive: {}, keepVideo: false,
+  mediaArchive: {}, keepVideo: false, videoCopy: null,
   id: "note",
   kind: "note",
   topic: "other",
@@ -113,6 +113,46 @@ it("draws a saved card with no state row or badge", () => {
   const html = card(link);
   expect(html).not.toContain("d-state");
   expect(html).toContain('href="https://example.com/story"');
+});
+
+it.each([false, true])("shows separate saving and retry states without hiding the source or poster (phone: %s)", (phone) => {
+  const video: Dump = { ...link, kind: "video", videoUrl: "https://example.com/clip.mp4", videoPosterUrl: "/api/files/poster.webp", sourceState: "reachable", keepVideo: true };
+  const pending = card({ ...video, videoCopy: { state: "pending", startedAt: Date.now() } }, phone);
+  expect(pending).toContain("Saving video…");
+  expect(pending).toContain("Cancel saving video");
+  expect(pending).toContain('href="https://example.com/story"');
+  expect(pending).toContain('/api/files/poster.webp');
+  const failed = card({ ...video, videoCopy: { state: "failed", startedAt: Date.now(), error: "Video download failed (503)" } }, phone);
+  expect(failed).toContain("Couldn&#x27;t save video");
+  expect(failed).toContain("Retry saving video");
+  expect(failed).not.toContain("Retry getting preview");
+});
+
+it.each([false, true])("renders missing videos as poster-only without playback controls (phone: %s)", (phone) => {
+  const video: Dump = { ...link, kind: "video", videoUrl: "https://example.com/clip.mp4", videoPosterUrl: "/api/files/poster.webp", sourceState: "unavailable", videoCopy: { state: "missing", startedAt: Date.now() } };
+  const html = card(video, phone);
+  expect(html).toContain("Local copy missing");
+  expect(html).toContain("Preview only");
+  expect(html).toContain("/api/files/poster.webp");
+  expect(html).not.toContain("<video");
+  expect(html).not.toContain("Retry saving video");
+  expect(videoCopyAction(video)).toBeNull();
+  expect(videoCopyAction({ ...video, sourceState: "reachable" })).toBe("Save video copy");
+});
+
+it("exhausts local video sources without retrying a gone or unverified original", () => {
+  const videoUrl = "https://example.com/clip.mp4";
+  const local = "/api/files/clip.mp4";
+  const video = { ...link, kind: "video" as const, videoUrl, mediaArchive: { [videoUrl]: local } };
+  for (const sourceState of ["unavailable", "unreachable", null] as const) {
+    expect(videoSources({ ...video, sourceState }, videoUrl)).toEqual([local]);
+    expect(exhaustedVideoAsset([local], new Set([local]))).toBe(local);
+  }
+  const sources = videoSources({ ...video, sourceState: "reachable" }, videoUrl);
+  expect(sources).toEqual([videoUrl, local]);
+  expect(exhaustedVideoAsset(sources, new Set([videoUrl]))).toBeNull();
+  expect(exhaustedVideoAsset(sources, new Set(sources))).toBe(local);
+  expect(exhaustedVideoAsset([], new Set())).toBeNull();
 });
 
 it("keeps a gone original's content, drops its dead link and says Original unavailable", () => {
