@@ -39,6 +39,17 @@ export async function storeRemoteImage(dumpId: string, url: string): Promise<str
   }
   const name = `${path.basename(dumpId)}-thumb-${createHash("sha256").update(data).digest("hex").slice(0, 12)}.${ext}`;
   await fs.mkdir(UPLOAD_DIR, { recursive: true });
-  await fs.writeFile(path.join(UPLOAD_DIR, name), data);
+  // Served as immutable, so readers must never see a half-written file: write aside, then rename.
+  const tmp = path.join(UPLOAD_DIR, `.${name}.${process.pid}.${Date.now()}.tmp`);
+  await fs.writeFile(tmp, data);
+  await fs.rename(tmp, path.join(UPLOAD_DIR, name));
   return `/api/files/${name}`;
+}
+
+export function isStoredThumb(dumpId: string, url: string | null | undefined): url is string {
+  return !!url?.startsWith(`/api/files/${path.basename(dumpId)}-thumb-`);
+}
+
+export async function removeStoredThumb(url: string): Promise<void> {
+  await fs.rm(path.join(UPLOAD_DIR, path.basename(url)), { force: true });
 }

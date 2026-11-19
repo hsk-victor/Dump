@@ -1,7 +1,7 @@
 import { classifyHeuristic } from "./classify";
 import { db, getDump, listResortable, listTopics, topicExists, updateDump, type Dump } from "./db";
 import { extractUrl } from "./extract";
-import { isExpiringUrl, storeRemoteImage } from "./thumbs";
+import { isExpiringUrl, isStoredThumb, removeStoredThumb, storeRemoteImage } from "./thumbs";
 import { renderXPostImage } from "./x-render";
 import { providerFromUrl, titleFromUrl } from "./detect";
 import { classifyWithAi, identifySubject } from "./llm";
@@ -128,6 +128,7 @@ async function runEnrich(id: string): Promise<Dump | null> {
   try {
     let fields: Partial<Dump> = {};
     let unreachable = false;
+    let newThumb: string | null = null;
     if (dump.url) {
       const ex = await extractUrl(dump.url);
       unreachable = ex.unreachable;
@@ -154,10 +155,11 @@ async function runEnrich(id: string): Promise<Dump | null> {
       // Signed CDN thumbnails (TikTok's x-expires, Instagram's oe=) die within days, so keep a copy.
       const lead = fields.imageUrl;
       if (isExpiringUrl(lead)) {
-        const stored = await storeRemoteImage(id, lead!).catch(() => null);
+        const stored = (await storeRemoteImage(id, lead!).catch(() => null)) ?? (isStoredThumb(id, dump.imageUrl) ? dump.imageUrl : null);
         if (stored) {
           fields.imageUrl = stored;
-          fields.imageUrls = [stored, ...(fields.imageUrls ?? []).filter((u) => u !== lead)];
+          fields.imageUrls = [stored, ...(fields.imageUrls ?? []).filter((u) => u !== lead && u !== stored)];
+          if (stored !== dump.imageUrl) newThumb = stored;
         }
       }
       // The native-look render is a snapshot: a failed render keeps any older
@@ -187,7 +189,10 @@ async function runEnrich(id: string): Promise<Dump | null> {
 
     const classification = await classify(forClassifying, merged.kind === "image");
     // Couldn't reach the site at all: keep the fallback topic but mark it failed so it can be retried.
-    return commit(id, { ...fields, ...classification, status: unreachable ? "failed" : "ready" }, dump);
+    const saved = commit(id, { ...fields, ...classification, status: unreachable ? "failed" : "ready" }, dump);
+    // Deleted mid-run: the delete's cleanup has already run, so drop the copy written after it.
+    if (!saved && newThumb) await removeStoredThumb(newThumb);
+    return saved;
   } catch (err) {
     console.warn(`[dump] enrich failed for ${id}:`, (err as Error).message);
     const rules = classifyHeuristic({ ...dump, title: dump.title ?? (dump.url ? titleFromUrl(dump.url) : null) });

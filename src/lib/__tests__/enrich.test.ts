@@ -122,6 +122,28 @@ describe("enrichDump", () => {
     expect(storeRemoteImage).not.toHaveBeenCalled();
   });
 
+  it("keeps the stored thumbnail when a retry can't copy the freshly signed one", async () => {
+    const d = createFromText("https://www.tiktok.com/@someone/video/3");
+    db.updateDump(d.id, { imageUrl: `/api/files/${d.id}-thumb-old.jpg`, imageUrls: [`/api/files/${d.id}-thumb-old.jpg`] });
+    extractUrl.mockResolvedValue(page({ kind: "video", imageUrl: signedCover, imageUrls: [signedCover] }));
+    await enrichDump(d.id);
+    expect(db.getDump(d.id)).toMatchObject({ imageUrl: `/api/files/${d.id}-thumb-old.jpg`, imageUrls: [`/api/files/${d.id}-thumb-old.jpg`] });
+  });
+
+  it("removes a thumbnail copied for a card deleted mid-run", async () => {
+    const d = createFromText("https://www.tiktok.com/@someone/video/4");
+    const name = `${d.id}-thumb-late.jpg`;
+    extractUrl.mockResolvedValue(page({ kind: "video", imageUrl: signedCover, imageUrls: [signedCover] }));
+    storeRemoteImage.mockImplementation(async () => {
+      fs.mkdirSync(db.UPLOAD_DIR, { recursive: true });
+      fs.writeFileSync(path.join(db.UPLOAD_DIR, name), "x");
+      db.deleteDump(d.id);
+      return `/api/files/${name}`;
+    });
+    expect(await enrichDump(d.id)).toBeNull();
+    expect(fs.existsSync(path.join(db.UPLOAD_DIR, name))).toBe(false);
+  });
+
   it("keeps a topic the user picked while enrichment was running", async () => {
     const d = db.createDump({ kind: "link", url: "https://example.com/pasta", domain: "example.com" });
     extractUrl.mockImplementation(async () => {
