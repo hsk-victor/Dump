@@ -3135,9 +3135,11 @@ body.d-dragging * {
     object-position: center;
   }
   .d-card .d-vmedia:has(img),
-  .d-card .d-igreel .d-media,
-  .d-card .d-post-video-frame {
+  .d-card .d-igreel .d-media {
     max-height: min(440px, 60svh);
+  }
+  .d-card .d-post-video {
+    max-height: min(16rem, 60svh);
   }
   .d-card .d-vmedia img,
   .d-card.d-igreel .d-media img {
