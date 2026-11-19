@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { PHONE_QUERY } from "@/lib/feed-layout";
 
 interface Props {
   onDump: (input: { text: string; file: File | null }) => Promise<boolean>;
+  phone: boolean;
 }
 
-export default function Composer({ onDump }: Props) {
+export default function Composer({ onDump, phone }: Props) {
   const [text, setText] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
@@ -14,6 +16,25 @@ export default function Composer({ onDump }: Props) {
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const dockRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!window.matchMedia(`${PHONE_QUERY}, (pointer: coarse)`).matches) inputRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    const dock = dockRef.current;
+    if (!dock) return;
+    const root = document.documentElement;
+    const measure = () => root.style.setProperty("--dock-height", `${dock.offsetHeight}px`);
+    const observer = new ResizeObserver(measure);
+    observer.observe(dock);
+    measure();
+    return () => {
+      observer.disconnect();
+      root.style.removeProperty("--dock-height");
+    };
+  }, []);
 
   useEffect(() => {
     if (!file) return setPreview(null);
@@ -22,11 +43,12 @@ export default function Composer({ onDump }: Props) {
     return () => URL.revokeObjectURL(url);
   }, [file]);
 
-  // Press "/" or "n" anywhere to jump to the dump box; drop images anywhere on the page.
+  // Press "n" to jump to the desktop dump box; drop images anywhere on the page.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement;
       if (el.closest("input, textarea, select, [contenteditable]")) return;
+      if (phone) return;
       if (e.key === "n" && !e.metaKey && !e.ctrlKey) {
         e.preventDefault();
         inputRef.current?.focus();
@@ -67,23 +89,25 @@ export default function Composer({ onDump }: Props) {
       window.removeEventListener("dragleave", onDragLeave);
       window.removeEventListener("drop", onDrop);
     };
-  }, []);
+  }, [phone]);
 
   async function submit() {
     if (busy || (!text.trim() && !file)) return;
     setBusy(true);
-    const ok = await onDump({ text: text.trim(), file });
-    setBusy(false);
-    if (ok) {
-      setText("");
-      setFile(null);
-      inputRef.current?.focus();
+    try {
+      if (await onDump({ text: text.trim(), file })) {
+        setText("");
+        setFile(null);
+        if (!phone) inputRef.current?.focus();
+      }
+    } finally {
+      setBusy(false);
     }
   }
 
   return (
     <>
-      <div className="d-dock" data-dragging={dragging || undefined}>
+      <div className="d-dock" ref={dockRef} data-dragging={dragging || undefined}>
         {preview ? (
           <div className="relative shrink-0">
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -91,7 +115,7 @@ export default function Composer({ onDump }: Props) {
             <button
               type="button"
               onClick={() => setFile(null)}
-              className="absolute -top-1.5 -right-1.5 grid h-4.5 w-4.5 place-items-center rounded-full bg-black text-[10px] text-white"
+              className="d-dock-remove absolute -top-1.5 -right-1.5 grid h-4.5 w-4.5 place-items-center rounded-full bg-black text-[10px] text-white"
               aria-label="Remove image"
             >
               ×
@@ -116,12 +140,11 @@ export default function Composer({ onDump }: Props) {
         />
         <textarea
           ref={inputRef}
-          autoFocus
-          rows={text.includes("\n") ? 3 : 1}
+          rows={!phone && text.includes("\n") ? 3 : 1}
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
+            if (!phone && e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
               e.preventDefault();
               submit();
             }
@@ -133,7 +156,7 @@ export default function Composer({ onDump }: Props) {
               setFile(img);
             }
           }}
-          placeholder="Dump a link, post, image or note…"
+          placeholder={phone ? "Paste a link or write a note…" : "Dump a link, post, image or note…"}
           aria-label="Dump something"
           className="d-dock-input"
         />

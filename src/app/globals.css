@@ -736,11 +736,11 @@ button {
   transition: opacity 0.14s var(--ease-out), translate 0.14s var(--ease-out);
 }
 @media (hover: hover) and (pointer: fine) {
-  .d-mediacard:is(:hover, :focus-within) .d-mpanel {
+  .d-mediacard:hover .d-mpanel {
     opacity: 1;
     translate: 0 0;
     pointer-events: auto;
-    transition-duration: 0.2s;
+    transition-duration: 0.16s;
   }
   .d-mediacard:is(:hover, :focus-within) .d-mchip {
     opacity: 0;
@@ -757,6 +757,12 @@ button {
     border-top-width: 1px;
   }
 }
+.d-mediacard:focus-within .d-mpanel {
+  opacity: 1;
+  translate: none;
+  pointer-events: auto;
+  transition: none;
+}
 /* Failed dumps keep the panel open so Retry is reachable. */
 .d-mediacard[data-open] .d-mpanel {
   opacity: 1;
@@ -766,7 +772,7 @@ button {
 .d-mediacard[data-open] .d-mchip {
   opacity: 0;
 }
-@media (hover: none), (pointer: coarse) {
+@media (width > 600px) and ((hover: none) or (pointer: coarse)) {
   .d-mediacard:not([data-open]) .d-mpanel {
     display: none;
   }
@@ -850,7 +856,7 @@ button {
   max-height: none;
   height: 100%;
   object-position: center;
-  transition: opacity 0.22s var(--ease-out), scale 0.4s var(--ease-out);
+  transition: opacity 0.22s var(--ease-out);
 }
 .d-inline-video .d-media video {
   display: block;
@@ -867,11 +873,6 @@ button {
   top: 0.55rem;
   bottom: auto;
   pointer-events: none;
-}
-@media (hover: hover) and (pointer: fine) {
-  .d-vidcard:hover .d-media img[data-loaded] {
-    scale: 1.03;
-  }
 }
 .d-vph {
   position: absolute;
@@ -893,21 +894,6 @@ button {
   height: 44%;
   background: linear-gradient(0deg, rgb(0 0 0 / 0.34), transparent);
   pointer-events: none;
-}
-.d-vidcard .d-play {
-  transition: scale 0.18s var(--ease-out);
-}
-@media (hover: hover) and (pointer: fine) {
-  .d-vidcard:hover .d-play {
-    scale: 1.08;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .d-vidcard .d-media img,
-  .d-vidcard .d-play {
-    transition: opacity 0.15s;
-    scale: none;
-  }
 }
 .d-body {
   padding: 0.8rem 0.9rem 0.8rem;
@@ -1713,7 +1699,7 @@ button {
 .d-mus[data-open] .d-mus-src {
   opacity: 0;
 }
-@media (hover: none), (pointer: coarse) {
+@media (width > 600px) and ((hover: none) or (pointer: coarse)) {
   .d-mus:not([data-open]) .d-mus-panel {
     display: none;
   }
@@ -1826,7 +1812,7 @@ button {
    hovering never grows a card or shifts the grid — only its contents fade in.
    Always fully visible on touch where hover doesn't exist, and inside the
    glass panels (.d-mediacard, .d-mus) that already gate their own meta. */
-@media (hover: hover) and (pointer: fine) {
+@media (width > 600px) and (hover: hover) and (pointer: fine) {
   .d-card:not(.d-mediacard):not(.d-mus) .d-meta > * {
     opacity: 0;
     transition: opacity 0.15s var(--ease-out);
@@ -2292,7 +2278,7 @@ The tape strip: frosted so the paper shows through, slightly rotated.
 .d-card:focus-within .d-actions {
   opacity: 1;
 }
-@media (hover: none), (pointer: coarse) {
+@media (width > 600px) and ((hover: none) or (pointer: coarse)) {
   /* No hover on touch: actions never cover a card at rest. Media cards reveal
      them with the details panel (tap-to-reveal sets data-open; failed dumps pin
      it open); every other card docks them beside the always-visible meta row —
@@ -2978,6 +2964,320 @@ body.d-dragging * {
   }
 }
 
+.d-phone-clear {
+  display: none;
+}
+
+@media (max-width: 600px) {
+  :root {
+    --muted: #696972;
+    --dock-clearance: calc(var(--dock-height, 56px) + 12px + env(safe-area-inset-bottom, 0px) + 16px);
+  }
+  [data-mode="dark"] {
+    --muted: #ababb4;
+  }
+  .d-header-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "brand settings" "search search" "topics type";
+    gap: 8px;
+    padding: calc(8px + env(safe-area-inset-top, 0px)) 16px 8px;
+  }
+  .d-brand {
+    grid-area: brand;
+    justify-self: start;
+    min-height: 44px;
+  }
+  .d-header-tools {
+    grid-area: settings;
+    justify-self: end;
+  }
+  .d-search {
+    grid-area: search;
+    margin: 0;
+    height: 44px;
+  }
+  .d-results {
+    flex-shrink: 0;
+  }
+  .d-subnav {
+    grid-area: topics;
+  }
+  .d-topics {
+    position: relative;
+    padding-inline-end: 16px;
+    mask-image: linear-gradient(90deg, #000 calc(100% - 16px), transparent);
+  }
+  .d-topic {
+    height: 44px;
+    font-size: 0.875rem;
+  }
+  .d-type-filter {
+    grid-area: type;
+  }
+  .d-phone-type {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-inline: 12px;
+    max-width: 128px;
+    border-radius: 10px;
+    background: var(--surface);
+    box-shadow: var(--shadow);
+    font-size: 0.875rem;
+  }
+  .d-phone-type span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .d-settings-pop {
+    max-width: calc(100vw - 32px);
+    max-height: min(65dvh, 27rem);
+    overflow: auto;
+    overscroll-behavior: contain;
+  }
+  .d-desktop-setting,
+  .d-footer,
+  .d-dock-kbd {
+    display: none;
+  }
+  .d-main {
+    padding: 8px 16px var(--dock-clearance);
+  }
+  html {
+    scroll-padding-top: calc(160px + env(safe-area-inset-top, 0px));
+    scroll-padding-bottom: var(--dock-clearance, 84px);
+  }
+  .d-grid {
+    column-gap: 12px;
+  }
+  .d-grid:not([data-dragging]) .d-item {
+    transition: none;
+  }
+  .d-card {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  .d-card[data-fresh] {
+    animation: none;
+  }
+  .d-card.d-body,
+  .d-card :is(.d-article-body, .d-link-body, .d-vid-info, .d-rd-body) {
+    padding-inline: 16px;
+  }
+  .d-card :is(.d-headline, .d-link-title, .d-vid-title, .d-rd-title, .d-post-headline, .d-mpanel-title, .d-mus-ptitle, .d-mus-title,
+    .d-note-title, .d-ig-empty-name) {
+    font-size: 1.125rem;
+    line-height: 1.5rem;
+    white-space: normal;
+    -webkit-line-clamp: 3;
+  }
+  .d-card :is(.d-dek, .d-rd-text, .d-post-text, .d-mpanel-dek, .d-mus-pdek, .d-annotation) {
+    font-size: 0.9375rem;
+    line-height: 1.375rem;
+    -webkit-line-clamp: 4;
+  }
+  .d-card :is(.d-note-lines, .d-note-edit) {
+    font-size: 1rem;
+    line-height: 1.5;
+  }
+  .d-card :is(.d-meta, .d-note-date, .d-link-domain, .d-vid-channel, .d-topic-chip, .d-mpanel-by, .d-sorting, .d-kicker, .d-author-site) {
+    font-size: 0.75rem;
+    line-height: 1rem;
+    white-space: normal;
+  }
+  .d-page .d-card .d-meta {
+    display: flex;
+    flex-wrap: wrap;
+    max-height: none;
+    padding-inline: 0;
+    opacity: 1;
+    overflow: visible;
+  }
+  .d-card .d-meta time {
+    display: block;
+  }
+  .d-card .d-meta .truncate,
+  .d-card .d-mpanel-by .truncate {
+    white-space: normal;
+  }
+  .d-page .d-card :is(.d-mpanel, .d-mus-panel) {
+    position: static;
+    display: block;
+    max-height: none;
+    overflow: visible;
+    padding: 16px;
+    background: none;
+    box-shadow: none;
+    backdrop-filter: none;
+    opacity: 1;
+    translate: none;
+    pointer-events: auto;
+    transition: none;
+  }
+  .d-card :is(.d-mchip, .d-mus-src) {
+    display: none;
+  }
+  .d-card .d-media img {
+    min-height: 0;
+    width: 100%;
+    max-height: min(440px, 60svh);
+    object-fit: contain;
+    object-position: center;
+  }
+  .d-card .d-vmedia:has(img),
+  .d-card .d-igreel .d-media,
+  .d-card .d-post-video-frame {
+    max-height: min(440px, 60svh);
+  }
+  .d-card .d-vmedia img,
+  .d-card.d-igreel .d-media img {
+    object-fit: contain;
+  }
+  .d-card .d-vmedia:has(img) {
+    aspect-ratio: auto;
+  }
+  .d-card :is(.d-link-title a, .d-headline a)::after {
+    content: none;
+  }
+  .d-phone-actions {
+    position: relative;
+    z-index: 2;
+    order: 1;
+    display: flex;
+    justify-content: space-between;
+    min-height: 44px;
+    padding-inline: 8px;
+    border-top: 1px solid var(--hairline);
+    color: var(--ink-2);
+  }
+  .d-body > .d-phone-actions {
+    margin: 8px -16px -0.8rem;
+  }
+  .d-phone-actions .d-more {
+    margin-inline-start: auto;
+  }
+  .d-phone-actions .d-drag {
+    cursor: grab;
+    touch-action: none;
+  }
+  .d-phone-popup-boundary {
+    position: fixed;
+    inset: calc(4px + env(safe-area-inset-top, 0px)) 8px var(--dock-clearance);
+    visibility: hidden;
+    pointer-events: none;
+  }
+  .d-phone-positioner {
+    z-index: 50;
+  }
+  .d-phone-menu {
+    min-width: min(9rem, var(--available-width));
+    max-width: min(17rem, var(--available-width));
+    max-height: min(60dvh, var(--available-height));
+    overflow: auto;
+    overscroll-behavior: contain;
+    overflow-wrap: anywhere;
+    transform-origin: var(--transform-origin);
+    font-size: 0.875rem;
+    transition: opacity 0.16s var(--ease-out), scale 0.16s var(--ease-out);
+  }
+  .d-phone-menu:is([data-starting-style], [data-ending-style]) {
+    translate: none;
+    scale: 0.97;
+  }
+  .d-phone-menu[data-ending-style] {
+    transition-duration: 0.11s;
+  }
+  .d-phone-menu[data-instant] {
+    transition: none;
+  }
+  .d-phone-menu .d-menu-item {
+    min-height: 44px;
+    padding: 8px 12px;
+  }
+  .d-phone-menu [data-checked] {
+    font-weight: 700;
+    background: var(--hairline);
+  }
+  .d-phone-clear,
+  .d-original,
+  .d-note-more {
+    display: inline-flex;
+    align-items: center;
+    align-self: flex-start;
+    min-height: 44px;
+    font-size: 0.875rem;
+    font-weight: 700;
+  }
+  .d-original,
+  .d-note-more {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  .d-note-more {
+    margin-top: 4px;
+  }
+  .d-dock {
+    bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    align-items: flex-end;
+    gap: 4px;
+    padding: 6px;
+  }
+  .d-dock-input {
+    field-sizing: content;
+    font-size: 1rem;
+    line-height: 1.5;
+    min-height: 44px;
+    max-height: calc(7.5em + 20px);
+    padding: 10px 0;
+    overflow: auto;
+    overscroll-behavior: contain;
+  }
+  .d-dock-remove {
+    inset: 0;
+    background: rgb(0 0 0 / 0.55);
+    font-size: 20px;
+  }
+  .d-dock img[alt="Image to dump"] {
+    width: 44px;
+    height: 44px;
+  }
+  :is(.d-icon-btn, .d-dock-icon, .d-dock-remove, .d-phone-actions button) {
+    width: 44px;
+    height: 44px;
+    display: grid;
+    place-items: center;
+    border-radius: 10px;
+  }
+  :is(.d-phone-type, .d-dock-btn, .d-settings-row button) {
+    min-height: 44px;
+  }
+  .d-dock-btn {
+    padding-inline: 10px;
+  }
+  :is(.d-phone-actions button, .d-phone-type, .d-note-more) {
+    transition: scale 0.12s var(--ease-out);
+  }
+  :is(.d-phone-actions button, .d-phone-type, .d-note-more):active {
+    scale: 0.97;
+  }
+  :is(.d-phone-actions button, .d-phone-type, .d-note-more, .d-original):focus-visible {
+    outline: 2px solid var(--ink-2);
+    outline-offset: -2px;
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .d-card:hover {
+      translate: none;
+    }
+    .d-phone-actions button:hover {
+      background: var(--hairline);
+    }
+  }
+}
+
 @keyframes shimmer {
   0% { background-position: -400px 0; }
   100% { background-position: 400px 0; }
@@ -2993,12 +3293,28 @@ body.d-dragging * {
 @media (pointer: coarse) {
   .d-search input,
   .d-dock-input,
-  .d-kind-select {
+  .d-kind-select,
+  .d-note-edit,
+  .d-topic-rn,
+  .d-cat-name,
+  .d-cat-desc {
     font-size: 16px;
   }
 }
 
+@media (max-width: 600px) {
+  .d-search input,
+  .d-cat-name,
+  .d-cat-desc {
+    font-size: 1rem;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .d-phone-menu:is([data-starting-style], [data-ending-style]),
+  :is(.d-phone-actions button, .d-phone-type, .d-note-more):active {
+    scale: none;
+  }
   /* Reduced motion means gentler, not zero: opacity/color transitions stay, movement goes. */
   .d-empty-card,
   .shimmer {

@@ -2,7 +2,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it, vi } from "vitest";
 import type { Dump } from "@/lib/db";
-import DumpCard from "./DumpCard";
+import DumpCard, { notePreview } from "./DumpCard";
 
 const title = "Mobile reminder: book a train to Kyoto this weekend";
 const note: Dump = {
@@ -55,4 +55,24 @@ it.each([
   expect(html).toContain(`<p class="d-note-lines" dir="auto" title="Click to edit">${content}</p>`);
   expect(html.split(title)).toHaveLength(2);
   expect(html).not.toContain("<textarea");
+});
+
+it("keeps short notes intact and offers a reading control for long notes in a narrow window", () => {
+  const content = Array.from({ length: 16 }, (_, i) => `Observation ${i + 1}: Save things you want to revisit later.`).join("\n");
+  const render = (body: string) => renderToStaticMarkup(createElement(DumpCard, {
+    dump: { ...note, content: body },
+    phone: true,
+    onTopic: vi.fn(),
+    onDelete: vi.fn(),
+    onRetry: vi.fn(),
+    onPin: vi.fn(),
+    onSaveNote: vi.fn(),
+    topics: [],
+  }));
+  expect(notePreview(title)).toBe(title);
+  expect(render(title)).not.toContain("Read more");
+  const long = render(content);
+  expect(long).toContain(`<p class="d-note-lines" dir="auto">${notePreview(content)}</p>`);
+  expect(long).toContain('aria-expanded="false">Read more</button>');
+  expect(long).not.toContain("<textarea");
 });

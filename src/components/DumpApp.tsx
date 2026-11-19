@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Toaster, toast as sonnerToast } from "sonner";
+import { Menu } from "@base-ui/react/menu";
 import type { Dump } from "@/lib/db";
-import { packFeed, type Rect } from "@/lib/feed-layout";
+import { feedColumns, packFeed, PHONE_QUERY, type Rect } from "@/lib/feed-layout";
 import { KINDS, kindMeta, topicMeta, TOPICS, type TopicMeta } from "@/lib/taxonomy";
 import { DENSITY_KEY, MODE_KEY } from "@/lib/theme";
 import Composer from "./Composer";
@@ -13,6 +14,7 @@ import Logo from "./Logo";
 import SectionNav, { type Counts } from "./SectionNav";
 import CategoryManager from "./CategoryManager";
 import UpdateButton from "./UpdateButton";
+import { PhoneMenu } from "./PhoneMenu";
 
 const PAGE_SIZE = 60;
 /** Matches the server's per-request cap on /api/dumps. */
@@ -34,6 +36,12 @@ const SLOT_SLOP = 48;
 const SLOT_HYSTERESIS = 8;
 /** Attached non-passively while a touch drag is live: blocks the scroll steal. */
 const blockTouchMove = (e: TouchEvent) => e.preventDefault();
+
+function subscribePhone(notify: () => void) {
+  const media = window.matchMedia(PHONE_QUERY);
+  media.addEventListener("change", notify);
+  return () => media.removeEventListener("change", notify);
+}
 
 interface PendingDrag {
   id: string;
@@ -86,6 +94,7 @@ function FeedItem({
   ...handlers
 }: {
   dump: Dump;
+  phone: boolean;
   fresh: boolean;
   removing: boolean;
   sortable: boolean;
@@ -120,6 +129,7 @@ function FeedItem({
 }
 
 export default function DumpApp() {
+  const phone = useSyncExternalStore(subscribePhone, () => window.matchMedia(PHONE_QUERY).matches, () => false);
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
@@ -333,7 +343,7 @@ export default function DumpApp() {
     const gap = parseFloat(cs.columnGap) || GAP_EST;
     const width = grid.clientWidth;
     const minWidth = parseFloat(cs.columnWidth) || 260;
-    const columns = Math.max(1, Math.floor((width + gap) / (minWidth + gap)));
+    const columns = feedColumns(window.matchMedia(PHONE_QUERY).matches, width, minWidth, gap);
     const fullWidthNotes = cs.getPropertyValue("--full-width-notes").trim() === "1";
     const d = dragRef.current;
     const { slots, ghost, height } = packFeed(
@@ -359,7 +369,7 @@ export default function DumpApp() {
 
   const hasItems = items.length > 0;
   // Re-pack when the container width, narrow layout, or card-size preference changes.
-  useEffect(() => {
+  useLayoutEffect(() => {
     const el = gridRef.current;
     if (!el) return;
     let previous = "";
@@ -374,7 +384,7 @@ export default function DumpApp() {
     const ro = new ResizeObserver(compute);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [density, loaded, hasItems, applyLayout]);
+  }, [density, loaded, hasItems, phone, applyLayout]);
 
   // Measure each rendered card once so the greedy column split can balance heights.
   useEffect(() => {
@@ -385,8 +395,8 @@ export default function DumpApp() {
       for (const e of entries) {
         const id = (e.target as HTMLElement).dataset.did;
         if (!id) continue;
-        const h = Math.round(e.borderBoxSize?.[0]?.blockSize ?? e.contentRect.height);
-        if (Math.abs((cardHeights.current.get(id) ?? -1) - h) > 4) {
+        const h = e.borderBoxSize?.[0]?.blockSize ?? e.contentRect.height;
+        if (cardHeights.current.get(id) !== h) {
           cardHeights.current.set(id, h);
           changed = true;
         }
@@ -411,13 +421,18 @@ export default function DumpApp() {
 
   async function handleDump({ text, file }: { text: string; file: File | null }) {
     let res: Response;
-    if (file) {
-      const form = new FormData();
-      form.set("file", file);
-      form.set("text", text);
-      res = await fetch("/api/dumps", { method: "POST", body: form });
-    } else {
-      res = await fetch("/api/dumps", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text }) });
+    try {
+      if (file) {
+        const form = new FormData();
+        form.set("file", file);
+        form.set("text", text);
+        res = await fetch("/api/dumps", { method: "POST", body: form });
+      } else {
+        res = await fetch("/api/dumps", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text }) });
+      }
+    } catch {
+      toast("Couldn't reach Dump. Your draft is still here.", "error");
+      return false;
     }
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
@@ -703,6 +718,7 @@ export default function DumpApp() {
 
   /** Press-and-hold anywhere on the card (except interactive targets) lifts it. */
   function onItemDown(e: ReactPointerEvent<HTMLDivElement>, id: string) {
+    if (phone || e.pointerType !== "mouse" || window.matchMedia("(pointer: coarse)").matches) return;
     if ((e.target as HTMLElement).closest(HOLD_EXCLUDE)) return;
     armDrag(e, id, e.currentTarget, true);
   }
@@ -754,6 +770,14 @@ export default function DumpApp() {
   }
 
   const activeLabel = topic ? topicMeta(topic, topics).label : kind ? kindMeta(kind).label : null;
+  const typeOptions = (
+    <>
+      <option value="">All types</option>
+      {KINDS.filter((k) => counts.kinds[k.id] || k.id === kind).map((k) => (
+        <option key={k.id} value={k.id}>{k.label} ({counts.kinds[k.id] ?? 0})</option>
+      ))}
+    </>
+  );
 
   return (
     <div className="d-page">
@@ -764,6 +788,7 @@ export default function DumpApp() {
             <span className="d-count">{counts.total}</span>
           </button>
           <SectionNav
+            phone={phone}
             counts={counts}
             topics={topics}
             topic={topic}
@@ -775,6 +800,27 @@ export default function DumpApp() {
             }}
             toast={toast}
           />
+
+          {phone && (
+            <div className="d-type-filter">
+              <Menu.Root>
+                <Menu.Trigger className="d-phone-type" aria-label={kind ? `Type: ${kindMeta(kind).label}` : "Type: All types"}>
+                  <span>{kind ? kindMeta(kind).label : "Type"}</span>
+                  <svg viewBox="0 0 10 6" className="d-move-caret" aria-hidden>
+                    <path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+                  </svg>
+                </Menu.Trigger>
+                <PhoneMenu>
+                  <Menu.RadioGroup value={kind ?? ""} onValueChange={(value) => setFilter({ kind: String(value) || null })}>
+                    <Menu.RadioItem className="d-menu-item" value="">All types</Menu.RadioItem>
+                    {KINDS.filter((k) => counts.kinds[k.id] || k.id === kind).map((k) => (
+                      <Menu.RadioItem className="d-menu-item" key={k.id} value={k.id}>{k.label} ({counts.kinds[k.id] ?? 0})</Menu.RadioItem>
+                    ))}
+                  </Menu.RadioGroup>
+                </PhoneMenu>
+              </Menu.Root>
+            </div>
+          )}
 
           <label className="d-search">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
@@ -798,7 +844,7 @@ export default function DumpApp() {
           </label>
 
           <div className="d-header-tools">
-            <UpdateButton />
+            {!phone && <UpdateButton />}
             <div className="d-settings" ref={settingsRef}>
               <button
                 className="d-icon-btn"
@@ -815,7 +861,7 @@ export default function DumpApp() {
               </button>
               {settingsOpen && (
                 <div className="d-settings-pop">
-                  <div className="d-settings-row">
+                  <div className="d-settings-row d-desktop-setting">
                     <span className="d-settings-label">Type</span>
                     <select
                       className="d-kind-select"
@@ -823,12 +869,7 @@ export default function DumpApp() {
                       onChange={(e) => setFilter({ kind: e.target.value || null })}
                       aria-label="Type"
                     >
-                      <option value="">All types</option>
-                      {KINDS.filter((k) => counts.kinds[k.id]).map((k) => (
-                        <option key={k.id} value={k.id}>
-                          {k.label} ({counts.kinds[k.id]})
-                        </option>
-                      ))}
+                      {typeOptions}
                     </select>
                   </div>
                   {aiOn && (
@@ -856,7 +897,7 @@ export default function DumpApp() {
                       </button>
                     </div>
                   </div>
-                  <div className="d-settings-row">
+                  <div className="d-settings-row d-desktop-setting">
                     <span className="d-settings-label">Card size</span>
                     <span className="d-density-wrap">
                       <span className="d-density-icon small" aria-hidden />
@@ -873,6 +914,7 @@ export default function DumpApp() {
                       <span className="d-density-icon" aria-hidden />
                     </span>
                   </div>
+                  {phone && <UpdateButton />}
                 </div>
               )}
             </div>
@@ -884,7 +926,13 @@ export default function DumpApp() {
         {loaded && items.length === 0 ? (
           <div className="d-empty" key="empty">
             {q || kind || topic ? (
-              <p>Nothing matches that. Try a different word.</p>
+              <>
+                <p>Nothing matches that. Try a different word.</p>
+                <button className="d-ghost-btn d-phone-clear" onClick={() => {
+                  setSearch("");
+                  setFilter({ q: null, kind: null, topic: null });
+                }}>Clear filters</button>
+              </>
             ) : (
               <>
                 <div className="d-empty-art" aria-hidden>
@@ -926,6 +974,7 @@ export default function DumpApp() {
               <FeedItem
                 key={d.id}
                 dump={d}
+                phone={phone}
                 fresh={d.id === freshId}
                 removing={removingIds.has(d.id)}
                 sortable={sortable}
@@ -960,7 +1009,8 @@ export default function DumpApp() {
         </footer>
       </main>
 
-      <Composer onDump={handleDump} />
+      <Composer onDump={handleDump} phone={phone} />
+      {phone && <div className="d-phone-popup-boundary" aria-hidden />}
 
       <CategoryManager
         open={catsOpen}
