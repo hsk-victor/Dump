@@ -164,6 +164,15 @@ async function runEnrich(id: string): Promise<Dump | null> {
         videoType: ex.videoType !== undefined ? ex.videoType : dump.videoType,
         sourceState: unreachable ? "unreachable" : "reachable",
       };
+      if (unreachable) {
+        // A fetch that got no response says nothing new: it only fills fields still empty,
+        // so a failed re-check never erases a saved copy, and a known-gone original stays gone.
+        for (const key of Object.keys(fields) as (keyof Dump)[]) {
+          const had = dump[key];
+          if (had != null && !(Array.isArray(had) && !had.length)) delete fields[key];
+        }
+        fields.sourceState = dump.sourceState === "unavailable" ? "unavailable" : "unreachable";
+      }
       // The native-look render is a snapshot: a failed render keeps any older
       // one. Posts with media show the media itself, so the render is only
       // worth generating for text-only posts.

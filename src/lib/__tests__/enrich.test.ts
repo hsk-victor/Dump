@@ -81,6 +81,23 @@ describe("enrichDump", () => {
     });
   });
 
+  it("keeps a saved copy and its gone state when a re-check can't reach the site", async () => {
+    const d = createFromText("https://example.com/gone-then-offline");
+    extractUrl.mockResolvedValue(page({ title: "Kept title", description: "Kept text", author: "Ana", content: "Body" }));
+    await enrichDump(d.id);
+    db.updateDump(d.id, { sourceState: "unavailable", status: "processing" });
+    extractUrl.mockResolvedValue(page({ kind: "link", title: null, description: null, author: null, content: null, siteName: "example.com", unreachable: true }));
+    expect(await enrichDump(d.id)).toMatchObject({
+      sourceState: "unavailable",
+      status: "failed",
+      kind: "article",
+      title: "Kept title",
+      description: "Kept text",
+      author: "Ana",
+      siteName: "Example",
+    });
+  });
+
   it("treats a network failure as a retryable fetch error, not a removed original", async () => {
     const d = createFromText("https://example.com/flaky");
     extractUrl.mockResolvedValue(page({ title: null, unreachable: true }));
