@@ -131,3 +131,9 @@ it("never shows source loss on a note", () => {
   const html = card({ ...note, sourceState: "unavailable", status: "failed" });
   expect(html).not.toContain("d-state");
 });
+
+it("keeps a gone card's saved text in the narrow layout", () => {
+  const html = card({ ...link, sourceState: "unavailable" }, true);
+  expect(html).toContain("Tide pools at dawn");
+  expect(html).toContain("Original unavailable");
+});

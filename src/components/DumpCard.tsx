@@ -1691,7 +1691,7 @@ export default function DumpCard({ dump, phone = false, fresh, removing, onTopic
   };
 
   if (kind === "note") return <NoteCard dump={dump} bits={bits} />;
-  if (phone && exposed && !showMedia && !dump.videoUrl && !dump.xRender) {
+  if (phone && exposed && !dek && !showMedia && !dump.videoUrl && !dump.xRender) {
     return (
       <article {...bits.cardProps} className="d-card d-body">
         {actions}
