@@ -188,12 +188,14 @@ function PlayOrPreview({ bits }: { bits: CardBits }) {
 function StateRows({ state, retryName, onRetry, videoCopy, onVideoCopy, canSaveVideo }: { state: CardState; retryName: string; onRetry: () => void; videoCopy: VideoCopy | null; onVideoCopy: (keep: boolean) => void; canSaveVideo: boolean }) {
   // One start and one outcome message: "Still …" is the same operation, not a new announcement.
   const live = state.failed?.label ?? (state.loading?.showLabel ? state.loading.label.replace(/^Still (\w)/, (_, c: string) => c.toUpperCase()) : "");
+  const unavailableCopy = !!state.unavailable && videoCopy?.state === "missing";
+  const unavailableLabel = unavailableCopy ? "Original unavailable · Local copy missing" : "Original unavailable";
   return (
     <>
       <span className="sr-only" aria-live="polite">
-        {videoCopy?.state === "pending" ? "Saving video…" : videoCopy?.state === "failed" ? "Couldn't save video" : videoCopy?.state === "missing" ? "Local copy missing" : live}
+        {unavailableCopy ? unavailableLabel : videoCopy?.state === "pending" ? "Saving video…" : videoCopy?.state === "failed" ? "Couldn't save video" : videoCopy?.state === "missing" ? "Local copy missing" : live}
       </span>
-      {videoCopy && (
+      {videoCopy && !unavailableCopy && (
         <div className={`d-state${videoCopy.state === "failed" ? " d-state-failed" : videoCopy.state === "pending" ? " d-state-loading" : ""}`}>
           {videoCopy.state === "pending" && <span className="d-spinner" aria-hidden />}
           <span className="d-state-text">{videoCopy.state === "pending" ? "Saving video…" : videoCopy.state === "failed" ? "Couldn't save video" : "Local copy missing"}</span>
@@ -208,8 +210,8 @@ function StateRows({ state, retryName, onRetry, videoCopy, onVideoCopy, canSaveV
         <div className="d-state d-state-gone">
           <Glyph name="unlink" className="d-state-icon" />
           <span className="d-state-text">
-            Original unavailable
-            {state.unavailable.detail && <span className="d-state-sub">{state.unavailable.detail}</span>}
+            {unavailableLabel}
+            {!unavailableCopy && state.unavailable.detail && <span className="d-state-sub">{state.unavailable.detail}</span>}
           </span>
         </div>
       )}

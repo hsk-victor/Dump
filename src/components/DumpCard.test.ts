@@ -132,12 +132,27 @@ it.each([false, true])("renders missing videos as poster-only without playback c
   const video: Dump = { ...link, kind: "video", videoUrl: "https://example.com/clip.mp4", videoPosterUrl: "/api/files/poster.webp", sourceState: "unavailable", videoCopy: { state: "missing", startedAt: Date.now() } };
   const html = card(video, phone);
   expect(html).toContain("Local copy missing");
+  expect(html).toContain("Original unavailable · Local copy missing");
+  expect(html.match(/class="d-state(?: [^"]*)?"/g)).toHaveLength(1);
+  expect(html).not.toContain("Video not saved");
   expect(html).toContain("Preview only");
   expect(html).toContain("/api/files/poster.webp");
   expect(html).not.toContain("<video");
   expect(html).not.toContain("Retry saving video");
   expect(videoCopyAction(video)).toBeNull();
   expect(videoCopyAction({ ...video, sourceState: "reachable" })).toBe("Save video copy");
+});
+
+it.each([false, true])("keeps reachable originals with a missing copy in their existing state (phone: %s)", (phone) => {
+  const video: Dump = { ...link, kind: "video", videoUrl: "https://example.com/clip.mp4", videoPosterUrl: "/api/files/poster.webp", sourceState: "reachable", videoCopy: { state: "missing", startedAt: Date.now() } };
+  const html = card(video, phone);
+  expect(html).toContain("Local copy missing");
+  expect(html).not.toContain("Original unavailable");
+  expect(html).not.toContain("Video not saved");
+  expect(html).toContain("Retry saving video");
+  expect(html).toContain("Preview only");
+  expect(html).toContain("/api/files/poster.webp");
+  expect(html).not.toContain("<video");
 });
 
 it("exhausts local video sources without retrying a gone or unverified original", () => {
