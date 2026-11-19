@@ -62,6 +62,53 @@ it("archives real images as bounded WebP, preserving links and idempotency", asy
   expect(mocks.image).toHaveBeenCalledTimes(2);
 });
 
+it.each([
+  { orientation: undefined, quadrants: [0, 1, 2, 3] },
+  { orientation: 1, quadrants: [0, 1, 2, 3] },
+  { orientation: 2, quadrants: [1, 0, 3, 2] },
+  { orientation: 3, quadrants: [3, 2, 1, 0] },
+  { orientation: 4, quadrants: [2, 3, 0, 1] },
+  { orientation: 5, quadrants: [0, 2, 1, 3] },
+  { orientation: 6, quadrants: [1, 3, 0, 2] },
+  { orientation: 7, quadrants: [3, 1, 2, 0] },
+  { orientation: 8, quadrants: [2, 0, 3, 1] },
+])("preserves upright image and poster pixels with EXIF orientation $orientation", async ({ orientation, quadrants }) => {
+  const colors = [[255, 0, 0], [0, 255, 0], [0, 0, 255], [255, 255, 0]];
+  const sideways = orientation !== undefined && orientation >= 5;
+  const width = sideways ? 80 : 120;
+  const height = sideways ? 120 : 80;
+  const pixels = Buffer.alloc(width * height * 3);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const quadrant = (y < height / 2 ? 0 : 2) + (x < width / 2 ? 0 : 1);
+      pixels.set(colors[quadrants[quadrant]], (y * width + x) * 3);
+    }
+  }
+  const source = sharp(pixels, { raw: { width, height, channels: 3 } });
+  const input = orientation === undefined
+    ? await source.png().toBuffer()
+    : await source.withMetadata({ orientation }).jpeg({ quality: 100, chromaSubsampling: "4:4:4" }).toBuffer();
+  expect((await sharp(input).metadata()).orientation).toBe(orientation);
+  mocks.image.mockResolvedValue(input);
+  const poster = "https://example.com/oriented-poster.jpg";
+  const d = create({ videoUrl: "https://example.com/clip.mp4", videoPosterUrl: poster });
+  await archiveDump(d.id);
+  const saved = db.getDump(d.id)!;
+  for (const url of [d.imageUrl!, poster]) {
+    const output = await bytes(saved.mediaArchive[url]);
+    expect((await sharp(output).metadata()).orientation).toBeUndefined();
+    const { data, info } = await sharp(output).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+    expect(info).toMatchObject({ width: 120, height: 80, channels: 3 });
+    for (const [quadrant, [x, y]] of [[30, 20], [90, 20], [30, 60], [90, 60]].entries()) {
+      const actual = data.subarray((y * info.width + x) * 3, (y * info.width + x) * 3 + 3);
+      for (let channel = 0; channel < 3; channel++) {
+        expect(Math.abs(actual[channel] - colors[quadrant][channel])).toBeLessThan(15);
+      }
+    }
+  }
+  expect(mocks.video).not.toHaveBeenCalled();
+});
+
 it("handles empty/local sources and independent image failures", async () => {
   const empty = create({ imageUrl: "/api/files/upload.png" });
   await archiveDump(empty.id);
