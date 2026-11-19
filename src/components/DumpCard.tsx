@@ -1163,23 +1163,13 @@ function noteDir(text: string): "rtl" | "ltr" {
   return "ltr";
 }
 
-/** The text under the catalog header: the title already shows the first line,
- *  so drop it from the ruled text to avoid printing it twice. */
-function noteBody(dump: Dump): string | null {
-  const content = dump.content ?? "";
-  const title = dump.title;
-  if (title && content.startsWith(title)) return content.slice(title.length).trimStart() || null;
-  return content || null;
-}
-
-/** note — an index card: a catalog header (uppercase title + date) over ruled
+/** note — an index card: a catalog header (label + date) over ruled
  *  writing lines, with a red margin rule on the leading edge. Plain card stock —
  *  the topic tint stays in the meta row, not the paper. User text only: no URL,
  *  no provider, nothing to link to. Clicking the body (or the Edit action) swaps
- *  the ruled text for an editor on the same lines; the title is always the first
- *  line, so the whole note is edited as one text and re-titled on save. */
+ *  the ruled text for an editor on the same lines. */
 function NoteCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
-  const body = noteBody(dump);
+  const body = dump.content || bits.title;
   const areaRef = useRef<HTMLTextAreaElement>(null);
   const openTimer = useRef<number | undefined>(undefined);
   const [saving, setSaving] = useState(false);
@@ -1214,7 +1204,7 @@ function NoteCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
   return (
     <article {...bits.cardProps} className="d-card group">
       {bits.actions}
-      <div className="d-note-body" dir={noteDir(dump.title ?? dump.content ?? "")}>
+      <div className="d-note-body" dir={noteDir(body ?? "")}>
         {editing ? (
           <>
             <div className="d-note-head">
@@ -1243,14 +1233,12 @@ function NoteCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
               }}
             />
           </>
-        ) : bits.processing && !bits.title ? (
+        ) : bits.processing && !body ? (
           shimmerLines()
         ) : (
           <>
             <div className="d-note-head">
-              <span className="d-note-title" dir="auto">
-                {bits.title ?? "Note"}
-              </span>
+              <span className="d-note-title">Note</span>
               <time className="d-note-date" dateTime={new Date(dump.createdAt).toISOString()}>
                 {shortDate(dump.createdAt)}
               </time>
