@@ -10,7 +10,9 @@ use std::sync::Mutex;
 use std::thread;
 use std::time::{Duration, Instant};
 
+use tauri::webview::NewWindowResponse;
 use tauri::{AppHandle, Manager, RunEvent, Url, WebviewUrl, WebviewWindowBuilder};
+use tauri_plugin_opener::OpenerExt;
 
 // A fixed port keeps the page origin, and with it localStorage (theme, density), stable across launches.
 const PREFERRED_PORT: u16 = 47913;
@@ -74,11 +76,28 @@ fn show_error(app: &AppHandle, message: &str) {
     }
 }
 
-fn start(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
+// The window only shows the splash and the local server; any other page opens in the default browser.
+fn is_app_url(url: &Url, port: u16) -> bool {
+    match url.scheme() {
+        "tauri" => true,
+        "http" => {
+            let host = url.host_str();
+            host == Some("tauri.localhost") || (host == Some("127.0.0.1") && url.port() == Some(port))
+        }
+        _ => false,
+    }
+}
+
+fn open_external(app: &AppHandle, url: &Url) {
+    if matches!(url.scheme(), "http" | "https" | "mailto") {
+        let _ = app.opener().open_url(url.as_str(), None::<&str>);
+    }
+}
+
+fn start(app: &AppHandle, port: u16) -> Result<(), Box<dyn std::error::Error>> {
     let server_dir = dunce::simplified(&app.path().resource_dir()?.join("server")).to_path_buf();
     let data_dir: PathBuf = app.path().app_data_dir()?;
     let log_dir: PathBuf = app.path().app_log_dir()?;
-    let port = pick_port();
     let child = spawn_server(&server_dir, &data_dir, &log_dir, port)?;
     *app.state::<Server>().0.lock().unwrap() = Some(child);
 
@@ -109,14 +128,37 @@ fn stop_server(app: &AppHandle) {
 
 fn main() {
     tauri::Builder::default()
+        // A second launch focuses the running window instead of starting another server on the same library.
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.unminimize();
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+        }))
+        .plugin(tauri_plugin_opener::init())
         .manage(Server(Mutex::new(None)))
         .setup(|app| {
+            let port = pick_port();
+            let nav_app = app.handle().clone();
+            let popup_app = app.handle().clone();
             WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
                 .title("Dump")
                 .inner_size(1280.0, 860.0)
                 .min_inner_size(400.0, 500.0)
+                .on_navigation(move |url| {
+                    if is_app_url(url, port) {
+                        return true;
+                    }
+                    open_external(&nav_app, url);
+                    false
+                })
+                .on_new_window(move |url, _features| {
+                    open_external(&popup_app, &url);
+                    NewWindowResponse::Deny
+                })
                 .build()?;
-            if let Err(e) = start(app.handle()) {
+            if let Err(e) = start(app.handle(), port) {
                 show_error(app.handle(), &format!("Dump couldn't start: {e}"));
             }
             Ok(())
