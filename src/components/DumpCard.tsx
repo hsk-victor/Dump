@@ -1252,7 +1252,8 @@ function NoteCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
       return;
     }
     setSaving(true);
-    const ok = await bits.onSaveNote(dump.id, text);
+    // A request that never got an answer (offline, server down) is a failed save too.
+    const ok = await bits.onSaveNote(dump.id, text).catch(() => false);
     setSaving(false);
     // A failed save keeps the editor and the draft open until a retry lands.
     setSaveFailed(!ok);
