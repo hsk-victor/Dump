@@ -859,8 +859,8 @@ export default function DumpApp() {
                   <circle cx="10" cy="17" r="2.2" />
                 </svg>
               </button>
-              {settingsOpen && (
-                <div className="d-settings-pop">
+              {(settingsOpen || phone) && (
+                <div className="d-settings-pop" hidden={!settingsOpen}>
                   <div className="d-settings-row d-desktop-setting">
                     <span className="d-settings-label">Type</span>
                     <select

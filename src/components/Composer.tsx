@@ -144,7 +144,8 @@ export default function Composer({ onDump, phone }: Props) {
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => {
-            if (!phone && e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+            if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing
+              && !window.matchMedia("(pointer: coarse)").matches) {
               e.preventDefault();
               submit();
             }

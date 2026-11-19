@@ -3036,6 +3036,10 @@ body.d-dragging * {
     max-height: min(65dvh, 27rem);
     overflow: auto;
     overscroll-behavior: contain;
+    animation: none;
+  }
+  .d-settings-pop[hidden] {
+    display: none;
   }
   .d-desktop-setting,
   .d-footer,
