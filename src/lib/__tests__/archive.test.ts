@@ -102,6 +102,39 @@ it("reconciles exhausted local media errors without accepting an unrelated file 
   }
 });
 
+it.each([true, false])("only drops a reported video copy when storage confirms it is missing (exists: %s)", async (exists) => {
+  const videoUrl = "https://example.com/reported.mp4";
+  const local = `/api/files/reported-${exists}.mp4`;
+  const poster = "https://example.com/poster.png";
+  const mediaArchive = { [videoUrl]: local, [poster]: "/api/files/poster.webp" };
+  const d = create({ imageUrl: null, videoUrl, keepVideo: true, mediaArchive });
+  if (exists) await fileStorage.put(storedFileName(local)!, new Uint8Array([1, 2, 3]));
+  const req = new NextRequest("http://localhost", { method: "PATCH", body: JSON.stringify({ failedVideoUrl: local }) });
+  const response = await PATCH(req, { params: Promise.resolve({ id: d.id }) });
+  const expected = exists
+    ? { mediaArchive, keepVideo: true, videoCopy: null }
+    : { mediaArchive: { [poster]: "/api/files/poster.webp" }, keepVideo: false, videoCopy: { state: "missing" } };
+  expect(response.status).toBe(200);
+  expect(await response.json()).toMatchObject(expected);
+  expect(db.getDump(d.id)).toMatchObject(expected);
+  expect(db.getDump(d.id)!.mediaArchive[videoUrl]).toBe(exists ? local : undefined);
+});
+
+it("keeps a reported video mapping when storage cannot confirm absence", async () => {
+  const videoUrl = "https://example.com/uncertain.mp4";
+  const local = "/api/files/uncertain.mp4";
+  const d = create({ imageUrl: null, videoUrl, keepVideo: true, mediaArchive: { [videoUrl]: local } });
+  const stat = vi.spyOn(fileStorage, "stat").mockRejectedValueOnce(Object.assign(new Error("Access denied"), { code: "EACCES" }));
+  try {
+    const req = new NextRequest("http://localhost", { method: "PATCH", body: JSON.stringify({ failedVideoUrl: local }) });
+    const response = await PATCH(req, { params: Promise.resolve({ id: d.id }) });
+    expect(await response.json()).toMatchObject({ mediaArchive: d.mediaArchive, keepVideo: true, videoCopy: null });
+    expect(db.getDump(d.id)!.mediaArchive[videoUrl]).toBe(local);
+  } finally {
+    stat.mockRestore();
+  }
+});
+
 it.each([true, false])("reports keep-video archival as pending until it settles (saved: %s)", async (success) => {
   const videoUrl = "https://example.com/delayed.mp4";
   const poster = "https://example.com/poster.png";

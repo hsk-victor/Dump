@@ -95,11 +95,19 @@ export async function reconcileVideoCopy(dump: Dump): Promise<Dump> {
     return getDump(dump.id) ?? dump;
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") return dump;
-    return markVideoMissing(dump.id, local!) ?? dump;
+    return await markVideoMissing(dump.id, local!) ?? dump;
   }
 }
 
-export function markVideoMissing(id: string, local: string): Dump | null {
+export async function markVideoMissing(id: string, local: string): Promise<Dump | null> {
+  const name = storedFileName(local);
+  if (!name) return getDump(id);
+  try {
+    await fileStorage.stat(name);
+    return getDump(id);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") return getDump(id);
+  }
   const dump = getDump(id);
   if (!dump?.videoUrl || (dump.mediaArchive[dump.videoUrl] !== local && dump.videoUrl !== local)) return dump;
   const mediaArchive = { ...dump.mediaArchive };

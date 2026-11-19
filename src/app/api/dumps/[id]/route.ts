@@ -20,7 +20,7 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
   if (!getDump(id)) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const body = await req.json().catch(() => ({}));
   if (typeof body.failedVideoUrl === "string") {
-    return NextResponse.json(markVideoMissing(id, body.failedVideoUrl));
+    return NextResponse.json(await markVideoMissing(id, body.failedVideoUrl));
   }
   if (typeof body.keepVideo === "boolean") {
     const current = getDump(id)!;
