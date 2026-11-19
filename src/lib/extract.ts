@@ -204,13 +204,18 @@ export function isGoneStatus(status: number): boolean {
   return status === 404 || status === 410;
 }
 
+/** Rate limits and server errors: the site answered but gave nothing, so try again later. */
+export function isTransientStatus(status: number): boolean {
+  return status === 429 || status >= 500;
+}
+
 async function fetchOEmbed(url: string): Promise<{ data: OEmbed | null; reached: boolean; gone?: boolean } | null> {
   const endpoint = oembedEndpoint(url);
   if (!endpoint) return null;
   let reached = false;
   try {
     const res = await fetchWithTimeout(endpoint, { headers: { accept: "application/json" } });
-    reached = true;
+    reached = !isTransientStatus(res.status);
     if (!res.ok) return { data: null, reached, gone: isGoneStatus(res.status) };
     return { data: (await res.json()) as OEmbed, reached };
   } catch {
@@ -335,7 +340,8 @@ export async function extractUrl(url: string): Promise<Extracted> {
   if (!isX) {
     try {
       const res = await fetchWithTimeout(url, { headers: { accept: "text/html,application/xhtml+xml,image/*;q=0.8,*/*;q=0.5" } });
-      reached = true;
+      // A 429/5xx is a temporary failure, not a page: it mustn't settle as a reachable save.
+      if (!isTransientStatus(res.status)) reached = true;
       pageGone = isGoneStatus(res.status);
       contentType = res.headers.get("content-type") ?? "";
       finalUrl = res.url || url;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseHtml, isPrivateIp, isGoneStatus } from "../extract";
+import { parseHtml, isPrivateIp, isGoneStatus, isTransientStatus } from "../extract";
 
 describe("parseHtml", () => {
   it("reads Open Graph metadata and resolves relative images", () => {
@@ -43,5 +43,12 @@ describe("isGoneStatus", () => {
   it("only treats 404 and 410 as a removed original", () => {
     expect([404, 410].every(isGoneStatus)).toBe(true);
     expect([200, 401, 403, 429, 500, 502, 503].some(isGoneStatus)).toBe(false);
+  });
+});
+
+describe("isTransientStatus", () => {
+  it("treats rate limits and server errors as retryable, never as gone", () => {
+    expect([429, 500, 502, 503, 504].every(isTransientStatus)).toBe(true);
+    expect([200, 401, 403, 404, 410].some(isTransientStatus)).toBe(false);
   });
 });

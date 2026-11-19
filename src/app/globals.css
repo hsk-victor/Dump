@@ -3416,6 +3416,47 @@ body.d-dragging * {
 .d-poster-frame {
   min-height: 6rem;
 }
+/* Desktop exception states: the media card's details leave the hover overlay for an in-flow
+   footer below the media — retained title/byline, status, then topic/date — so nothing
+   competes with the image. Saved cards keep the quiet overlay. */
+@media (width > 600px) {
+  :is(.d-mediacard, .d-mus)[data-exception] :is(.d-mpanel, .d-mus-panel) {
+    position: static;
+    max-height: none;
+    overflow: visible;
+    padding: 0.7rem 0.8rem 0.6rem;
+    border-radius: 0;
+    background: var(--surface);
+    box-shadow: none;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    opacity: 1;
+    translate: none;
+    pointer-events: auto;
+    transition: none;
+  }
+  /* The widget keeps showing its artwork, title and artist; the footer doesn't repeat them. */
+  .d-mus[data-exception] :is(.d-mus-face, .d-mus-src) {
+    opacity: 1;
+  }
+  .d-mus[data-exception] .d-mus-ptitle {
+    display: none;
+  }
+}
+/* Remote-only audio: a plain destination, not a player. */
+.d-mus-open {
+  display: inline-flex;
+  align-self: start;
+  margin-top: 0.35rem;
+  padding: 0.2rem 0.6rem;
+  border: 1px solid color-mix(in srgb, var(--ink) 18%, transparent);
+  border-radius: 999px;
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 600;
+  color: var(--ink-2);
+  white-space: nowrap;
+}
 .d-menu-sep {
   height: 1px;
   margin: 0.25rem 0.4rem;
