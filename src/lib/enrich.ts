@@ -81,6 +81,11 @@ function needsIdentify(d: Pick<Dump, "kind" | "domain">): boolean {
  * can't race a later one and overwrite it finishing last. */
 const enrichTail = new Map<string, Promise<unknown>>();
 
+/** Whether an enrichment or render run for this dump is queued or running in this process. */
+export function isEnriching(id: string): boolean {
+  return enrichTail.has(id);
+}
+
 /**
  * Fills in a freshly saved dump: fetch metadata for links, then file it under a topic.
  * Runs in the background after the dump has already been saved and shown to the user.
@@ -130,6 +135,14 @@ async function runEnrich(id: string): Promise<Dump | null> {
     if (dump.url) {
       const ex = await extractUrl(dump.url);
       unreachable = ex.unreachable;
+      if (ex.gone) {
+        // The original is confirmed gone: what was already saved is all there is now, so
+        // keep every retained field and only record the loss. A never-filed dump still gets
+        // a topic from what it has.
+        const filed = dump.classifiedBy ? null : classifyHeuristic({ ...dump, title: dump.title ?? titleFromUrl(dump.url) });
+        const cls: Partial<Dump> = filed ? { topic: filed.topic, tags: filed.tags, classifiedBy: "rules" } : {};
+        return commit(id, { ...cls, sourceState: "unavailable", status: "ready" }, dump);
+      }
       const title = dump.title ?? truncate(ex.title, 300);
       // Only user-supplied or fetched titles are stored, so a later retry can always fill one in.
       // Without one, the card shows the URL-derived title and its words go into `content` to stay searchable.
@@ -149,6 +162,7 @@ async function runEnrich(id: string): Promise<Dump | null> {
         videoUrl: ex.videoUrl !== undefined ? ex.videoUrl : dump.videoUrl,
         videoPosterUrl: ex.videoPosterUrl ?? dump.videoPosterUrl,
         videoType: ex.videoType !== undefined ? ex.videoType : dump.videoType,
+        sourceState: unreachable ? "unreachable" : "reachable",
       };
       // The native-look render is a snapshot: a failed render keeps any older
       // one. Posts with media show the media itself, so the render is only

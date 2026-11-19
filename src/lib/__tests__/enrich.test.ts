@@ -63,6 +63,30 @@ describe("enrichDump", () => {
     expect(db.getDump(d.id)).toMatchObject({ title: null, status: unreachable ? "failed" : "ready" });
   });
 
+  it("keeps everything saved when the original is confirmed gone, and only records the loss", async () => {
+    const d = createFromText("https://example.com/gone-post");
+    extractUrl.mockResolvedValue(page({ title: "Kept title", description: "Kept text", imageUrl: "https://example.com/kept.jpg", imageUrls: ["https://example.com/kept.jpg"] }));
+    await enrichDump(d.id);
+    expect(db.getDump(d.id)).toMatchObject({ sourceState: "reachable", status: "ready" });
+    db.updateDump(d.id, { status: "processing" });
+    extractUrl.mockResolvedValue(page({ kind: "link", title: "404 Not Found", description: null, imageUrl: null, imageUrls: [], gone: true }));
+    const out = await enrichDump(d.id);
+    expect(out).toMatchObject({
+      sourceState: "unavailable",
+      status: "ready",
+      kind: "article",
+      title: "Kept title",
+      description: "Kept text",
+      imageUrl: "https://example.com/kept.jpg",
+    });
+  });
+
+  it("treats a network failure as a retryable fetch error, not a removed original", async () => {
+    const d = createFromText("https://example.com/flaky");
+    extractUrl.mockResolvedValue(page({ title: null, unreachable: true }));
+    expect(await enrichDump(d.id)).toMatchObject({ sourceState: "unreachable", status: "failed" });
+  });
+
   it("clears a provisional video URL when extraction identifies a page instead", async () => {
     const d = db.createDump({ kind: "video", url: "https://example.com/preview.mp4", videoUrl: "https://example.com/preview.mp4", videoType: "video" });
     extractUrl.mockResolvedValue(page({ videoUrl: null, videoType: null, imageUrl: "https://example.com/preview.jpg", imageUrls: ["https://example.com/preview.jpg"] }));

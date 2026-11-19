@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState, type CSSProperties, type MouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type MouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { Menu } from "@base-ui/react/menu";
 import type { Dump } from "@/lib/db";
 import { SUBJECT_MIN_CONFIDENCE, subjectLine, kindMeta, providerMeta, topicMeta, type TopicMeta } from "@/lib/taxonomy";
 import { timeAgo, shortDate } from "@/lib/format";
 import { GITHUB_TAG, githubInfo, type GithubInfo, titleFromUrl } from "@/lib/detect";
 import { PhoneMenu } from "./PhoneMenu";
+import { cardState, LOADING_DEADLINE_MS, LOADING_LABEL_DELAY_MS, STILL_LOADING_MS, type CardState } from "@/lib/card-state";
 
 /** Wiring for the actions-row grip: the parent feed owns the drag lifecycle. */
 export interface DragHandle {
@@ -85,6 +86,8 @@ const GLYPHS = {
   person: "M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z",
   pin: "M16 9V4l1 0c.55 0 1-.45 1-1s-.45-1-1-1H7c-.55 0-1 .45-1 1s.45 1 1 1l1 0v5c0 1.66-1.34 3-3 3h-1v2h7v7l1 1 1-1v-7h7v-2h-1c-1.66 0-3-1.34-3-3z",
   pencil: "M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z",
+  unlink:
+    "M17 7h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1 0 1.43-.98 2.63-2.31 2.98l1.46 1.46C20.88 15.61 22 13.95 22 12c0-2.76-2.24-5-5-5zm-1 4h-2.19l2 2H16zM2 4.27l3.11 3.11C3.29 8.12 2 9.91 2 12c0 2.76 2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1 0-1.59 1.21-2.9 2.76-3.07L8.73 11H8v2h2.73L13 15.27V17h1.73l4.01 4L20 19.74 3.27 3 2 4.27z",
   grip: "M11 18c0 1.1-.9 2-2 2s-2-.9-2-2 .9-2 2-2 2 .9 2 2zm-2-8c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm0-5c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm6 4c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z",
 };
 
@@ -171,6 +174,75 @@ function PlayBadge() {
   );
 }
 
+/** A video whose only kept copy is its poster can't play: say so instead of drawing a play button. */
+function PlayOrPreview({ bits }: { bits: CardBits }) {
+  if (bits.posterOnly) return <span className="d-preview-only">Preview only</span>;
+  return <PlayBadge />;
+}
+
+/** Exception rows under the content, above topic/date: loading, original unavailable, failed.
+ *  A saved card renders none — that's the quiet default. */
+function StateRows({ state, retryName, onRetry }: { state: CardState; retryName: string; onRetry: () => void }) {
+  // One start and one outcome message: "Still …" is the same operation, not a new announcement.
+  const live = state.failed?.label ?? (state.loading?.showLabel ? state.loading.label.replace(/^Still (\w)/, (_, c: string) => c.toUpperCase()) : "");
+  return (
+    <>
+      <span className="sr-only" aria-live="polite">
+        {live}
+      </span>
+      {state.unavailable && (
+        <div className="d-state d-state-gone">
+          <Glyph name="unlink" className="d-state-icon" />
+          <span className="d-state-text">
+            Original unavailable
+            {state.unavailable.detail && <span className="d-state-sub">{state.unavailable.detail}</span>}
+          </span>
+        </div>
+      )}
+      {state.loading?.showLabel && (
+        <div className="d-state d-state-loading">
+          <span className="d-spinner" aria-hidden />
+          <span className="d-state-text">{state.loading.label}</span>
+        </div>
+      )}
+      {state.failed && (
+        <div className="d-state d-state-failed">
+          <span className="d-state-text">{state.failed.label}</span>
+          <button type="button" className="d-state-retry" onClick={onRetry} aria-label={`${state.failed.action}, ${retryName}`}>
+            Retry
+          </button>
+        </div>
+      )}
+    </>
+  );
+}
+
+/** Re-renders a loading card exactly when its label should change (300ms, 10s, 30s). */
+function useStateClock(processing: boolean, since: number) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!processing) return;
+    const age = Date.now() - since;
+    const next = [LOADING_LABEL_DELAY_MS, STILL_LOADING_MS, LOADING_DEADLINE_MS].find((t) => t > age);
+    if (next === undefined) return;
+    const t = window.setTimeout(() => setNow(Date.now()), next - age + 5);
+    return () => window.clearTimeout(t);
+  }, [processing, since, now]);
+  return now;
+}
+
+const subscribeOnline = (cb: () => void) => {
+  window.addEventListener("online", cb);
+  window.addEventListener("offline", cb);
+  return () => {
+    window.removeEventListener("online", cb);
+    window.removeEventListener("offline", cb);
+  };
+};
+function useOnline() {
+  return useSyncExternalStore(subscribeOnline, () => navigator.onLine, () => true);
+}
+
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 /** GitHub titles come back like "GitHub - owner/repo: Desc" or
@@ -218,6 +290,15 @@ interface CardBits {
   showMedia: boolean;
   setImgFailed: (v: boolean) => void;
   processing: boolean;
+  /** Exception rows (loading / unavailable / failed). Already inside `meta` and `bareMeta`;
+   *  media cards render them below the media instead, with `panelMeta` in their panel. */
+  stateRows: ReactNode;
+  panelMeta: ReactNode;
+  /** Failed or unavailable: media cards keep their panel open so the retained details stay readable. */
+  exposed: boolean;
+  /** Original confirmed gone. */
+  gone: boolean;
+  posterOnly: boolean;
   /** Touch tap-to-reveal: first tap on a media card's face opens its panel (data-open). */
   revealed: boolean;
   cardProps: Record<string, unknown>;
@@ -383,7 +464,7 @@ function XVideo({ dump, author, href }: { dump: Dump; author: string | null; hre
   );
 }
 
-/** x — native post chrome with inline media; dead tweets retain their tombstone. */
+/** x — native post chrome with inline media; a gone post keeps whatever was saved. */
 function XCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
   const [failedIdx, setFailedIdx] = useState<ReadonlySet<number>>(new Set());
   const [xrFailed, setXrFailed] = useState(false);
@@ -421,7 +502,18 @@ function XCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
       ) : media ? (
         /* Just the media — it still links through to the post. */
         <>
-          {dump.videoUrl && <XVideo dump={dump} author={author} href={bits.href} />}
+          {dump.videoUrl &&
+            (bits.posterOnly ? (
+              <div className="d-post-video-frame d-poster-frame">
+                {dump.videoPosterUrl && (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img className="d-post-video" src={dump.videoPosterUrl} alt="" loading="lazy" referrerPolicy="no-referrer" />
+                )}
+                <PlayOrPreview bits={bits} />
+              </div>
+            ) : (
+              <XVideo dump={dump} author={author} href={bits.href} />
+            ))}
           {images.length > 0 && (
             <a href={bits.href ?? undefined} target="_blank" rel="noreferrer" className={`d-post-gallery${images.length > 1 ? " d-post-grid" : ""}`}>
               {allImages.map((src, i) => !failedIdx.has(i) && (
@@ -448,8 +540,6 @@ function XCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
           </a>
           {bits.processing && !text ? (
             shimmerLines()
-          ) : dump.status === "failed" && !text ? (
-            <p className="d-tomb">This post doesn&rsquo;t exist.</p>
           ) : (
             <>
               {headline && <p className="d-post-headline" dir="auto">{headline}</p>}
@@ -511,7 +601,7 @@ function PostCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
 
 /** reddit — r/sub roundel + "r/sub · u/author · ago" kicker, headline, text,
  *  framed media with a 1/N counter. Native-reddit identity without the vote
- *  rail or action row; a dead thread renders a tombstone. */
+ *  rail or action row; a gone thread keeps whatever was saved. */
 function RedditCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
   const [failedIdx, setFailedIdx] = useState<ReadonlySet<number>>(new Set());
   const sub = redditSub(dump.url);
@@ -521,7 +611,6 @@ function RedditCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
   const allImages = dump.imageUrls.length ? dump.imageUrls : dump.imageUrl ? [dump.imageUrl] : [];
   const shownIdx = allImages.findIndex((_, i) => !failedIdx.has(i));
   const images = allImages.filter((_, i) => !failedIdx.has(i));
-  const dead = dump.status === "failed" && !text;
   return (
     <article {...bits.cardProps} className="d-card d-rd group">
       {bits.actions}
@@ -536,8 +625,6 @@ function RedditCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
         </div>
         {bits.processing && !dump.title && !text ? (
           shimmerLines()
-        ) : dead ? (
-          <p className="d-tomb">This thread doesn&rsquo;t exist.</p>
         ) : (
           <>
             {headline && (
@@ -552,7 +639,7 @@ function RedditCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
           <a href={bits.href ?? undefined} target="_blank" rel="noreferrer" className="d-rd-media">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={images[0]} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setFailedIdx((s) => new Set(s).add(shownIdx))} />
-            {dump.kind === "video" && <PlayBadge />}
+            {dump.kind === "video" && <PlayOrPreview bits={bits} />}
             {images.length > 1 && <span className="d-post-count">1/{images.length}</span>}
           </a>
         )}
@@ -601,7 +688,6 @@ function HnCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
   const headline = sparse ? hnFallback(dump, item.raw) : item.kind === "story" || item.kind === "job" ? item.raw : item.rest;
   const text = dump.description ?? dump.summary;
   const body = text && text !== headline ? text : null;
-  const dead = dump.status === "failed" && sparse && !body;
   const empty = bits.processing && sparse;
   return (
     <article {...bits.cardProps} className="d-card d-hn group">
@@ -615,8 +701,6 @@ function HnCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
         </div>
         {empty ? (
           shimmerLines()
-        ) : dead ? (
-          <p className="d-tomb">This item doesn&rsquo;t exist.</p>
         ) : (
           <>
             <h3 className="d-headline" dir="auto">
@@ -649,13 +733,12 @@ function HnCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
 /** github — media-first, like the media cards: GitHub's generated og:image (repo
  *  name, description, stats) IS the card at rest; a type tag names the page kind
  *  (Issue/PR/File/Profile) and a glass panel with title + meta rises on hover.
- *  No image → quiet kicker + headline body; dead saves get a tombstone. */
+ *  No image → quiet kicker + headline body. */
 function GithubCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
   const info = githubInfo(dump.url);
   const title = githubTitle(dump, info);
   const dek = githubDek(dump, info);
   const tag = GITHUB_TAG[info.kind];
-  const dead = dump.status === "failed";
   // Issues/PRs/discussions carry a real title; for repos, files and profiles the
   // image already says it — the panel names the thing instead.
   const titled = info.kind === "issue" || info.kind === "pr" || info.kind === "discussion";
@@ -665,35 +748,17 @@ function GithubCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
 
   if (bits.showMedia) {
     return (
-      <article {...bits.cardProps} className="d-card d-mediacard d-ghcard group" data-open={dead || bits.revealed || undefined}>
+      <article {...bits.cardProps} className="d-card d-mediacard d-ghcard group" data-open={bits.exposed || bits.revealed || undefined}>
         {bits.actions}
         {bits.pinBadge}
+        <div className="d-mframe">
         <a href={bits.href ?? undefined} target="_blank" rel="noreferrer" className="d-media" aria-label={label}>
           <FadeImg dump={dump} bits={bits} alt={titled ? (title ?? "") : ""} />
           <MediaMark dump={dump} />
           {tag && <span className="d-gh-tag">{tagLabel}</span>}
         </a>
-        {bits.processing && (
-          <span className="d-mchip" aria-hidden>
-            <span className="d-mchip-sorting shimmer" />
-          </span>
-        )}
         <div className="d-mpanel">
-          {dead ? (
-            <>
-              <h3 className="d-mpanel-title" dir="auto">
-                {bits.href ? (
-                  <a href={bits.href} target="_blank" rel="noreferrer">
-                    {label}
-                  </a>
-                ) : (
-                  label
-                )}
-              </h3>
-              <p className="d-tomb">This GitHub page doesn&rsquo;t exist.</p>
-            </>
-          ) : (
-            <>
+                      <>
               <h3 className="d-mpanel-title" dir="auto">
                 {bits.href ? (
                   <a href={bits.href} target="_blank" rel="noreferrer">
@@ -709,14 +774,15 @@ function GithubCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
                 </p>
               )}
             </>
-          )}
           {dump.note && (
             <p className="d-mpanel-note" dir="auto">
               {dump.note}
             </p>
           )}
-          {bits.meta}
+          {bits.panelMeta}
         </div>
+        </div>
+        {bits.stateRows}
       </article>
     );
   }
@@ -737,21 +803,8 @@ function GithubCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
             )}
           </span>
         </div>
-        {bits.processing ? (
+        {bits.processing && !title ? (
           shimmerLines()
-        ) : dead ? (
-          <>
-            <h3 className="d-headline" dir="auto">
-              {bits.href ? (
-                <a href={bits.href} target="_blank" rel="noreferrer">
-                  {label}
-                </a>
-              ) : (
-                label
-              )}
-            </h3>
-            <p className="d-tomb">This GitHub page doesn&rsquo;t exist.</p>
-          </>
         ) : (
           <>
             <h3 className="d-headline" dir="auto">
@@ -796,7 +849,7 @@ function YouTubeCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
             <ProviderIcon provider={dump.provider} />
           </span>
         )}
-        <PlayBadge />
+        <PlayOrPreview bits={bits} />
         <Flag dump={dump} />
       </a>
       <a href={bits.href ?? undefined} target="_blank" rel="noreferrer" className="d-vid-info">
@@ -828,10 +881,11 @@ function VideoCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
     [dump.author?.trim(), providerMeta(dump.provider)?.label].filter(Boolean).join(" · ") ||
     (dump.url ? bits.site : null);
   return (
-    <article {...bits.cardProps} className={`d-card d-mediacard d-vidcard group${dump.videoUrl ? " d-inline-video" : ""}`} data-open={dump.status === "failed" || bits.revealed || undefined}>
+    <article {...bits.cardProps} className={`d-card d-mediacard d-vidcard group${dump.videoUrl ? " d-inline-video" : ""}`} data-open={bits.exposed || bits.revealed || undefined}>
       {bits.actions}
       {bits.pinBadge}
-      {dump.videoUrl ? (
+      <div className="d-mframe">
+      {dump.videoUrl && !bits.posterOnly ? (
         <div className="d-media d-vmedia">
           <LoopVideo src={dump.videoUrl} poster={dump.videoPosterUrl ?? undefined} controls label={t.title ?? "Video"} />
           <MediaMark dump={dump} />
@@ -846,14 +900,9 @@ function VideoCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
           </span>
         )}
         <span className="d-vscrim" aria-hidden />
-        <PlayBadge />
+        <PlayOrPreview bits={bits} />
         <MediaMark dump={dump} />
       </a>
-      )}
-      {bits.processing && (
-        <span className="d-mchip" aria-hidden>
-          <span className="d-mchip-sorting shimmer" />
-        </span>
       )}
       <div className="d-mpanel">
         {bits.processing && !t.title ? (
@@ -875,8 +924,10 @@ function VideoCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
             {t.note && <p className="d-annotation d-mpanel-note" dir="auto">{t.note}</p>}
           </>
         )}
-        {bits.meta}
+        {bits.panelMeta}
       </div>
+      </div>
+      {bits.stateRows}
     </article>
   );
 }
@@ -902,19 +953,15 @@ function mediaText(dump: Dump, bits: CardBits) {
 function MediaCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
   const t = mediaText(dump, bits);
   return (
-    <article {...bits.cardProps} className="d-card d-mediacard group" data-open={dump.status === "failed" || bits.revealed || undefined}>
+    <article {...bits.cardProps} className="d-card d-mediacard group" data-open={bits.exposed || bits.revealed || undefined}>
       {bits.actions}
       {bits.pinBadge}
+      <div className="d-mframe">
       <a href={bits.href ?? undefined} target="_blank" rel="noreferrer" className="d-media" aria-label={t.title ?? t.byline ?? "Open image"}>
         <FadeImg dump={dump} bits={bits} alt={t.title ?? ""} />
-        {dump.kind === "video" && <PlayBadge />}
+        {dump.kind === "video" && <PlayOrPreview bits={bits} />}
         <MediaMark dump={dump} />
       </a>
-      {bits.processing && (
-        <span className="d-mchip" aria-hidden>
-          <span className="d-mchip-sorting shimmer" />
-        </span>
-      )}
       <div className="d-mpanel">
         {bits.processing && !t.title ? (
           shimmerLines()
@@ -935,8 +982,10 @@ function MediaCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
             {t.note && <p className="d-annotation d-mpanel-note" dir="auto">{t.note}</p>}
           </>
         )}
-        {bits.meta}
+        {bits.panelMeta}
       </div>
+      </div>
+      {bits.stateRows}
     </article>
   );
 }
@@ -961,15 +1010,15 @@ function IgCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
   const headline = !urlTitle && bits.title !== caption && !attributionName(dump.title, dump) ? bits.title : null;
   const title = headline ?? caption;
   const dek = headline && caption && caption !== headline ? caption : null;
-  const dead = dump.status === "failed" && !title;
   return (
     <article
       {...bits.cardProps}
       className={`d-card d-mediacard d-igcard${shape === "reel" ? " d-igreel" : ""} group`}
-      data-open={dump.status === "failed" || bits.revealed || undefined}
+      data-open={bits.exposed || bits.revealed || undefined}
     >
       {bits.actions}
       {bits.pinBadge}
+      <div className="d-mframe">
       {bits.showMedia ? (
         <a
           href={bits.href ?? undefined}
@@ -984,7 +1033,7 @@ function IgCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
               <Glyph name="film" />
             </span>
           )}
-          {(shape === "reel" || dump.kind === "video") && <PlayBadge />}
+          {(shape === "reel" || dump.kind === "video") && <PlayOrPreview bits={bits} />}
           <MediaMark dump={dump} />
         </a>
       ) : (
@@ -998,16 +1047,9 @@ function IgCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
           </span>
         </a>
       )}
-      {bits.processing && (
-        <span className="d-mchip" aria-hidden>
-          <span className="d-mchip-sorting shimmer" />
-        </span>
-      )}
       <div className="d-mpanel">
         {bits.processing && !title ? (
           shimmerLines()
-        ) : dead ? (
-          <p className="d-tomb">This post doesn&rsquo;t exist.</p>
         ) : (
           <>
             {title && (
@@ -1031,8 +1073,10 @@ function IgCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
             {dump.note && <p className="d-annotation d-mpanel-note" dir="auto">{dump.note}</p>}
           </>
         )}
-        {bits.meta}
+        {bits.panelMeta}
       </div>
+      </div>
+      {bits.stateRows}
     </article>
   );
 }
@@ -1046,9 +1090,10 @@ function MusicCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
   const sub = dump.author ?? (bits.dek !== bits.title ? bits.dek : null) ?? provider?.label;
   const title = bits.title ?? provider?.label ?? "Audio";
   return (
-    <article {...bits.cardProps} className="d-card d-mus group" data-open={dump.status === "failed" || bits.revealed || undefined}>
+    <article {...bits.cardProps} className="d-card d-mus group" data-open={bits.exposed || bits.revealed || undefined}>
       {bits.actions}
       {bits.pinBadge}
+      <div className="d-mframe">
       <a
         href={bits.href ?? undefined}
         target="_blank"
@@ -1070,15 +1115,17 @@ function MusicCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
                 <span className="d-mus-title" dir="auto">{title}</span>
                 {sub && <span className="d-mus-sub" dir="auto">{sub}</span>}
               </span>
+              {!bits.gone && (
               <span className="d-mus-transport" aria-hidden>
                 <svg viewBox="0 0 24 24"><path fill="currentColor" d="M6 5h2.4v14H6zM18 5.5v13L8.4 12z" /></svg>
                 <svg viewBox="0 0 24 24" className="d-mus-transport-pause"><path fill="currentColor" d="M7.5 5h3v14h-3zM13.5 5h3v14h-3z" /></svg>
                 <svg viewBox="0 0 24 24"><path fill="currentColor" d="M15.6 5H18v14h-2.4zM6 5.5v13L15.6 12z" /></svg>
               </span>
+              )}
             </>
           )}
         </span>
-        {!(bits.processing && !bits.title) && (
+        {!(bits.processing && !bits.title) && !bits.gone && (
           <span className="d-mus-prog" aria-hidden>
             <span className="d-mus-prog-fill" />
           </span>
@@ -1090,8 +1137,10 @@ function MusicCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
           <p className="d-mus-ptitle" dir="auto">{title}</p>
         )}
         {dump.note && <p className="d-mus-note" dir="auto">{dump.note}</p>}
-        {bits.meta}
+        {bits.panelMeta}
       </div>
+      </div>
+      {bits.stateRows}
     </article>
   );
 }
@@ -1178,6 +1227,7 @@ function NoteCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
   const areaRef = useRef<HTMLTextAreaElement>(null);
   const openTimer = useRef<number | undefined>(undefined);
   const [saving, setSaving] = useState(false);
+  const [saveFailed, setSaveFailed] = useState(false);
   const editing = bits.editingNote;
 
   useEffect(() => () => window.clearTimeout(openTimer.current), []);
@@ -1197,13 +1247,23 @@ function NoteCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
     const text = el.value.trim();
     // Clicking away without changes (or a wiped note) just closes the editor.
     if (!text || text === (dump.content ?? "").trim()) {
+      setSaveFailed(false);
       bits.endNoteEdit();
       return;
     }
     setSaving(true);
     const ok = await bits.onSaveNote(dump.id, text);
     setSaving(false);
+    // A failed save keeps the editor and the draft open until a retry lands.
+    setSaveFailed(!ok);
     if (ok) bits.endNoteEdit();
+  };
+
+  const discard = () => {
+    const dirty = (areaRef.current?.value.trim() ?? "") !== (dump.content ?? "").trim();
+    if (dirty && !window.confirm("Discard your unsaved changes to this note?")) return;
+    setSaveFailed(false);
+    bits.endNoteEdit();
   };
 
   return (
@@ -1226,17 +1286,34 @@ function NoteCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
               rows={Math.min(Math.max((dump.content ?? "").split("\n").length, 3), 30)}
               maxLength={50000}
               aria-label="Note text"
-              onBlur={() => void save()}
+              onBlur={() => {
+                if (!saveFailed) void save();
+              }}
               onKeyDown={(e) => {
                 if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
                   e.preventDefault();
                   void save();
                 } else if (e.key === "Escape") {
                   e.preventDefault();
-                  bits.endNoteEdit();
+                  discard();
                 }
               }}
             />
+            {saveFailed && (
+              <div className="d-state d-state-failed" role="alert">
+                <span className="d-state-text">Not saved</span>
+                <button
+                  type="button"
+                  className="d-state-retry"
+                  disabled={saving}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => void save()}
+                  aria-label="Retry saving note"
+                >
+                  {saving ? "Saving…" : "Retry"}
+                </button>
+              </div>
+            )}
           </>
         ) : bits.processing && !body ? (
           shimmerLines()
@@ -1343,7 +1420,6 @@ function LinkCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
   const titleIsDomain = bits.title != null && bits.title === dump.domain;
   const headline = titleIsDomain ? linkAddress(dump) ?? bits.title : bits.title;
   const empty = bits.processing && !headline;
-  const dead = dump.status === "failed" && !headline;
   return (
     <article {...bits.cardProps} className="d-card d-link group">
       {bits.actions}
@@ -1353,8 +1429,6 @@ function LinkCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
           <span className="d-link-shimmer">
             <span className="shimmer" />
           </span>
-        ) : dead ? (
-          <p className="d-tomb">This page doesn&rsquo;t exist.</p>
         ) : (
           <div className="d-link-text">
             <h3 className="d-link-title" dir="auto">
@@ -1402,8 +1476,15 @@ export default function DumpCard({ dump, phone = false, fresh, removing, onTopic
     return () => document.removeEventListener("pointerdown", onDown, true);
   }, [revealed]);
 
+  const processing = dump.status === "processing";
+  const now = useStateClock(processing, dump.updatedAt);
+  const online = useOnline();
+  const state = cardState(dump, now, online);
+  const gone = !!state.unavailable;
+  const exposed = !!(state.failed || state.unavailable);
+
   const onCardPointerDown = (e: ReactPointerEvent<HTMLElement>) => {
-    if (phone || revealed || dump.status === "failed") return;
+    if (phone || revealed || exposed) return;
     if (!window.matchMedia("(hover: none), (pointer: coarse)").matches) return;
     if ((e.target as HTMLElement).closest(".d-inline-video .d-media")) setRevealed(true);
   };
@@ -1415,7 +1496,7 @@ export default function DumpCard({ dump, phone = false, fresh, removing, onTopic
    * directly). Failed dumps keep their always-open panel, so this never runs
    * for them. e.detail === 0 lets keyboard-initiated clicks navigate. */
   const onCardClick = (e: MouseEvent<HTMLElement>) => {
-    if (phone || revealed || dump.status === "failed" || e.detail === 0) return;
+    if (phone || revealed || exposed || e.detail === 0) return;
     const card = e.currentTarget;
     if (!card.classList.contains("d-mediacard") && !card.classList.contains("d-mus")) return;
     if (!window.matchMedia("(hover: none), (pointer: coarse)").matches) return;
@@ -1426,10 +1507,11 @@ export default function DumpCard({ dump, phone = false, fresh, removing, onTopic
   const topic = topicMeta(dump.topic, topics);
   const kind = dump.kind;
   const provider = providerMeta(dump.provider);
-  const processing = dump.status === "processing";
   const subject = dump.subject && (dump.subject.confidence ?? 0) >= SUBJECT_MIN_CONFIDENCE ? dump.subject : null;
   const title = subject ? subjectLine(subject) : dump.title || (dump.url ? titleFromUrl(dump.url) : null);
-  const href = dump.url ?? (kind === "image" ? dump.imageUrl : null);
+  // A confirmed-gone original is a dead end: only a locally stored image still opens.
+  const localImage = dump.imageUrl?.startsWith("/api/files/") ? dump.imageUrl : null;
+  const href = gone ? (kind === "image" ? localImage : null) : dump.url ?? (kind === "image" ? dump.imageUrl : null);
   const site = dump.siteName && dump.siteName.length < 30 ? dump.siteName : dump.domain;
   const showMedia = !!dump.imageUrl && !imgFailed;
   const dek = dump.summary ?? dump.description;
@@ -1452,6 +1534,19 @@ export default function DumpCard({ dump, phone = false, fresh, removing, onTopic
       {t.label}
     </Menu.Item>
   ));
+  const copyLink = () => {
+    if (dump.url) void navigator.clipboard?.writeText(dump.url).catch(() => {});
+  };
+  const sourceItems = (
+    <>
+      {dump.url && (
+        <Menu.Item className="d-menu-item" onClick={copyLink}>Copy original link</Menu.Item>
+      )}
+      {gone && !processing && (
+        <Menu.Item className="d-menu-item" onClick={() => onRetry(dump.id)}>Check original again</Menu.Item>
+      )}
+    </>
+  );
   const actions = phone ? (
     <div className="d-phone-actions">
       {grip}
@@ -1472,9 +1567,7 @@ export default function DumpCard({ dump, phone = false, fresh, removing, onTopic
               <PhoneMenu submenu>{destinations}</PhoneMenu>
             </Menu.SubmenuRoot>
           )}
-          {dump.status === "failed" && (
-            <Menu.Item className="d-menu-item" onClick={() => onRetry(dump.id)}>Retry</Menu.Item>
-          )}
+          {sourceItems}
           <Menu.Item className="d-menu-item" onClick={() => onDelete(dump.id)}>Delete</Menu.Item>
         </PhoneMenu>
       </Menu.Root>
@@ -1507,6 +1600,8 @@ export default function DumpCard({ dump, phone = false, fresh, removing, onTopic
           <Menu.Positioner side="bottom" align="end" sideOffset={4}>
             <Menu.Popup className="d-menu">
               {destinations}
+              {dump.url && destinations.length > 0 && <Menu.Separator className="d-menu-sep" />}
+              {sourceItems}
             </Menu.Popup>
           </Menu.Positioner>
         </Menu.Portal>
@@ -1515,35 +1610,56 @@ export default function DumpCard({ dump, phone = false, fresh, removing, onTopic
     </div>
   );
 
-  const topicChip = processing ? (
-    <span className="d-sorting shimmer">Sorting…</span>
-  ) : (
+  // The topic stays put while a fetch runs; the state row says what's in flight.
+  const topicChip = (
     <span className="d-topic-chip" title={filedBy}>
       <span className="d-dot" />
       {topic.label}
     </span>
   );
 
-  const metaRow = (siteLabel: string | null) => (
+  const stateRows = (
+    <StateRows
+      state={state}
+      retryName={title ?? dump.domain ?? kindMeta(kind).singular}
+      onRetry={() => onRetry(dump.id)}
+    />
+  );
+  const metaLine = (siteLabel: string | null) => (
     <div className="d-meta">
       {dump.pinned && <Glyph name="pin" className="d-meta-pin" />}
       {topicChip}
       {siteLabel && <span className="min-w-0 truncate">{siteLabel}</span>}
-      {!phone && dump.status === "failed" && (
-        <button onClick={() => onRetry(dump.id)} className="d-retry">Retry</button>
-      )}
       <time className="ml-auto shrink-0 whitespace-nowrap" dateTime={new Date(dump.createdAt).toISOString()}>
         {timeAgo(dump.createdAt)}
       </time>
     </div>
   );
-  const meta = metaRow(site ?? provider?.label ?? kindMeta(kind).singular);
+  const siteLabel = site ?? provider?.label ?? kindMeta(kind).singular;
+  const meta = (
+    <>
+      {stateRows}
+      {metaLine(siteLabel)}
+    </>
+  );
 
   const bits: CardBits = {
     phone,
     actions,
     meta,
-    bareMeta: metaRow(null),
+    bareMeta: (
+      <>
+        {stateRows}
+        {metaLine(null)}
+      </>
+    ),
+    // The phone layout puts a media card's panel in normal flow, so the rows go inside it,
+    // above topic/date, as on text cards.
+    stateRows: phone ? null : stateRows,
+    panelMeta: phone ? meta : metaLine(siteLabel),
+    exposed,
+    gone,
+    posterOnly: state.posterOnly,
     href,
     title,
     dek,
@@ -1575,14 +1691,14 @@ export default function DumpCard({ dump, phone = false, fresh, removing, onTopic
   };
 
   if (kind === "note") return <NoteCard dump={dump} bits={bits} />;
-  if (phone && dump.status === "failed" && !showMedia && !dump.videoUrl && !dump.xRender) {
+  if (phone && exposed && !showMedia && !dump.videoUrl && !dump.xRender) {
     return (
       <article {...bits.cardProps} className="d-card d-body">
         {actions}
         <p className="d-kicker"><SiteMark dump={dump} />{provider?.label ?? site ?? kindMeta(kind).singular}</p>
         <p className="d-headline" dir="auto">{dump.title || linkAddress(dump) || dump.domain || "Preview unavailable"}</p>
         {dump.note && <p className="d-annotation" dir="auto">{dump.note}</p>}
-        {dump.url && <a className="d-original" href={dump.url} target="_blank" rel="noreferrer">Open original</a>}
+        {href && dump.url && <a className="d-original" href={dump.url} target="_blank" rel="noreferrer">Open original</a>}
         {meta}
       </article>
     );

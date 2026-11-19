@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseHtml, isPrivateIp } from "../extract";
+import { parseHtml, isPrivateIp, isGoneStatus } from "../extract";
 
 describe("parseHtml", () => {
   it("reads Open Graph metadata and resolves relative images", () => {
@@ -37,4 +37,11 @@ describe("isPrivateIp", () => {
   it.each(["8.8.8.8", "1.1.1.1", "2606:4700:4700::1111", "::ffff:8.8.8.8", "::ffff:808:808"])("allows %s", (ip) =>
     expect(isPrivateIp(ip)).toBe(false),
   );
+});
+
+describe("isGoneStatus", () => {
+  it("only treats 404 and 410 as a removed original", () => {
+    expect([404, 410].every(isGoneStatus)).toBe(true);
+    expect([200, 401, 403, 429, 500, 502, 503].some(isGoneStatus)).toBe(false);
+  });
 });

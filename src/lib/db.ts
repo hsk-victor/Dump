@@ -7,6 +7,9 @@ import { TOPICS, TOPIC_CRITERIA } from "./taxonomy";
 import { providerFromUrl } from "./detect";
 
 export type Status = "processing" | "ready" | "failed";
+/** What the last fetch learned about the original: "unavailable" only on a definitive 404/410,
+ *  "unreachable" for a network error/timeout — never evidence the item is gone. Null = unknown. */
+export type SourceState = "reachable" | "unavailable" | "unreachable";
 
 /** xeet-rendered post PNGs, one per theme — /api/files/ paths into uploads. JSON in the DB. */
 export interface XRender {
@@ -19,6 +22,7 @@ export interface Dump {
   kind: Kind;
   topic: Topic;
   status: Status;
+  sourceState: SourceState | null;
   url: string | null;
   domain: string | null;
   /** The service the URL came from (github, youtube, x…). Picks the card variant; null for notes/other sites. */
@@ -57,6 +61,7 @@ interface Row {
   kind: string;
   topic: string;
   status: string;
+  source_state: string | null;
   url: string | null;
   domain: string | null;
   provider: string | null;
@@ -111,6 +116,7 @@ CREATE TABLE IF NOT EXISTS dumps (
   video_poster_url TEXT,
   video_type TEXT,
   x_render TEXT,
+  source_state TEXT,
   summary TEXT,
   subject TEXT,
   tags TEXT NOT NULL DEFAULT '[]',
@@ -186,7 +192,7 @@ export function db(): Database.Database {
     if (!cols.some((c) => c.name === "subject")) conn.exec("ALTER TABLE dumps ADD COLUMN subject TEXT");
     if (!cols.some((c) => c.name === "provider")) conn.exec("ALTER TABLE dumps ADD COLUMN provider TEXT");
     if (!cols.some((c) => c.name === "image_urls")) conn.exec("ALTER TABLE dumps ADD COLUMN image_urls TEXT");
-    for (const name of ["author_handle", "author_avatar_url", "video_url", "video_poster_url", "video_type", "x_render"]) {
+    for (const name of ["author_handle", "author_avatar_url", "video_url", "video_poster_url", "video_type", "x_render", "source_state"]) {
       if (!cols.some((c) => c.name === name)) conn.exec(`ALTER TABLE dumps ADD COLUMN ${name} TEXT`);
     }
     if (!cols.some((c) => c.name === "pinned")) conn.exec("ALTER TABLE dumps ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0");
@@ -227,6 +233,7 @@ function toDump(r: Row): Dump {
     kind: r.kind as Kind,
     topic: r.topic as Topic,
     status: r.status as Status,
+    sourceState: (r.source_state as SourceState | null) ?? null,
     url: r.url,
     domain: r.domain,
     // Rows saved before the column existed still get a provider: it's a pure function of the URL.
@@ -286,6 +293,7 @@ const COLUMN: Record<string, string> = {
   kind: "kind",
   topic: "topic",
   status: "status",
+  sourceState: "source_state",
   url: "url",
   domain: "domain",
   provider: "provider",
@@ -382,6 +390,21 @@ export function bumpDump(id: string, patch: Patch = {}): Dump | null {
   return getDump(id);
 }
 
+/** Rows parked in 'processing' longer than `olderThanMs` whose run isn't in flight (e.g. the
+ *  server restarted mid-enrich) become retryable failures instead of loading forever. */
+export function failStaleProcessing(olderThanMs: number, inFlight: (id: string) => boolean): number {
+  const rows = db()
+    .prepare("SELECT id FROM dumps WHERE status = 'processing' AND updated_at < ?")
+    .all(Date.now() - olderThanMs) as { id: string }[];
+  let n = 0;
+  for (const { id } of rows) {
+    if (inFlight(id)) continue;
+    db().prepare("UPDATE dumps SET status = 'failed' WHERE id = ? AND status = 'processing'").run(id);
+    n++;
+  }
+  return n;
+}
+
 export function deleteDump(id: string): Dump | null {
   const existing = getDump(id);
   if (existing) db().prepare("DELETE FROM dumps WHERE id = ?").run(id);
@@ -409,7 +432,7 @@ export interface ListOptions {
 
 // Feed rows name their columns instead of SELECT *: `content` holds up to 50KB of
 // extracted article text per row, but only note cards ever render it.
-const FEED_COLS = `d.id, d.kind, d.topic, d.status, d.url, d.domain, d.provider, d.title, d.description,
+const FEED_COLS = `d.id, d.kind, d.topic, d.status, d.source_state, d.url, d.domain, d.provider, d.title, d.description,
   CASE WHEN d.kind = 'note' THEN d.content END AS content,
   d.note, d.image_url, d.image_urls, d.site_name, d.author, d.author_handle, d.author_avatar_url,
   d.video_url, d.video_poster_url, d.video_type, d.x_render, d.summary, d.subject, d.tags,
