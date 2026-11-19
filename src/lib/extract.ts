@@ -347,10 +347,10 @@ export async function extractUrl(url: string): Promise<Extracted> {
   }
 
   if (contentType.startsWith("image/")) {
-    return { kind: "image", title: decodeURIComponent(new URL(url).pathname.split("/").pop() || "Image"), description: null, content: null, imageUrl: url, imageUrls: [url], videoUrl: null, videoType: null, siteName: host, author: null, unreachable: false };
+    return { kind: "image", title: decodeURIComponent(new URL(url).pathname.split("/").pop() || "Image"), description: null, content: null, imageUrl: url, imageUrls: [url], videoUrl: null, videoType: null, siteName: host, author: null, unreachable: false, gone: pageGone };
   }
   if (contentType.startsWith("video/")) {
-    return { kind: "video", title: videoTitleFromUrl(finalUrl), description: null, content: null, imageUrl: null, imageUrls: [], videoUrl: url, videoType: "video", siteName: host, author: null, unreachable: !reached };
+    return { kind: "video", title: videoTitleFromUrl(finalUrl), description: null, content: null, imageUrl: null, imageUrls: [], videoUrl: url, videoType: "video", siteName: host, author: null, unreachable: !reached, gone: pageGone };
   }
 
   const embedText = textFromEmbedHtml(oembed?.html);
