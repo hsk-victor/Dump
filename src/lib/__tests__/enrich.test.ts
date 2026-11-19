@@ -7,6 +7,8 @@ const dir = fs.mkdtempSync(path.join(os.tmpdir(), "dump-enrich-"));
 process.env.DUMP_DATA_DIR = dir;
 
 const extractUrl = vi.fn();
+const archive = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+vi.mock("../archive", () => ({ archiveDump: archive }));
 vi.mock("../extract", () => ({ extractUrl: (url: string) => extractUrl(url) }));
 const classifyWithAi = vi.fn();
 const identifySubject = vi.fn();
@@ -45,6 +47,18 @@ const severance = (over: Record<string, unknown> = {}) => ({
 });
 
 describe("enrichDump", () => {
+  it("settles enrichment while archival is pending and handles archive rejection", async () => {
+    let reject!: (error: Error) => void;
+    archive.mockReturnValueOnce(new Promise<void>((_resolve, fail) => { reject = fail; }));
+    const d = createFromText("https://example.com/detached-archive");
+    extractUrl.mockResolvedValue(page());
+    const result = await enrichDump(d.id);
+    expect(result?.status).toBe("ready");
+    const { isEnriching } = await import("../enrich");
+    expect(isEnriching(d.id)).toBe(false);
+    reject(new Error("archive unavailable"));
+    await Promise.resolve();
+  });
   it.each([
     ["preview-a", undefined, "Fetched page title"],
     ["preview-b", "Bookmarklet title", "Bookmarklet title"],

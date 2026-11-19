@@ -12,13 +12,13 @@ export const posterKey = (url: string) => `poster:${url}`;
 const remote = (url: string | null | undefined): url is string => !!url && /^https?:\/\//i.test(url);
 const jobs = new Map<string, Promise<void>>();
 
-export async function downloadVideo(url: string): Promise<Buffer> {
+export async function downloadVideo(url: string, maxBytes = 300 * 1024 * 1024): Promise<Buffer> {
   const response = await fetchWithTimeout(url);
   if (!response.ok || !response.body) {
     await response.body?.cancel();
     throw new Error("Video download failed");
   }
-  if (Number(response.headers.get("content-length")) > 300 * 1024 * 1024) {
+  if (Number(response.headers.get("content-length")) > maxBytes) {
     await response.body.cancel();
     throw new Error("Video too large");
   }
@@ -30,7 +30,7 @@ export async function downloadVideo(url: string): Promise<Buffer> {
       const { done, value } = await reader.read();
       if (done) break;
       size += value.length;
-      if (size > 300 * 1024 * 1024) throw new Error("Video too large");
+      if (size > maxBytes) throw new Error("Video too large");
       chunks.push(value);
     }
     return Buffer.concat(chunks);
@@ -95,7 +95,7 @@ async function runArchive(id: string): Promise<void> {
   if (remote(dump.videoUrl)) {
     const url = dump.videoUrl;
     let bytes: Buffer | undefined;
-    const video = async () => bytes ??= await downloadVideo(url);
+    const video = async () => bytes ??= await downloadVideo(url, (dump.keepVideo ? 300 : 64) * 1024 * 1024);
     if (!dump.videoPosterUrl && !dump.mediaArchive[posterKey(url)]) {
       try { await image(posterKey(url), await frame(await video())); } catch { /* Posters are best effort. */ }
     }

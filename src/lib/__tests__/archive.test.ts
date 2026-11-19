@@ -102,6 +102,16 @@ it("rejects failed and oversized video responses without retaining bytes", async
   await expect(downloadVideo("https://example.com/large.mp4")).rejects.toThrow("Video too large");
 });
 
+it("caps poster-only downloads at 64 MB but permits that size for opted-in video", async () => {
+  mocks.video.mockImplementation(async () => new Response(new Uint8Array([1]), { headers: { "content-length": String(65 * 1024 * 1024) } }));
+  const d = create({ kind: "video", imageUrl: null, videoUrl: "https://example.com/large.mp4" });
+  await archiveDump(d.id);
+  expect(db.getDump(d.id)!.mediaArchive).toEqual({});
+  db.updateDump(d.id, { keepVideo: true });
+  await archiveDump(d.id);
+  expect(db.getDump(d.id)!.mediaArchive[d.videoUrl!]).toBeTruthy();
+});
+
 it("does not retain video when the user opts out during download", async () => {
   const videoUrl = "https://example.com/race.mp4";
   const d = create({ kind: "video", imageUrl: null, videoPosterUrl: "https://example.com/poster.png", videoUrl, keepVideo: true });

@@ -56,9 +56,9 @@ export function isEnriching(id: string): boolean {
 export function enrichDump(id: string): Promise<Dump | null> {
   const prev = enrichTail.get(id) ?? Promise.resolve();
   const job = prev.then(async () => {
-    await runEnrich(id);
-    await archiveDump(id);
-    return getDump(id);
+    const dump = await runEnrich(id);
+    void archiveDump(id).catch(() => {});
+    return dump;
   });
   const tail = job.then(
     () => { if (enrichTail.get(id) === tail) enrichTail.delete(id); },

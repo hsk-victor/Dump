@@ -890,6 +890,7 @@ function YouTubeCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
 function VideoCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
   if (dump.provider === "youtube" && !dump.videoUrl) return <YouTubeCard dump={dump} bits={bits} />;
   const t = mediaText(dump, bits);
+  const poster = dump.videoPosterUrl ?? videoPoster(dump);
   const byline =
     [dump.author?.trim(), providerMeta(dump.provider)?.label].filter(Boolean).join(" · ") ||
     (dump.url ? bits.site : null);
@@ -905,8 +906,8 @@ function VideoCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
         </div>
       ) : (
       <a href={bits.href ?? undefined} target="_blank" rel="noreferrer" className="d-media d-vmedia" aria-label={t.title ?? byline ?? "Open video"}>
-        {bits.posterOnly && videoPoster(dump) ? (
-          <ArchiveImage dump={dump} src={dump.videoPosterUrl ?? videoPoster(dump)} alt={t.title ?? ""} />
+        {bits.posterOnly && poster ? (
+          <FadeImg dump={{ ...dump, imageUrl: poster, imageUrls: [poster] }} bits={bits} alt={t.title ?? ""} />
         ) : bits.showMedia ? (
           <FadeImg dump={dump} bits={bits} alt={t.title ?? ""} />
         ) : (
