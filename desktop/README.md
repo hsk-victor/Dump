@@ -6,6 +6,9 @@ waits for it, and loads it in the app window. Closing the app stops the server.
 
 - **Data:** `%APPDATA%\app.dump.desktop` (SQLite DB + uploads), passed to the server as `DUMP_DATA_DIR`.
 - **Server log:** `%LOCALAPPDATA%\app.dump.desktop\logs\server.log`.
+- **Access:** the server requires a per-launch secret (`DUMP_DESKTOP_TOKEN`, see `src/middleware.ts`) so other
+  Windows accounts on the PC can't use the library through the loopback port. The app opens
+  `/?dump_token=<secret>` and the window keeps it as an HttpOnly cookie; anything else gets 403.
 - **Installer:** NSIS, per-user (`%LOCALAPPDATA%\Dump`), no admin prompt.
 
 ## Build (Windows x64)

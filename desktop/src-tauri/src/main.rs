@@ -30,7 +30,21 @@ fn pick_port() -> u16 {
         .unwrap_or(PREFERRED_PORT)
 }
 
-fn spawn_server(server_dir: &Path, data_dir: &Path, log_dir: &Path, port: u16) -> std::io::Result<Child> {
+// A per-launch secret the server requires (src/middleware.ts), so other Windows accounts can't use the
+// loopback port. It goes in the environment, which other accounts can't read, unlike the command line.
+fn launch_token() -> std::io::Result<String> {
+    let mut bytes = [0u8; 32];
+    getrandom::fill(&mut bytes).map_err(|e| std::io::Error::other(e.to_string()))?;
+    Ok(bytes.iter().map(|b| format!("{b:02x}")).collect())
+}
+
+fn spawn_server(
+    server_dir: &Path,
+    data_dir: &Path,
+    log_dir: &Path,
+    port: u16,
+    token: &str,
+) -> std::io::Result<Child> {
     fs::create_dir_all(data_dir)?;
     fs::create_dir_all(log_dir)?;
     let log = File::create(log_dir.join("server.log"))?;
@@ -42,6 +56,7 @@ fn spawn_server(server_dir: &Path, data_dir: &Path, log_dir: &Path, port: u16) -
         .env("HOSTNAME", "127.0.0.1")
         .env("DUMP_DATA_DIR", data_dir)
         .env("DUMP_PARENT_PID", std::process::id().to_string())
+        .env("DUMP_DESKTOP_TOKEN", token)
         .stdin(Stdio::null())
         .stdout(log.try_clone()?)
         .stderr(log);
@@ -98,14 +113,15 @@ fn start(app: &AppHandle, port: u16) -> Result<(), Box<dyn std::error::Error>> {
     let server_dir = dunce::simplified(&app.path().resource_dir()?.join("server")).to_path_buf();
     let data_dir: PathBuf = app.path().app_data_dir()?;
     let log_dir: PathBuf = app.path().app_log_dir()?;
-    let child = spawn_server(&server_dir, &data_dir, &log_dir, port)?;
+    let token = launch_token()?;
+    let child = spawn_server(&server_dir, &data_dir, &log_dir, port, &token)?;
     *app.state::<Server>().0.lock().unwrap() = Some(child);
 
     let handle = app.clone();
     thread::spawn(move || {
         if wait_for_port(port) {
             if let Some(window) = handle.get_webview_window("main") {
-                let url = Url::parse(&format!("http://127.0.0.1:{port}/")).unwrap();
+                let url = Url::parse(&format!("http://127.0.0.1:{port}/?dump_token={token}")).unwrap();
                 let _ = window.navigate(url);
             }
         } else {
