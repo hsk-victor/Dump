@@ -9,6 +9,8 @@ waits for it, and loads it in the app window. Closing the app stops the server.
 - **Access:** the server requires a per-launch secret (`DUMP_DESKTOP_TOKEN`, see `src/middleware.ts`) so other
   Windows accounts on the PC can't use the library through the loopback port. The app opens
   `/?dump_token=<secret>` and the window keeps it as an HttpOnly cookie; anything else gets 403.
+  The bookmarklet, which runs in the user's browser, carries `k=<key>` instead: a key kept in
+  `%APPDATA%pp.dump.desktopookmarklet.key` (made on first launch) that only opens `/dump`.
 - **Installer:** NSIS, per-user (`%LOCALAPPDATA%\Dump`), no admin prompt.
 
 ## Build (Windows x64)

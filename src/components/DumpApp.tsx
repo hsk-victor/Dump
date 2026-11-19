@@ -178,8 +178,15 @@ export default function DumpApp() {
     setDark(document.documentElement.dataset.mode === "dark");
     // React refuses javascript: hrefs in JSX, so set it directly. Sends the page's og:description
     // and og:image too — a logged-in Instagram/TikTok tab sees a caption and thumbnail the server can't fetch.
-    const code = `javascript:(()=>{const m=n=>{const e=document.querySelector('meta[property="'+n+'"],meta[name="'+n+'"]');return e?e.content:''};const u=v=>{try{return v?new URL(v,location.href).href:''}catch(x){return''}};window.open('${window.location.origin}/dump?url='+encodeURIComponent(location.href)+'&title='+encodeURIComponent(document.title)+'&desc='+encodeURIComponent(m('og:description')||m('twitter:description')||m('description'))+'&img='+encodeURIComponent(u(m('og:image')||m('twitter:image'))),'dump','width=360,height=220')})()`;
-    bookmarklet.current?.setAttribute("href", code);
+    const setBookmarklet = (key: string | null) => {
+      const code = `javascript:(()=>{const m=n=>{const e=document.querySelector('meta[property="'+n+'"],meta[name="'+n+'"]');return e?e.content:''};const u=v=>{try{return v?new URL(v,location.href).href:''}catch(x){return''}};window.open('${window.location.origin}/dump?${key ? `k=${key}&` : ""}url='+encodeURIComponent(location.href)+'&title='+encodeURIComponent(document.title)+'&desc='+encodeURIComponent(m('og:description')||m('twitter:description')||m('description'))+'&img='+encodeURIComponent(u(m('og:image')||m('twitter:image'))),'dump','width=360,height=220')})()`;
+      bookmarklet.current?.setAttribute("href", code);
+    };
+    // The desktop app needs a key in the bookmarklet (src/lib/desktop-token.ts); elsewhere it's null.
+    fetch("/api/bookmarklet")
+      .then((r) => (r.ok ? r.json() : { key: null }))
+      .then((d: { key: string | null }) => setBookmarklet(d.key))
+      .catch(() => setBookmarklet(null));
   }, []);
 
   useEffect(() => {

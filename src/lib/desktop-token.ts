@@ -6,6 +6,10 @@ import { timingSafeEqual } from "node:crypto";
 export const DESKTOP_TOKEN_PARAM = "dump_token";
 export const DESKTOP_TOKEN_COOKIE = "dump_desktop";
 
+// The bookmarklet runs in the user's browser, which has no cookie, so it carries `k=<key>` instead
+// (DUMP_BOOKMARKLET_KEY, kept in the user's app-data folder). The key only opens `/dump`, which saves a page.
+export const BOOKMARKLET_KEY_PARAM = "k";
+
 export type DesktopAccess = "open" | "allowed" | "grant" | "denied";
 
 function same(a: string, b: string): boolean {
@@ -23,4 +27,8 @@ export function desktopAccess(
   if (cookie && same(cookie, token)) return "allowed";
   if (param && same(param, token)) return "grant";
   return "denied";
+}
+
+export function bookmarkletAllowed(key: string | undefined, pathname: string, param: string | null): boolean {
+  return !!key && pathname === "/dump" && !!param && same(param, key);
 }

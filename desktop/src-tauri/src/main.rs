@@ -30,12 +30,32 @@ fn pick_port() -> u16 {
         .unwrap_or(PREFERRED_PORT)
 }
 
-// A per-launch secret the server requires (src/middleware.ts), so other Windows accounts can't use the
-// loopback port. It goes in the environment, which other accounts can't read, unlike the command line.
-fn launch_token() -> std::io::Result<String> {
+fn random_hex() -> std::io::Result<String> {
     let mut bytes = [0u8; 32];
     getrandom::fill(&mut bytes).map_err(|e| std::io::Error::other(e.to_string()))?;
     Ok(bytes.iter().map(|b| format!("{b:02x}")).collect())
+}
+
+// A per-launch secret the server requires (src/middleware.ts), so other Windows accounts can't use the
+// loopback port. It goes in the environment, which other accounts can't read, unlike the command line.
+fn launch_token() -> std::io::Result<String> {
+    random_hex()
+}
+
+// The bookmarklet runs in the user's browser, which never sees the launch token, so it carries this
+// key instead. It lasts across launches (the bookmark keeps working) and only lets `/dump` save a page.
+// It lives in the per-user app-data folder, which other accounts can't read.
+fn bookmarklet_key(data_dir: &Path) -> std::io::Result<String> {
+    let path = data_dir.join("bookmarklet.key");
+    if let Ok(key) = fs::read_to_string(&path) {
+        let key = key.trim();
+        if key.len() == 64 && key.bytes().all(|b| b.is_ascii_hexdigit()) {
+            return Ok(key.to_string());
+        }
+    }
+    let key = random_hex()?;
+    fs::write(&path, &key)?;
+    Ok(key)
 }
 
 fn spawn_server(
@@ -47,6 +67,7 @@ fn spawn_server(
 ) -> std::io::Result<Child> {
     fs::create_dir_all(data_dir)?;
     fs::create_dir_all(log_dir)?;
+    let bookmarklet_key = bookmarklet_key(data_dir)?;
     let log = File::create(log_dir.join("server.log"))?;
     let mut cmd = Command::new(server_dir.join("node.exe"));
     cmd.arg(server_dir.join("server-entry.cjs"))
@@ -57,6 +78,7 @@ fn spawn_server(
         .env("DUMP_DATA_DIR", data_dir)
         .env("DUMP_PARENT_PID", std::process::id().to_string())
         .env("DUMP_DESKTOP_TOKEN", token)
+        .env("DUMP_BOOKMARKLET_KEY", bookmarklet_key)
         .stdin(Stdio::null())
         .stdout(log.try_clone()?)
         .stderr(log);
