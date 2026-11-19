@@ -3009,6 +3009,8 @@ body.d-dragging * {
     mask-image: linear-gradient(90deg, #000 calc(100% - 16px), transparent);
   }
   .d-topic {
+    justify-content: center;
+    min-width: 44px;
     height: 44px;
     font-size: 0.875rem;
   }
