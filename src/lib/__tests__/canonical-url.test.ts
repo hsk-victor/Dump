@@ -44,9 +44,17 @@ describe("canonicalUrl", () => {
     ["https://x.com/a/status/123", "https://x.com.evil.com/a/status/123"],
     ["https://youtube.com/watch?v=abc", "https://youtu.be/ABC"],
     ["https://youtube.com/playlist?list=one", "https://youtube.com/playlist?list=two"],
+    ["https://youtube.com/embed/videoseries?list=one", "https://youtube.com/embed/videoseries?list=two"],
     ["https://example.com/Path", "https://example.com/path"],
   ])("keeps different pages distinct: %s vs %s", (a, b) => {
     expect(canonicalUrl(a)).not.toBe(canonicalUrl(b));
+  });
+
+  it("preserves embedded playlist parameters rather than inventing a video key", () => {
+    expect(canonicalUrl("https://www.youtube.com/embed/videoseries?list=one&index=2"))
+      .toBe("https://youtube.com/embed/videoseries?index=2&list=one");
+    expect(canonicalUrl("https://youtube.com/embed/videoseries"))
+      .toBe("https://youtube.com/embed/videoseries");
   });
 
   it.each(["", "not a URL", "http://[invalid", "mailto:test@example.com"])("leaves invalid or unsupported input unchanged: %s", (url) => {

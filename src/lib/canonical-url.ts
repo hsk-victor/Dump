@@ -26,7 +26,7 @@ export function canonicalUrl(input: string): string {
       }
     }
 
-    if (url.hostname === "youtube.com" || url.hostname === "youtu.be") {
+    if ((url.hostname === "youtube.com" && url.pathname !== "/embed/videoseries") || url.hostname === "youtu.be") {
       const video = url.hostname === "youtu.be"
         ? url.pathname.match(/^\/([^/]+)$/)?.[1]
         : url.pathname === "/watch"
