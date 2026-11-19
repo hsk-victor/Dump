@@ -59,6 +59,10 @@ describe("cardState", () => {
       unavailable: { detail: null },
       posterOnly: false,
     });
+    expect(cardState(dump({ kind: "post", provider: "x", sourceState: "unavailable", videoUrl: "https://video.twimg.com/v.mp4" }), NOW)).toMatchObject({
+      unavailable: { detail: "Video not saved" },
+      posterOnly: true,
+    });
     expect(cardState(dump({ kind: "audio", sourceState: "unavailable", imageUrl: "/api/files/a.jpg" }), NOW).unavailable?.detail).toBe(
       "Artwork kept · audio not saved",
     );

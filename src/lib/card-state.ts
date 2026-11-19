@@ -25,8 +25,13 @@ export function hasLocalVideo(dump: Pick<Dump, "videoUrl">): boolean {
   return !!dump.videoUrl?.startsWith("/api/files/");
 }
 
+/** Video dumps, and posts carrying a video (X stores those as kind "post"). */
+function isVideo(dump: Pick<Dump, "kind" | "videoUrl">): boolean {
+  return dump.kind === "video" || !!dump.videoUrl;
+}
+
 function unavailableDetail(dump: Dump): string | null {
-  if (dump.kind === "video" && !hasLocalVideo(dump)) return "Video not saved";
+  if (isVideo(dump) && !hasLocalVideo(dump)) return "Video not saved";
   if (dump.kind === "audio") return dump.imageUrl ? "Artwork kept · audio not saved" : "Audio not saved";
   return null;
 }
@@ -46,7 +51,7 @@ export function cardState(dump: Dump, now: number, online = true): CardState {
   const gone = dump.sourceState === "unavailable";
   if (gone) {
     state.unavailable = { detail: unavailableDetail(dump) };
-    state.posterOnly = dump.kind === "video" && !hasLocalVideo(dump);
+    state.posterOnly = isVideo(dump) && !hasLocalVideo(dump);
   }
 
   if (dump.status === "processing") {
