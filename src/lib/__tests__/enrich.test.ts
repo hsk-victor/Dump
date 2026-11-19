@@ -98,6 +98,15 @@ describe("enrichDump", () => {
     });
   });
 
+  it("keeps an already-filed dump's topic when a re-check can't reach the site", async () => {
+    const d = createFromText("https://example.com/filed-then-offline");
+    extractUrl.mockResolvedValue(page());
+    await enrichDump(d.id);
+    db.updateDump(d.id, { topic: "travel", classifiedBy: "rules", status: "processing" });
+    extractUrl.mockResolvedValue(page({ title: null, description: null, unreachable: true }));
+    expect(await enrichDump(d.id)).toMatchObject({ topic: "travel", status: "failed", sourceState: "unreachable" });
+  });
+
   it("treats a network failure as a retryable fetch error, not a removed original", async () => {
     const d = createFromText("https://example.com/flaky");
     extractUrl.mockResolvedValue(page({ title: null, unreachable: true }));

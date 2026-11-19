@@ -181,6 +181,9 @@ async function runEnrich(id: string): Promise<Dump | null> {
         if (xRender) fields.xRender = xRender;
       }
     }
+    // A re-check that reached nothing has no new data to file by: a dump that was already
+    // filed keeps its topic.
+    if (unreachable && dump.classifiedBy) return commit(id, { ...fields, status: "failed" }, dump);
     const merged = { ...dump, ...fields };
 
     // Clips/images get a second pass to name what they're about, before the topic is decided,
