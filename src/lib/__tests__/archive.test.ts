@@ -12,12 +12,12 @@ const mocks = vi.hoisted(() => ({ image: vi.fn(), video: vi.fn() }));
 vi.mock("../extract", () => ({ fetchImage: mocks.image, fetchWithTimeout: mocks.video }));
 vi.mock("next/server", async (original) => ({ ...await original<typeof import("next/server")>(), after: vi.fn() }));
 const db = await import("../db");
-const { archiveDump, backfillArchive, posterKey, downloadVideo } = await import("../archive");
+const { archiveDump, backfillArchive, posterKey, downloadVideo, isArchiving } = await import("../archive");
 const { fileStorage, storedFileName } = await import("../storage");
 const { mediaSources, videoPoster } = await import("../media");
 const { hasLocalVideo } = await import("../card-state");
 const { GET } = await import("@/app/api/files/[name]/route");
-const { DELETE, PATCH } = await import("@/app/api/dumps/[id]/route");
+const { DELETE, PATCH, GET: getDumpResponse } = await import("@/app/api/dumps/[id]/route");
 const image = await sharp({ create: { width: 2400, height: 1800, channels: 3, background: "red" } }).png().toBuffer();
 beforeEach(() => {
   for (const dump of db.listDumps({ limit: -1 })) db.deleteDump(dump.id);
@@ -27,6 +27,26 @@ beforeEach(() => {
 afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 const create = (extra = {}) => db.createDump({ kind: "image", imageUrl: "https://example.com/a.png", ...extra });
 const bytes = async (url: string) => fileStorage.read(storedFileName(url)!);
+
+it.each([true, false])("reports keep-video archival as pending until it settles (saved: %s)", async (success) => {
+  const videoUrl = "https://example.com/delayed.mp4";
+  const poster = "https://example.com/poster.png";
+  const d = create({ kind: "video", imageUrl: null, videoUrl, videoPosterUrl: poster, mediaArchive: { [poster]: "/api/files/poster.webp" } });
+  let finish!: (response: Response) => void;
+  mocks.video.mockReturnValueOnce(new Promise<Response>((resolve) => { finish = resolve; }));
+  const ctx = { params: Promise.resolve({ id: d.id }) };
+  const request = new NextRequest("http://localhost", { method: "PATCH", body: JSON.stringify({ keepVideo: true }) });
+  const response = await PATCH(request, ctx);
+  expect(await response.json()).toMatchObject({ keepVideo: true, archivePending: true });
+  expect(await (await getDumpResponse(request, ctx)).json()).toMatchObject({ archivePending: true, mediaArchive: { [poster]: "/api/files/poster.webp" } });
+  finish(success ? new Response(new Uint8Array([1, 2, 3])) : new Response(null, { status: 404 }));
+  await expect.poll(() => isArchiving(d.id)).toBe(false);
+  const completed = await (await getDumpResponse(request, ctx)).json();
+  expect(completed.archivePending).toBe(false);
+  expect(!!completed.mediaArchive[videoUrl]).toBe(success);
+  db.deleteDump(d.id);
+  expect((await getDumpResponse(request, ctx)).status).toBe(404);
+});
 
 it("archives real images as bounded WebP, preserving links and idempotency", async () => {
   const d = create({ imageUrls: ["https://example.com/a.png", "https://example.com/b.png"] });

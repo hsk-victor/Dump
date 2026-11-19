@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties, 
 import { Menu } from "@base-ui/react/menu";
 import type { Dump } from "@/lib/db";
 import { mediaSources, videoPoster, videoCopyAction } from "@/lib/media";
+import { setVideoCopy } from "@/lib/video-copy";
 import { ArchiveImage } from "./Media";
 import { SUBJECT_MIN_CONFIDENCE, subjectLine, kindMeta, providerMeta, topicMeta, type TopicMeta } from "@/lib/taxonomy";
 import { timeAgo, shortDate } from "@/lib/format";
@@ -1547,8 +1548,7 @@ export default function DumpCard({ dump, phone = false, fresh, removing, onTopic
     <>
       {videoCopyAction(dump) && (
         <Menu.Item className="d-menu-item" onClick={async () => {
-          const response = await fetch(`/api/dumps/${dump.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ keepVideo: videoCopyAction(dump) === "Save video copy" }) });
-          if (response.ok) window.dispatchEvent(new Event("dump-updated"));
+          await setVideoCopy(dump.id, videoCopyAction(dump) === "Save video copy", () => window.dispatchEvent(new Event("dump-updated")));
         }}>{videoCopyAction(dump)}</Menu.Item>
       )}
       {dump.url && (

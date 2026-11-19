@@ -12,6 +12,10 @@ export const posterKey = (url: string) => `poster:${url}`;
 const remote = (url: string | null | undefined): url is string => !!url && /^https?:\/\//i.test(url);
 const jobs = new Map<string, Promise<void>>();
 
+export function isArchiving(id: string): boolean {
+  return jobs.has(id);
+}
+
 export async function downloadVideo(url: string, maxBytes = 300 * 1024 * 1024, timeoutMs = 300_000): Promise<Buffer> {
   const response = await fetchWithTimeout(url, { timeoutMs });
   if (!response.ok || !response.body) {

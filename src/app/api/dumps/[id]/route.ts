@@ -2,7 +2,7 @@ import { after, NextResponse, type NextRequest } from "next/server";
 import { deleteDump, getDump, topPosition, topicExists, updateDump } from "@/lib/db";
 import { enrichDump, noteTitle } from "@/lib/enrich";
 import { fileStorage, storedFileName } from "@/lib/storage";
-import { archiveDump, removeArchiveFiles } from "@/lib/archive";
+import { archiveDump, isArchiving, removeArchiveFiles } from "@/lib/archive";
 
 export const runtime = "nodejs";
 
@@ -10,7 +10,7 @@ type Ctx = { params: Promise<{ id: string }> };
 
 export async function GET(_req: NextRequest, { params }: Ctx) {
   const dump = getDump((await params).id);
-  return dump ? NextResponse.json(dump) : NextResponse.json({ error: "Not found" }, { status: 404 });
+  return dump ? NextResponse.json({ ...dump, archivePending: isArchiving(dump.id) }) : NextResponse.json({ error: "Not found" }, { status: 404 });
 }
 
 export async function PATCH(req: NextRequest, { params }: Ctx) {
@@ -24,8 +24,11 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
     if (!body.keepVideo && current.videoUrl) delete mediaArchive[current.videoUrl];
     const dump = updateDump(id, { keepVideo: body.keepVideo, mediaArchive });
     if (!body.keepVideo && removed && !Object.values(mediaArchive).includes(removed)) await removeArchiveFiles([removed]);
-    if (body.keepVideo) after(() => archiveDump(id));
-    return NextResponse.json(dump);
+    if (body.keepVideo) {
+      const job = archiveDump(id).catch(() => {});
+      after(() => job);
+    }
+    return NextResponse.json({ ...dump, archivePending: isArchiving(id) });
   }
 
   if (body.reprocess) {
