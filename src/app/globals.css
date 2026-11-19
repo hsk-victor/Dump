@@ -3151,6 +3151,14 @@ body.d-dragging * {
   .d-card :is(.d-link-title a, .d-headline a)::after {
     content: none;
   }
+  .d-card :is(.d-link-title, .d-headline, .d-rd-title, .d-mpanel-title) > a[href]::before {
+    content: "";
+    position: absolute;
+    z-index: 1;
+    inset-inline: 16px;
+    block-size: 44px;
+    margin-block-start: -8px;
+  }
   .d-phone-actions {
     position: relative;
     z-index: 2;
