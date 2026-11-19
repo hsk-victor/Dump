@@ -3415,11 +3415,12 @@ body.d-dragging * {
 .d-poster-frame {
   min-height: 6rem;
 }
-/* Desktop exception states: the media card's details leave the hover overlay for an in-flow
+/* Desktop exception states (and every audio card): the media card's details leave the hover overlay for an in-flow
    footer below the media — retained title/byline, status, then topic/date — so nothing
    competes with the image. Saved cards keep the quiet overlay. */
 @media (width > 600px) {
-  :is(.d-mediacard, .d-mus)[data-exception] :is(.d-mpanel, .d-mus-panel) {
+  /* Audio always: an overlay would cover the widget's title, artist and destination. */
+  :is(.d-mediacard[data-exception] .d-mpanel, .d-mus .d-mus-panel) {
     position: static;
     max-height: none;
     overflow: visible;
