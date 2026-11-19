@@ -24,13 +24,17 @@ describe("canonicalUrl", () => {
     expect(canonicalUrl(url)).toBe("https://youtube.com/watch?v=AbC_123");
   });
 
-  it("normalizes host prefixes, fragments, slashes, tracking and query order", () => {
+  it("normalizes host prefixes, slashes, tracking and query order while preserving fragments", () => {
     expect(canonicalUrl("https://WWW.Mobile.Example.COM/article/?q=test&page=2&utm_source=x&FBCLID=x&gclid=x&igshid=x&si=x&ref_src=x#section"))
-      .toBe("https://example.com/article?page=2&q=test");
-    expect(canonicalUrl("https://example.com")).toBe(canonicalUrl("https://m.example.com/#top"));
+      .toBe("https://example.com/article?page=2&q=test#section");
+    expect(canonicalUrl("https://example.com/#top")).toBe(canonicalUrl("https://m.example.com/#top"));
   });
 
   it.each([
+    ["https://excalidraw.com/#json=first,key1", "https://excalidraw.com/#json=second,key2"],
+    ["https://example.com/#/page/one", "https://example.com/#/page/two"],
+    ["https://x.com/profile#one", "https://x.com/profile#two"],
+    ["https://youtube.com/playlist?list=one#first", "https://youtube.com/playlist?list=one#second"],
     ["https://example.com/?id=1", "https://example.com/?id=2"],
     ["https://example.com/?page=1", "https://example.com/?page=2"],
     ["https://example.com/?q=one", "https://example.com/?q=two"],

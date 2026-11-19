@@ -7,7 +7,6 @@ export function canonicalUrl(input: string): string {
     const url = new URL(input);
     if (url.protocol !== "http:" && url.protocol !== "https:") return input;
     url.hostname = url.hostname.toLowerCase().replace(/^(?:(?:www|m|mobile)\.)+/, "");
-    url.hash = "";
     url.pathname = url.pathname.replace(/\/+$/, "");
     for (const key of [...url.searchParams.keys()]) {
       if (TRACKING_PARAM.test(key)) url.searchParams.delete(key);
@@ -18,6 +17,7 @@ export function canonicalUrl(input: string): string {
       url.protocol = "https:";
       const status = url.pathname.match(/^\/(?:[^/]+|i\/web)\/status(?:es)?\/(\d+)(?:\/(?:photo|video)\/\d+)?$/);
       if (status) {
+        url.hash = "";
         url.pathname = `/i/web/status/${status[1]}`;
         url.search = "";
       } else {
@@ -33,6 +33,7 @@ export function canonicalUrl(input: string): string {
           ? url.searchParams.get("v")
           : url.pathname.match(/^\/(?:shorts|embed|live)\/([^/]+)$/)?.[1];
       if (video) {
+        url.hash = "";
         url.protocol = "https:";
         url.hostname = "youtube.com";
         url.pathname = "/watch";
