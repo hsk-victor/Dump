@@ -8,6 +8,11 @@ process.env.DUMP_DATA_DIR = dir;
 
 const extractUrl = vi.fn();
 vi.mock("../extract", () => ({ extractUrl: (url: string) => extractUrl(url) }));
+const storeRemoteImage = vi.fn();
+vi.mock("../thumbs", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../thumbs")>()),
+  storeRemoteImage: (id: string, url: string) => storeRemoteImage(id, url),
+}));
 const classifyWithAi = vi.fn();
 const identifySubject = vi.fn();
 vi.mock("../llm", () => ({
@@ -79,8 +84,43 @@ describe("enrichDump", () => {
     extractUrl.mockReset();
     classifyWithAi.mockReset().mockResolvedValue(null);
     identifySubject.mockReset().mockResolvedValue(null);
+    storeRemoteImage.mockReset().mockResolvedValue(null);
   });
   afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+  const signedCover = "https://p19-common-sign.tiktokcdn-us.com/cover.image?x-expires=1795240800&x-signature=abc";
+
+  it("stores a copy of a signed TikTok thumbnail so the card outlives x-expires", async () => {
+    const d = createFromText("https://www.tiktok.com/@scout2015/video/6718335390845095173");
+    extractUrl.mockResolvedValue(page({ kind: "video", title: "Scramble up ur name", description: "Scramble up ur name", author: "Scout, Suki & Stella", authorHandle: "scout2015", siteName: "TikTok", imageUrl: signedCover, imageUrls: [signedCover] }));
+    storeRemoteImage.mockResolvedValue(`/api/files/${d.id}-thumb-abc.jpg`);
+    await enrichDump(d.id);
+    expect(storeRemoteImage).toHaveBeenCalledWith(d.id, signedCover);
+    expect(db.getDump(d.id)).toMatchObject({ title: "Scramble up ur name", author: "Scout, Suki & Stella", authorHandle: "scout2015", imageUrl: `/api/files/${d.id}-thumb-abc.jpg`, imageUrls: [`/api/files/${d.id}-thumb-abc.jpg`], status: "ready" });
+  });
+
+  it("stores a signed thumbnail the bookmarklet sent when the server fetch found none", async () => {
+    const igImage = "https://scontent.cdninstagram.com/v/1.jpg?oh=00_AY&oe=6744F1A2";
+    const d = createFromText("https://www.instagram.com/p/abc/", { imageUrl: igImage });
+    extractUrl.mockResolvedValue(page({ kind: "image", title: null, description: null, imageUrl: null, imageUrls: [] }));
+    storeRemoteImage.mockResolvedValue(`/api/files/${d.id}-thumb-ig.jpg`);
+    await enrichDump(d.id);
+    expect(storeRemoteImage).toHaveBeenCalledWith(d.id, igImage);
+    expect(db.getDump(d.id)).toMatchObject({ imageUrl: `/api/files/${d.id}-thumb-ig.jpg` });
+  });
+
+  it("keeps the remote thumbnail when storing a copy fails, and leaves unsigned ones remote", async () => {
+    const d = createFromText("https://www.tiktok.com/@someone/video/2");
+    extractUrl.mockResolvedValue(page({ kind: "video", imageUrl: signedCover, imageUrls: [signedCover] }));
+    await enrichDump(d.id);
+    expect(db.getDump(d.id)).toMatchObject({ imageUrl: signedCover, status: "ready" });
+
+    storeRemoteImage.mockClear();
+    const plain = createFromText("https://example.com/plain-thumb");
+    extractUrl.mockResolvedValue(page({ imageUrl: "https://example.com/og.jpg", imageUrls: ["https://example.com/og.jpg"] }));
+    await enrichDump(plain.id);
+    expect(storeRemoteImage).not.toHaveBeenCalled();
+  });
 
   it("keeps a topic the user picked while enrichment was running", async () => {
     const d = db.createDump({ kind: "link", url: "https://example.com/pasta", domain: "example.com" });

@@ -1,0 +1,44 @@
+import { createHash } from "node:crypto";
+import fs from "node:fs/promises";
+import path from "node:path";
+import sharp from "sharp";
+import { UPLOAD_DIR } from "./db";
+import { fetchImage } from "./extract";
+
+/** Query params CDNs use to sign a URL that stops working after a deadline (TikTok, Instagram/Facebook, S3, CloudFront). */
+const EXPIRY_PARAMS = [["x-expires"], ["x-signature"], ["x-amz-expires"], ["x-amz-signature"], ["oe", "oh"], ["expires", "signature"]];
+
+export function isExpiringUrl(url: string | null | undefined): boolean {
+  if (!url || !/^https?:\/\//i.test(url)) return false;
+  try {
+    const keys = new Set([...new URL(url).searchParams.keys()].map((k) => k.toLowerCase()));
+    return EXPIRY_PARAMS.some((set) => set.every((k) => keys.has(k)));
+  } catch {
+    return false;
+  }
+}
+
+const KEEP_FORMATS: Record<string, string> = { jpeg: "jpg", png: "png", gif: "gif", webp: "webp", avif: "avif" };
+
+/**
+ * Downloads a remote image into uploads so the card outlives the source's signed URL.
+ * Named by dump id + content hash: re-saving the same image reuses the file, and deleting
+ * the dump removes only its own copy. Null when the image can't be fetched or decoded.
+ */
+export async function storeRemoteImage(dumpId: string, url: string): Promise<string | null> {
+  const bytes = await fetchImage(url);
+  if (!bytes?.length) return null;
+  let data: Buffer = bytes;
+  let ext: string;
+  try {
+    const { format } = await sharp(bytes, { animated: true }).metadata();
+    ext = (format && KEEP_FORMATS[format]) ?? "webp";
+    if (!format || !KEEP_FORMATS[format]) data = await sharp(bytes).webp({ quality: 85 }).toBuffer();
+  } catch {
+    return null;
+  }
+  const name = `${path.basename(dumpId)}-thumb-${createHash("sha256").update(data).digest("hex").slice(0, 12)}.${ext}`;
+  await fs.mkdir(UPLOAD_DIR, { recursive: true });
+  await fs.writeFile(path.join(UPLOAD_DIR, name), data);
+  return `/api/files/${name}`;
+}

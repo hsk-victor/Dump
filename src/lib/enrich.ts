@@ -1,6 +1,7 @@
 import { classifyHeuristic } from "./classify";
 import { db, getDump, listResortable, listTopics, topicExists, updateDump, type Dump } from "./db";
 import { extractUrl } from "./extract";
+import { isExpiringUrl, storeRemoteImage } from "./thumbs";
 import { renderXPostImage } from "./x-render";
 import { providerFromUrl, titleFromUrl } from "./detect";
 import { classifyWithAi, identifySubject } from "./llm";
@@ -150,6 +151,15 @@ async function runEnrich(id: string): Promise<Dump | null> {
         videoPosterUrl: ex.videoPosterUrl ?? dump.videoPosterUrl,
         videoType: ex.videoType !== undefined ? ex.videoType : dump.videoType,
       };
+      // Signed CDN thumbnails (TikTok's x-expires, Instagram's oe=) die within days, so keep a copy.
+      const lead = fields.imageUrl;
+      if (isExpiringUrl(lead)) {
+        const stored = await storeRemoteImage(id, lead!).catch(() => null);
+        if (stored) {
+          fields.imageUrl = stored;
+          fields.imageUrls = [stored, ...(fields.imageUrls ?? []).filter((u) => u !== lead)];
+        }
+      }
       // The native-look render is a snapshot: a failed render keeps any older
       // one. Posts with media show the media itself, so the render is only
       // worth generating for text-only posts.

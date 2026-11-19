@@ -52,5 +52,8 @@ export async function DELETE(_req: NextRequest, { params }: Ctx) {
   if (dump.imageUrl?.startsWith("/api/files/")) {
     await fs.rm(path.join(UPLOAD_DIR, path.basename(dump.imageUrl)), { force: true });
   }
+  // Stored copies of remote thumbnails, including ones a re-fetch has since replaced.
+  const thumbs = (await fs.readdir(UPLOAD_DIR).catch(() => [] as string[])).filter((f) => f.startsWith(`${dump.id}-thumb-`));
+  await Promise.all(thumbs.map((f) => fs.rm(path.join(UPLOAD_DIR, f), { force: true })));
   return new NextResponse(null, { status: 204 });
 }
