@@ -4,6 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEv
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Toaster, toast as sonnerToast } from "sonner";
 import type { Dump } from "@/lib/db";
+import { packFeed, type Rect } from "@/lib/feed-layout";
 import { KINDS, kindMeta, topicMeta, TOPICS, type TopicMeta } from "@/lib/taxonomy";
 import { DENSITY_KEY, MODE_KEY } from "@/lib/theme";
 import Composer from "./Composer";
@@ -33,13 +34,6 @@ const SLOT_SLOP = 48;
 const SLOT_HYSTERESIS = 8;
 /** Attached non-passively while a touch drag is live: blocks the scroll steal. */
 const blockTouchMove = (e: TouchEvent) => e.preventDefault();
-
-interface Rect {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-}
 
 interface PendingDrag {
   id: string;
@@ -153,7 +147,6 @@ export default function DumpApp() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const settingsRef = useRef<HTMLDivElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
-  const colCountRef = useRef(1);
   const cardHeights = useRef(new Map<string, number>());
   const itemsRef = useRef(items);
   itemsRef.current = items;
@@ -338,33 +331,21 @@ export default function DumpApp() {
     if (!grid) return;
     const cs = getComputedStyle(grid);
     const gap = parseFloat(cs.columnGap) || GAP_EST;
-    const n = Math.max(1, colCountRef.current);
-    const colW = (grid.clientWidth - gap * (n - 1)) / n;
+    const width = grid.clientWidth;
+    const minWidth = parseFloat(cs.columnWidth) || 260;
+    const columns = Math.max(1, Math.floor((width + gap) / (minWidth + gap)));
+    const fullWidthNotes = cs.getPropertyValue("--full-width-notes").trim() === "1";
     const d = dragRef.current;
-    const list = d ? itemsRef.current.filter((x) => x.id !== d.id) : itemsRef.current;
-    slotRects.current.clear();
-    ghostRect.current = null;
-    const colsH = new Array<number>(n).fill(0);
-    const pack = (id: string | null, h: number) => {
-      let c = 0;
-      for (let i = 1; i < colsH.length; i++) if (colsH[i] < colsH[c]) c = i;
-      const r: Rect = { x: c * (colW + gap), y: colsH[c], w: colW, h };
-      if (id === null) ghostRect.current = r;
-      else slotRects.current.set(id, r);
-      colsH[c] = r.y + h + gap;
-    };
-    for (let i = 0; i <= list.length; i++) {
-      if (d && d.j === i) pack(null, d.h);
-      if (i < list.length) pack(list[i].id, cardHeights.current.get(list[i].id) ?? ESTIMATE_H);
-    }
-    grid.style.height = `${Math.max(0, Math.max(...colsH) - gap)}px`;
+    const { slots, ghost, height } = packFeed(
+      itemsRef.current, cardHeights.current, { width, gap, columns, fullWidthNotes, estimate: ESTIMATE_H }, d,
+    );
+    slotRects.current = slots;
+    ghostRect.current = ghost;
+    grid.style.height = `${height}px`;
     for (const node of grid.querySelectorAll<HTMLElement>(".d-item")) {
       const id = node.dataset.did!;
-      if (d && id === d.id) {
-        node.style.width = `${colW}px`;
-        continue; // pointer-driven — leave its transform alone
-      }
-      const r = slotRects.current.get(id);
+      if (d && id === d.id) continue;
+      const r = slots.get(id);
       if (!r) continue;
       node.style.width = `${r.w}px`;
       node.style.transform = `translate3d(${r.x}px, ${r.y}px, 0)`;
@@ -377,20 +358,17 @@ export default function DumpApp() {
   }, [items, dragId, applyLayout]);
 
   const hasItems = items.length > 0;
-  // Column count follows the container width and the card-size preference; the CSS
-  // column-width on .d-grid is kept purely so this can read the resolved pixel width.
+  // Re-pack when the container width, narrow layout, or card-size preference changes.
   useEffect(() => {
     const el = gridRef.current;
     if (!el) return;
+    let previous = "";
     const compute = () => {
       const cs = getComputedStyle(el);
-      const gap = parseFloat(cs.columnGap) || GAP_EST;
-      const w = parseFloat(cs.columnWidth) || 260;
-      const n = Math.max(1, Math.floor((el.clientWidth + gap) / (w + gap)));
-      if (n !== colCountRef.current) {
-        colCountRef.current = n;
-        applyLayout();
-      }
+      const key = `${el.clientWidth}|${cs.columnWidth}|${cs.columnGap}|${cs.getPropertyValue("--full-width-notes")}`;
+      if (key === previous) return;
+      previous = key;
+      applyLayout();
     };
     compute();
     const ro = new ResizeObserver(compute);
