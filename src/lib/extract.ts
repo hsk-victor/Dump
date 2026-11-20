@@ -23,6 +23,8 @@ export interface Extracted {
   videoType?: "video" | "animated_gif" | null;
   /** True when no request for this URL got any HTTP response (network error, timeout, blocked). */
   unreachable: boolean;
+  /** True only on a definitive 404/410 for the item itself — the original is gone, not just unreachable. */
+  gone?: boolean;
 }
 
 const UA = "Mozilla/5.0 (compatible; DumpBot/0.1; +https://github.com/hsk-victor/Dump)";
@@ -197,14 +199,24 @@ function oembedEndpoint(url: string): string | null {
   return null;
 }
 
-async function fetchOEmbed(url: string): Promise<{ data: OEmbed | null; reached: boolean } | null> {
+/** 404/410 is the only HTTP answer that means the item itself is gone; 401/403/429/5xx are not. */
+export function isGoneStatus(status: number): boolean {
+  return status === 404 || status === 410;
+}
+
+/** Rate limits and server errors: the site answered but gave nothing, so try again later. */
+export function isTransientStatus(status: number): boolean {
+  return status === 429 || status >= 500;
+}
+
+async function fetchOEmbed(url: string): Promise<{ data: OEmbed | null; reached: boolean; gone?: boolean } | null> {
   const endpoint = oembedEndpoint(url);
   if (!endpoint) return null;
   let reached = false;
   try {
     const res = await fetchWithTimeout(endpoint, { headers: { accept: "application/json" } });
-    reached = true;
-    if (!res.ok) return { data: null, reached };
+    reached = !isTransientStatus(res.status);
+    if (!res.ok) return { data: null, reached, gone: isGoneStatus(res.status) };
     return { data: (await res.json()) as OEmbed, reached };
   } catch {
     return { data: null, reached };
@@ -323,11 +335,14 @@ export async function extractUrl(url: string): Promise<Extracted> {
   let page: PageMeta | null = null;
   let contentType = "";
   let finalUrl = url;
+  let pageGone = false;
   const isX = /(^|\.)(x|twitter)\.com$/.test(host);
   if (!isX) {
     try {
       const res = await fetchWithTimeout(url, { headers: { accept: "text/html,application/xhtml+xml,image/*;q=0.8,*/*;q=0.5" } });
-      reached = true;
+      // A 429/5xx is a temporary failure, not a page: it mustn't settle as a reachable save.
+      if (!isTransientStatus(res.status)) reached = true;
+      pageGone = isGoneStatus(res.status);
       contentType = res.headers.get("content-type") ?? "";
       finalUrl = res.url || url;
       if (res.ok && /html|xml/.test(contentType)) page = parseHtml(await readLimited(res), finalUrl);
@@ -338,10 +353,10 @@ export async function extractUrl(url: string): Promise<Extracted> {
   }
 
   if (contentType.startsWith("image/")) {
-    return { kind: "image", title: decodeURIComponent(new URL(url).pathname.split("/").pop() || "Image"), description: null, content: null, imageUrl: url, imageUrls: [url], videoUrl: null, videoType: null, siteName: host, author: null, unreachable: false };
+    return { kind: "image", title: decodeURIComponent(new URL(url).pathname.split("/").pop() || "Image"), description: null, content: null, imageUrl: url, imageUrls: [url], videoUrl: null, videoType: null, siteName: host, author: null, unreachable: false, gone: pageGone };
   }
   if (contentType.startsWith("video/")) {
-    return { kind: "video", title: videoTitleFromUrl(finalUrl), description: null, content: null, imageUrl: null, imageUrls: [], videoUrl: url, videoType: "video", siteName: host, author: null, unreachable: !reached };
+    return { kind: "video", title: videoTitleFromUrl(finalUrl), description: null, content: null, imageUrl: null, imageUrls: [], videoUrl: url, videoType: "video", siteName: host, author: null, unreachable: !reached, gone: pageGone };
   }
 
   const embedText = textFromEmbedHtml(oembed?.html);
@@ -360,6 +375,7 @@ export async function extractUrl(url: string): Promise<Extracted> {
       siteName: "X",
       author,
       unreachable: !reached,
+      gone: !!oembedResult?.gone,
     };
   }
 
@@ -377,5 +393,6 @@ export async function extractUrl(url: string): Promise<Extracted> {
     siteName: page?.siteName ?? oembed?.provider_name ?? host,
     author: oembed?.author_name ?? page?.author ?? null,
     unreachable: !reached,
+    gone: pageGone,
   };
 }
