@@ -1,7 +1,8 @@
 import { after, NextResponse, type NextRequest } from "next/server";
-import { counts, listDumps, listTopics, staleXRenderIds, updateDump } from "@/lib/db";
+import { counts, failStaleProcessing, listDumps, listTopics, staleXRenderIds, updateDump } from "@/lib/db";
 import { createFromFile, createFromText, InputError } from "@/lib/create";
-import { enrichDump, refreshXRender } from "@/lib/enrich";
+import { enrichDump, isEnriching, refreshXRender } from "@/lib/enrich";
+import { STALE_PROCESSING_MS } from "@/lib/card-state";
 import { aiEnabled } from "@/lib/llm";
 import { isKind } from "@/lib/taxonomy";
 
@@ -35,6 +36,8 @@ export async function GET(req: NextRequest) {
     for (const { id } of stale) updateDump(id, { status: "processing" });
     for (const { id, status } of stale) after(() => refreshXRender(id, status));
   }
+  // A run lost to a restart would otherwise leave its card loading forever.
+  if (offset === 0) failStaleProcessing(STALE_PROCESSING_MS, isEnriching);
   const rows = listDumps({
     q: sp.get("q"),
     kind: isKind(kind) ? kind : null,

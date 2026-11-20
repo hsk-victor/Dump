@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseHtml, parseTikTokItem, isPrivateIp } from "../extract";
+import { parseHtml, parseTikTokItem, isPrivateIp, isGoneStatus, isTransientStatus } from "../extract";
 
 describe("parseHtml", () => {
   it("reads Open Graph metadata and resolves relative images", () => {
@@ -85,5 +85,19 @@ describe("TikTok pages", () => {
     expect(parseTikTokItem(`<script id="__UNIVERSAL_DATA_FOR_REHYDRATION__">{not json</script>`)).toBeNull();
     const html = universal({ desc: "Caption", author: { uniqueId: "u" } });
     expect(parseHtml(html, "https://example.com/page")).toMatchObject({ title: "TikTok - Make Your Day", author: null });
+  });
+});
+
+describe("isGoneStatus", () => {
+  it("only treats 404 and 410 as a removed original", () => {
+    expect([404, 410].every(isGoneStatus)).toBe(true);
+    expect([200, 401, 403, 429, 500, 502, 503].some(isGoneStatus)).toBe(false);
+  });
+});
+
+describe("isTransientStatus", () => {
+  it("treats rate limits and server errors as retryable, never as gone", () => {
+    expect([429, 500, 502, 503, 504].every(isTransientStatus)).toBe(true);
+    expect([200, 401, 403, 404, 410].some(isTransientStatus)).toBe(false);
   });
 });

@@ -17,6 +17,7 @@
   --ink-2: #3f3f46;
   --muted: #8b8b94;
   --hairline: rgb(0 0 0 / 0.07);
+  --error-text: #b42318;
   --shadow: 0 0 0 1px rgb(0 0 0 / 0.03), 0 1px 2px rgb(0 0 0 / 0.04), 0 12px 30px -16px rgb(0 0 0 / 0.16);
   --shadow-hover: 0 0 0 1px rgb(0 0 0 / 0.04), 0 2px 4px rgb(0 0 0 / 0.05), 0 20px 48px -16px rgb(0 0 0 / 0.28);
   --shadow-drag: 0 0 0 1px rgb(0 0 0 / 0.04), 0 2px 6px rgb(0 0 0 / 0.06), 0 26px 60px -12px rgb(0 0 0 / 0.35);
@@ -33,6 +34,7 @@
   --ink-2: #d4d4d8;
   --muted: #7c7c85;
   --hairline: rgb(255 255 255 / 0.07);
+  --error-text: #fda29b;
   --shadow: 0 0 0 1px rgb(255 255 255 / 0.05), 0 1px 2px rgb(0 0 0 / 0.3), 0 12px 30px -16px rgb(0 0 0 / 0.5);
   --shadow-hover: 0 0 0 1px rgb(255 255 255 / 0.1), 0 2px 4px rgb(0 0 0 / 0.4), 0 20px 48px -14px rgb(0 0 0 / 0.75);
   --shadow-drag: 0 0 0 1px rgb(255 255 255 / 0.08), 0 2px 8px rgb(0 0 0 / 0.4), 0 30px 64px -12px rgb(0 0 0 / 0.8);
@@ -527,7 +529,8 @@ button {
   z-index: 5;
   transition: none;
 }
-.d-item > .d-card {
+.d-item > .d-card,
+.d-card-shell > .d-card {
   margin-bottom: 0;
 }
 .d-card {
@@ -736,26 +739,32 @@ button {
   transition: opacity 0.14s var(--ease-out), translate 0.14s var(--ease-out);
 }
 @media (hover: hover) and (pointer: fine) {
-  .d-mediacard:is(:hover, :focus-within) .d-mpanel {
+  :is(.d-mediacard:hover, .d-card-shell:hover > .d-mediacard) .d-mpanel {
     opacity: 1;
     translate: 0 0;
     pointer-events: auto;
-    transition-duration: 0.2s;
+    transition-duration: 0.16s;
   }
-  .d-mediacard:is(:hover, :focus-within) .d-mchip {
+  :is(.d-mediacard:is(:hover, :focus-within), .d-card-shell:is(:hover, :focus-within) > .d-mediacard) .d-mchip {
     opacity: 0;
   }
   /* The panel always shows its meta row once open (Retry included); skip the row's own collapse animation. */
   .d-mpanel .d-meta {
     transition: none;
   }
-  .d-mediacard:is(:hover, :focus-within, [data-open]) .d-mpanel .d-meta {
+  :is(.d-mediacard:is(:hover, :focus-within, [data-open]), .d-card-shell:is(:hover, :focus-within) > .d-mediacard) .d-mpanel .d-meta {
     opacity: 1;
     max-height: 2.5rem;
     margin-top: 0.5rem;
     padding-top: 0.45rem;
     border-top-width: 1px;
   }
+}
+:is(.d-mediacard:focus-within, .d-card-shell:focus-within > .d-mediacard) .d-mpanel {
+  opacity: 1;
+  translate: none;
+  pointer-events: auto;
+  transition: none;
 }
 /* Failed dumps keep the panel open so Retry is reachable. */
 .d-mediacard[data-open] .d-mpanel {
@@ -766,7 +775,7 @@ button {
 .d-mediacard[data-open] .d-mchip {
   opacity: 0;
 }
-@media (hover: none), (pointer: coarse) {
+@media (width > 600px) and ((hover: none) or (pointer: coarse)) {
   .d-mediacard:not([data-open]) .d-mpanel {
     display: none;
   }
@@ -850,7 +859,7 @@ button {
   max-height: none;
   height: 100%;
   object-position: center;
-  transition: opacity 0.22s var(--ease-out), scale 0.4s var(--ease-out);
+  transition: opacity 0.22s var(--ease-out);
 }
 /* TikTok covers are 9:16: show the whole frame, letterboxed on the neutral backdrop. */
 .d-vidcard-portrait .d-media img {
@@ -873,11 +882,6 @@ button {
   bottom: auto;
   pointer-events: none;
 }
-@media (hover: hover) and (pointer: fine) {
-  .d-vidcard:hover .d-media img[data-loaded] {
-    scale: 1.03;
-  }
-}
 .d-vph {
   position: absolute;
   inset: 0;
@@ -898,21 +902,6 @@ button {
   height: 44%;
   background: linear-gradient(0deg, rgb(0 0 0 / 0.34), transparent);
   pointer-events: none;
-}
-.d-vidcard .d-play {
-  transition: scale 0.18s var(--ease-out);
-}
-@media (hover: hover) and (pointer: fine) {
-  .d-vidcard:hover .d-play {
-    scale: 1.08;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .d-vidcard .d-media img,
-  .d-vidcard .d-play {
-    transition: opacity 0.15s;
-    scale: none;
-  }
 }
 .d-body {
   padding: 0.8rem 0.9rem 0.8rem;
@@ -1653,11 +1642,8 @@ button {
   transition: opacity 0.15s var(--ease-out);
 }
 @media (hover: hover) and (pointer: fine) {
-  /* On hover the corner belongs to the card actions (like .d-mchip fading) and
-     the details panel takes over — the player chrome would sit under both. */
-  .d-mus:is(:hover, :focus-within) .d-mus-src,
-  .d-mus:is(:hover, :focus-within) .d-mus-face,
-  .d-mus:is(:hover, :focus-within) .d-mus-prog {
+  :is(.d-mus:is(:hover, :focus-within), .d-card-shell:is(:hover, :focus-within) > .d-mus)
+    :is(.d-mus-src, .d-mus-prog) {
     opacity: 0;
   }
 }
@@ -1689,7 +1675,7 @@ button {
   transition: opacity 0.14s var(--ease-out), translate 0.14s var(--ease-out);
 }
 @media (hover: hover) and (pointer: fine) {
-  .d-mus:is(:hover, :focus-within) .d-mus-panel {
+  :is(.d-mus:is(:hover, :focus-within), .d-card-shell:is(:hover, :focus-within) > .d-mus) .d-mus-panel {
     opacity: 1;
     translate: 0 0;
     pointer-events: auto;
@@ -1698,7 +1684,7 @@ button {
   .d-mus-panel .d-meta {
     transition: none;
   }
-  .d-mus:is(:hover, :focus-within, [data-open]) .d-mus-panel .d-meta {
+  :is(.d-mus:is(:hover, :focus-within, [data-open]), .d-card-shell:is(:hover, :focus-within) > .d-mus) .d-mus-panel .d-meta {
     opacity: 1;
     max-height: 2.5rem;
     margin-top: 0;
@@ -1713,12 +1699,11 @@ button {
   translate: 0 0;
   pointer-events: auto;
 }
-.d-mus[data-open] .d-mus-face,
 .d-mus[data-open] .d-mus-prog,
 .d-mus[data-open] .d-mus-src {
   opacity: 0;
 }
-@media (hover: none), (pointer: coarse) {
+@media (width > 600px) and ((hover: none) or (pointer: coarse)) {
   .d-mus:not([data-open]) .d-mus-panel {
     display: none;
   }
@@ -1831,12 +1816,12 @@ button {
    hovering never grows a card or shifts the grid — only its contents fade in.
    Always fully visible on touch where hover doesn't exist, and inside the
    glass panels (.d-mediacard, .d-mus) that already gate their own meta. */
-@media (hover: hover) and (pointer: fine) {
+@media (width > 600px) and (hover: hover) and (pointer: fine) {
   .d-card:not(.d-mediacard):not(.d-mus) .d-meta > * {
     opacity: 0;
     transition: opacity 0.15s var(--ease-out);
   }
-  .d-card:not(.d-mediacard):not(.d-mus):is(:hover, :focus-within) .d-meta > * {
+  .d-card-shell:is(:hover, :focus-within) > .d-card:not(.d-mediacard, .d-mus) .d-meta > * {
     opacity: 1;
   }
 }
@@ -2104,7 +2089,7 @@ button {
   border-radius: 0;
 }
 
-/* Notes — index card: a catalog header (uppercase title + date) over ruled
+/* Notes — index card: a catalog header (label + date) over ruled
    writing lines, with a red margin rule on the leading edge. Card stock stays
    plain — the topic tint lives in the meta row, not the paper. */
 .d-card[data-kind="note"] {
@@ -2138,15 +2123,11 @@ button {
   border-bottom: 1.5px solid var(--note-rule);
 }
 .d-note-title {
-  min-width: 0;
   font-size: 0.7rem;
   font-weight: 700;
   letter-spacing: 0.07em;
   text-transform: uppercase;
   color: var(--ink-2);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 .d-note-date {
   flex-shrink: 0;
@@ -2164,10 +2145,6 @@ button {
   color: var(--ink-2);
   white-space: pre-line;
   overflow-wrap: anywhere;
-  display: -webkit-box;
-  -webkit-line-clamp: 10;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
   cursor: text;
   background: repeating-linear-gradient(
     to bottom,
@@ -2278,14 +2255,16 @@ The tape strip: frosted so the paper shows through, slightly rotated.
 }
 */
 
-/* Hover actions */
+/* The action row stays in flow even while it's hidden. */
 .d-actions {
-  position: absolute;
-  z-index: 2;
-  top: 0.5rem;
-  right: 0.5rem;
   display: flex;
   align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  width: fit-content;
+  max-width: 100%;
+  margin-block-start: 4px;
+  margin-inline-start: auto;
   gap: 0.1rem;
   padding: 0.15rem;
   border-radius: 9px;
@@ -2295,48 +2274,29 @@ The tape strip: frosted so the paper shows through, slightly rotated.
   font-size: 0.72rem;
   color: var(--ink-2);
   opacity: 0;
+  pointer-events: none;
   transition: opacity 0.15s var(--ease-out);
 }
 @media (hover: hover) and (pointer: fine) {
-  .d-card:hover .d-actions {
+  .d-card-shell:hover > .d-actions {
     opacity: 1;
+    pointer-events: auto;
   }
 }
-.d-card:focus-within .d-actions {
+.d-card-shell:focus-within > .d-actions {
   opacity: 1;
+  pointer-events: auto;
+  transition: none;
 }
-@media (hover: none), (pointer: coarse) {
-  /* No hover on touch: actions never cover a card at rest. Media cards reveal
-     them with the details panel (tap-to-reveal sets data-open; failed dumps pin
-     it open); every other card docks them beside the always-visible meta row —
-     with space reserved — instead of floating them over its top-right corner. */
-  .d-mediacard:not([data-open]) .d-actions,
-  .d-mus:not([data-open]) .d-actions {
-    opacity: 0;
-  }
-  .d-mediacard:is([data-open], :focus-within) .d-actions,
-  .d-mus:is([data-open], :focus-within) .d-actions {
+@media (width > 600px) and ((hover: none) or (pointer: coarse)) {
+  .d-card-shell:has(> .d-card:is([data-open], :not(.d-mediacard, .d-mus))) > .d-actions {
     opacity: 1;
+    pointer-events: auto;
   }
-  .d-card:not(.d-mediacard):not(.d-mus) .d-actions {
-    opacity: 1;
-    top: auto;
-    bottom: 0.4rem;
-    right: 0.55rem;
-  }
-  .d-card:not(.d-mediacard):not(.d-mus) .d-meta {
-    padding-right: 6.4rem;
-  }
-  /* Notes dock an extra Edit button in the actions pill. */
-  .d-card[data-kind="note"] .d-meta {
-    padding-right: 8rem;
-  }
-  /* Same corner rule as desktop hover: once actions are revealed they own the
-     top-right — the counter/tag there steps aside. */
-  .d-mediacard[data-open] .d-mcount,
-  .d-ghcard[data-open] .d-gh-tag {
-    opacity: 0;
-  }
+}
+.d-card-shell:has(> .d-card[data-removing]) > .d-actions {
+  opacity: 0;
+  pointer-events: none;
 }
 /* Pin + edit icon buttons share the square action sizing; pin stays lit while
    the dump is pinned. */
@@ -2985,14 +2945,523 @@ body.d-dragging * {
   }
 }
 
+@media (width < 480px) {
+  .d-grid {
+    --full-width-notes: 1;
+  }
+}
+
+.d-phone-clear {
+  display: none;
+}
+
+@media (max-width: 600px) {
+  :root {
+    --muted: #696972;
+    --dock-clearance: calc(var(--dock-height, 56px) + 12px + env(safe-area-inset-bottom, 0px) + 16px);
+  }
+  [data-mode="dark"] {
+    --muted: #ababb4;
+  }
+  .d-header-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "brand settings" "search search" "topics type";
+    gap: 8px;
+    padding: calc(8px + env(safe-area-inset-top, 0px)) 16px 8px;
+  }
+  .d-brand {
+    grid-area: brand;
+    justify-self: start;
+    min-height: 44px;
+  }
+  .d-header-tools {
+    grid-area: settings;
+    justify-self: end;
+  }
+  .d-search {
+    grid-area: search;
+    margin: 0;
+    height: 44px;
+  }
+  .d-results {
+    flex-shrink: 0;
+  }
+  .d-subnav {
+    grid-area: topics;
+  }
+  .d-topics {
+    position: relative;
+    padding-inline-end: 16px;
+    mask-image: linear-gradient(90deg, #000 calc(100% - 16px), transparent);
+  }
+  .d-topic {
+    justify-content: center;
+    min-width: 44px;
+    height: 44px;
+    font-size: 0.875rem;
+  }
+  .d-type-filter {
+    grid-area: type;
+  }
+  .d-phone-type {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-inline: 12px;
+    max-width: 128px;
+    border-radius: 10px;
+    background: var(--surface);
+    box-shadow: var(--shadow);
+    font-size: 0.875rem;
+  }
+  .d-phone-type span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .d-settings-pop {
+    max-width: calc(100vw - 32px);
+    max-height: min(65dvh, 27rem);
+    overflow: auto;
+    overscroll-behavior: contain;
+    animation: none;
+  }
+  .d-settings-pop[hidden] {
+    display: none;
+  }
+  .d-desktop-setting,
+  .d-footer,
+  .d-dock-kbd {
+    display: none;
+  }
+  .d-main {
+    padding: 8px 16px var(--dock-clearance);
+  }
+  html {
+    scroll-padding-top: calc(160px + env(safe-area-inset-top, 0px));
+    scroll-padding-bottom: var(--dock-clearance, 84px);
+  }
+  .d-grid {
+    column-gap: 12px;
+  }
+  .d-grid:not([data-dragging]) .d-item {
+    transition: none;
+  }
+  .d-card {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  .d-card[data-fresh] {
+    animation: none;
+  }
+  .d-card.d-body,
+  .d-card :is(.d-article-body, .d-link-body, .d-vid-info, .d-rd-body) {
+    padding-inline: 16px;
+  }
+  .d-card :is(.d-headline, .d-link-title, .d-vid-title, .d-rd-title, .d-post-headline, .d-mpanel-title, .d-mus-ptitle, .d-mus-title,
+    .d-note-title, .d-ig-empty-name) {
+    font-size: 1.125rem;
+    line-height: 1.5rem;
+    white-space: normal;
+    -webkit-line-clamp: 3;
+  }
+  .d-card :is(.d-dek, .d-rd-text, .d-post-text, .d-mpanel-dek, .d-mus-pdek, .d-annotation) {
+    font-size: 0.9375rem;
+    line-height: 1.375rem;
+    -webkit-line-clamp: 4;
+  }
+  .d-card :is(.d-note-lines, .d-note-edit) {
+    font-size: 1rem;
+    line-height: 1.5;
+  }
+  .d-card :is(.d-meta, .d-note-date, .d-link-domain, .d-vid-channel, .d-topic-chip, .d-mpanel-by, .d-sorting, .d-kicker, .d-author-site) {
+    font-size: 0.75rem;
+    line-height: 1rem;
+    white-space: normal;
+  }
+  .d-page .d-card .d-meta {
+    display: flex;
+    flex-wrap: wrap;
+    max-height: none;
+    padding-inline: 0;
+    opacity: 1;
+    overflow: visible;
+  }
+  .d-card .d-meta time {
+    display: block;
+  }
+  .d-card .d-meta .truncate,
+  .d-card .d-mpanel-by .truncate {
+    white-space: normal;
+  }
+  .d-page .d-card :is(.d-mpanel, .d-mus-panel) {
+    position: static;
+    display: block;
+    max-height: none;
+    overflow: visible;
+    padding: 16px;
+    background: none;
+    box-shadow: none;
+    backdrop-filter: none;
+    opacity: 1;
+    translate: none;
+    pointer-events: auto;
+    transition: none;
+  }
+  .d-card :is(.d-mchip, .d-mus-src) {
+    display: none;
+  }
+  .d-card .d-media img {
+    min-height: 0;
+    width: 100%;
+    max-height: min(440px, 60svh);
+    object-fit: contain;
+    object-position: center;
+  }
+  .d-card .d-vmedia:has(img),
+  .d-card .d-igreel .d-media {
+    max-height: min(440px, 60svh);
+  }
+  .d-card .d-post-video {
+    max-height: min(16rem, 60svh);
+  }
+  .d-card .d-vmedia img,
+  .d-card.d-igreel .d-media img {
+    object-fit: contain;
+  }
+  .d-card .d-vmedia:has(img) {
+    aspect-ratio: auto;
+  }
+  .d-card :is(.d-link-title a, .d-headline a)::after {
+    content: none;
+  }
+  .d-card :is(.d-link-title, .d-headline, .d-rd-title, .d-mpanel-title) > a[href]::before {
+    content: "";
+    position: absolute;
+    z-index: 1;
+    inset-inline: 16px;
+    block-size: 44px;
+    margin-block-start: -8px;
+  }
+  .d-phone-actions {
+    position: relative;
+    z-index: 2;
+    order: 1;
+    display: flex;
+    justify-content: space-between;
+    min-height: 44px;
+    padding-inline: 8px;
+    border-top: 1px solid var(--hairline);
+    color: var(--ink-2);
+  }
+  .d-body > .d-phone-actions {
+    margin: 8px -16px -0.8rem;
+  }
+  .d-phone-actions .d-more {
+    margin-inline-start: auto;
+  }
+  .d-phone-actions .d-drag {
+    cursor: grab;
+    touch-action: none;
+  }
+  .d-phone-popup-boundary {
+    position: fixed;
+    inset: calc(4px + env(safe-area-inset-top, 0px)) 8px var(--dock-clearance);
+    visibility: hidden;
+    pointer-events: none;
+  }
+  .d-phone-positioner {
+    z-index: 50;
+  }
+  .d-phone-menu {
+    min-width: min(9rem, var(--available-width));
+    max-width: min(17rem, var(--available-width));
+    max-height: min(60dvh, var(--available-height));
+    overflow: auto;
+    overscroll-behavior: contain;
+    overflow-wrap: anywhere;
+    transform-origin: var(--transform-origin);
+    font-size: 0.875rem;
+    transition: opacity 0.16s var(--ease-out), scale 0.16s var(--ease-out);
+  }
+  .d-phone-menu:is([data-starting-style], [data-ending-style]) {
+    translate: none;
+    scale: 0.97;
+  }
+  .d-phone-menu[data-ending-style] {
+    transition-duration: 0.11s;
+  }
+  .d-phone-menu[data-instant] {
+    transition: none;
+  }
+  .d-phone-menu[data-keyboard-open][data-open] {
+    opacity: 1;
+    scale: none;
+    transition: none;
+  }
+  .d-phone-menu .d-menu-item {
+    min-height: 44px;
+    padding: 8px 12px;
+  }
+  .d-phone-menu [data-checked] {
+    font-weight: 700;
+    background: var(--hairline);
+  }
+  .d-phone-clear,
+  .d-original,
+  .d-note-more {
+    display: inline-flex;
+    align-items: center;
+    align-self: flex-start;
+    min-height: 44px;
+    font-size: 0.875rem;
+    font-weight: 700;
+  }
+  .d-original,
+  .d-note-more {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  .d-note-more {
+    margin-top: 4px;
+  }
+  .d-dock {
+    bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    align-items: flex-end;
+    gap: 4px;
+    padding: 6px;
+  }
+  .d-dock-input {
+    field-sizing: content;
+    font-size: 1rem;
+    line-height: 1.5;
+    min-height: 44px;
+    max-height: calc(7.5em + 20px);
+    padding: 10px 0;
+    overflow: auto;
+    overscroll-behavior: contain;
+  }
+  .d-dock-remove {
+    inset: 0;
+    background: rgb(0 0 0 / 0.55);
+    font-size: 20px;
+  }
+  .d-dock img[alt="Image to dump"] {
+    width: 44px;
+    height: 44px;
+  }
+  :is(.d-icon-btn, .d-dock-icon, .d-dock-remove, .d-phone-actions button) {
+    width: 44px;
+    height: 44px;
+    display: grid;
+    place-items: center;
+    border-radius: 10px;
+  }
+  :is(.d-phone-type, .d-dock-btn, .d-settings-row button) {
+    min-height: 44px;
+  }
+  .d-dock-btn {
+    padding-inline: 10px;
+  }
+  :is(.d-phone-actions button, .d-phone-type, .d-note-more) {
+    transition: scale 0.12s var(--ease-out);
+  }
+  :is(.d-phone-actions button, .d-phone-type, .d-note-more):active {
+    scale: 0.97;
+  }
+  :is(.d-phone-actions button, .d-phone-type, .d-note-more, .d-original):focus-visible {
+    outline: 2px solid var(--ink-2);
+    outline-offset: -2px;
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .d-card:hover {
+      translate: none;
+    }
+    .d-phone-actions button:hover {
+      background: var(--hairline);
+    }
+  }
+}
+
 @keyframes shimmer {
   0% { background-position: -400px 0; }
   100% { background-position: 400px 0; }
 }
+/* Skeletons are static: a wave across a feed scanned all day is noise. */
 .shimmer {
-  background: linear-gradient(90deg, var(--hairline) 0%, color-mix(in srgb, var(--ink) 10%, transparent) 50%, var(--hairline) 100%);
-  background-size: 800px 100%;
-  animation: shimmer 1.4s linear infinite;
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+}
+
+/* ── Card states ── loading, original unavailable, failed. Rows sit in flow under the
+   content, above topic/date; a saved card shows none. Never over media. */
+.d-state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 0.6rem;
+  padding: 10px 0 0;
+  border-top: 1px solid var(--hairline);
+  font-size: 12px;
+  line-height: 17px;
+  font-weight: 550;
+  color: var(--ink-2);
+}
+.d-state + .d-meta {
+  margin-top: 0.55rem;
+}
+/* Media cards: the panel anchors to the media frame, so a state row below it is never covered. */
+.d-mframe {
+  position: relative;
+}
+/* Media cards: the row is its own surface below the image, outside the hover panel. */
+:is(.d-mediacard, .d-mus) > .d-state {
+  margin-top: 0;
+  padding: 10px 12px;
+  background: var(--surface);
+}
+:is(.d-mediacard, .d-mus) > .d-state + .d-state {
+  border-top: 1px solid var(--hairline);
+}
+/* Same insets as the meta row on cards whose meta isn't in a padded body. */
+.d-link .d-state {
+  margin-left: 0.8rem;
+  margin-right: 0.8rem;
+}
+.d-vid .d-state {
+  margin: 0.1rem 0.9rem 0;
+}
+.d-article .d-state {
+  clear: both;
+}
+.d-state-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.d-state-sub {
+  display: block;
+  font-weight: 450;
+}
+.d-state-icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+.d-state-failed {
+  color: var(--error-text);
+}
+.d-state-retry {
+  /* Above stretched headline links, like the hover actions. */
+  position: relative;
+  z-index: 2;
+  margin-left: auto;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid color-mix(in srgb, currentColor 45%, transparent);
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: scale 0.16s var(--ease-out);
+}
+.d-state-retry:active {
+  scale: 0.97;
+}
+.d-state-retry:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+.d-state-retry:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+@media (pointer: coarse) {
+  .d-state-retry {
+    min-height: 44px;
+  }
+}
+@keyframes d-spin {
+  to {
+    rotate: 360deg;
+  }
+}
+.d-spinner {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  border: 1.5px solid color-mix(in srgb, var(--ink-2) 25%, transparent);
+  border-top-color: var(--ink-2);
+  animation: d-spin 0.8s linear infinite;
+}
+/* A gone video's poster can't play: a static label replaces the play button. */
+.d-preview-only {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  translate: -50% -50%;
+  padding: 0.3rem 0.65rem;
+  border-radius: 999px;
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 600;
+  color: #fff;
+  background: rgb(0 0 0 / 0.55);
+  backdrop-filter: blur(6px);
+  white-space: nowrap;
+  pointer-events: none;
+}
+.d-poster-frame {
+  min-height: 6rem;
+}
+/* Desktop exception states (and every audio card): the media card's details leave the hover overlay for an in-flow
+   footer below the media — retained title/byline, status, then topic/date — so nothing
+   competes with the image. Saved cards keep the quiet overlay. */
+@media (width > 600px) {
+  /* Audio always: an overlay would cover the widget's title, artist and destination. */
+  :is(.d-mediacard[data-exception] .d-mpanel, .d-mus .d-mus-panel) {
+    position: static;
+    max-height: none;
+    overflow: visible;
+    padding: 0.7rem 0.8rem 0.6rem;
+    border-radius: 0;
+    background: var(--surface);
+    box-shadow: none;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    opacity: 1;
+    translate: none;
+    pointer-events: auto;
+    transition: none;
+  }
+  .d-mus[data-exception] .d-mus-src {
+    opacity: 1;
+  }
+}
+/* Remote-only audio: a plain destination, not a player. */
+.d-mus-open {
+  display: inline-flex;
+  align-self: start;
+  margin-top: 0.35rem;
+  padding: 0.2rem 0.6rem;
+  border: 1px solid color-mix(in srgb, var(--ink) 18%, transparent);
+  border-radius: 999px;
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 600;
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+.d-menu-sep {
+  height: 1px;
+  margin: 0.25rem 0.4rem;
+  background: var(--hairline);
 }
 
 /* Last so it beats every base input rule below: 16px minimum on touch
@@ -3000,16 +3469,36 @@ body.d-dragging * {
 @media (pointer: coarse) {
   .d-search input,
   .d-dock-input,
-  .d-kind-select {
+  .d-kind-select,
+  .d-note-edit,
+  .d-topic-rn,
+  .d-cat-name,
+  .d-cat-desc {
     font-size: 16px;
   }
 }
 
+@media (max-width: 600px) {
+  .d-search input,
+  .d-cat-name,
+  .d-cat-desc {
+    font-size: 1rem;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .d-phone-menu:is([data-starting-style], [data-ending-style]),
+  :is(.d-phone-actions button, .d-phone-type, .d-note-more):active {
+    scale: none;
+  }
   /* Reduced motion means gentler, not zero: opacity/color transitions stay, movement goes. */
   .d-empty-card,
-  .shimmer {
+  .shimmer,
+  .d-spinner {
     animation: none;
+  }
+  .d-state-retry:active {
+    scale: none;
   }
   .d-card {
     transition: box-shadow 0.15s, opacity 0.15s;

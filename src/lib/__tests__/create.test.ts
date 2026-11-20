@@ -7,7 +7,7 @@ const dir = fs.mkdtempSync(path.join(os.tmpdir(), "dump-create-"));
 process.env.DUMP_DATA_DIR = dir;
 
 const { createFromText, InputError } = await import("../create");
-const { counts } = await import("../db");
+const { counts, createDump, listDumps } = await import("../db");
 
 describe("createFromText", () => {
   afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
@@ -61,5 +61,40 @@ describe("createFromText", () => {
 
   it("leaves direct video filename titles as display-only fallbacks", () => {
     expect(createFromText("https://example.com/Spring%20flowers.mp4")).toMatchObject({ kind: "video", title: null, videoUrl: "https://example.com/Spring%20flowers.mp4" });
+  });
+
+  it("deduplicates the three NASA URLs and moves the original dump to the top", () => {
+    const before = counts().total;
+    const original = "https://twitter.com/NASAWebb/status/1546621080298835970";
+    const first = createFromText(original);
+    for (const url of [
+      "https://x.com/NASAWebb/status/1546621080298835970?s=20",
+      "https://x.com/NASAWebb/status/1546621080298835970",
+    ]) {
+      const newer = createFromText("An intervening note");
+      expect(listDumps()[0].id).toBe(newer.id);
+      const again = createFromText(url);
+      expect(again).toMatchObject({ id: first.id, duplicate: true, url: original });
+      expect(again.position).toBeGreaterThan(newer.position);
+      expect(listDumps()[0].id).toBe(first.id);
+    }
+    expect(counts().total).toBe(before + 3);
+    expect(listDumps().filter((dump) => dump.id === first.id)).toHaveLength(1);
+  });
+
+  it("matches pre-existing rows without rewriting their URLs", () => {
+    const url = "https://mobile.twitter.com/old/status/987654321?utm_source=legacy#photo";
+    const legacy = createDump({ kind: "post", url, title: "Legacy post" });
+    const before = counts().total;
+    expect(createFromText("https://x.com/i/web/status/987654321"))
+      .toMatchObject({ id: legacy.id, duplicate: true, url, title: "Legacy post" });
+    expect(counts().total).toBe(before);
+  });
+
+  it("saves meaningful query variants as separate dumps", () => {
+    const first = createFromText("https://example.com/search?q=one");
+    const second = createFromText("https://example.com/search?q=two");
+    expect(second.id).not.toBe(first.id);
+    expect(second.duplicate).toBeUndefined();
   });
 });
