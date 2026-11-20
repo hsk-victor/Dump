@@ -4,6 +4,7 @@ export const KINDS = [
   { id: "video", label: "Videos", singular: "Video" },
   { id: "image", label: "Images", singular: "Image" },
   { id: "audio", label: "Audio", singular: "Audio" },
+  { id: "file", label: "Files", singular: "File" },
   { id: "link", label: "Links", singular: "Link" },
   { id: "note", label: "Notes", singular: "Note" },
 ] as const;

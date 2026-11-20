@@ -63,8 +63,9 @@ export async function POST(req: NextRequest) {
     if ((req.headers.get("content-type") ?? "").includes("multipart/form-data")) {
       const form = await req.formData();
       const file = form.get("file");
-      const text = (form.get("text") as string | null) ?? "";
-      dump = file instanceof File && file.size > 0 ? await createFromFile(file, text) : createFromText(text);
+      const value = form.get("text");
+      const text = typeof value === "string" ? value : "";
+      dump = file instanceof File ? await createFromFile(file, text) : createFromText(text);
     } else {
       const body = await req.json().catch(() => ({}));
       dump = createFromText(String(body.text ?? ""), { title: body.title, description: body.description, imageUrl: body.imageUrl });

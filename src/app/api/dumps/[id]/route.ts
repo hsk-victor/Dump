@@ -74,7 +74,9 @@ export async function DELETE(_req: NextRequest, { params }: Ctx) {
   const dump = deleteDump(id);
   if (!dump) return NextResponse.json({ error: "Not found" }, { status: 404 });
   await removeArchiveFiles(Object.values(dump.mediaArchive));
-  const name = storedFileName(dump.imageUrl);
-  if (name) await fileStorage.remove(name);
+  for (const url of [dump.imageUrl, dump.attachment?.url]) {
+    const name = storedFileName(url);
+    if (name) await fileStorage.remove(name);
+  }
   return new NextResponse(null, { status: 204 });
 }
