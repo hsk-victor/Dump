@@ -108,9 +108,31 @@ async function runEnrich(id: string): Promise<Dump | null> {
         // The original is confirmed gone: what was already saved is all there is now, so
         // keep every retained field and only record the loss. A never-filed dump still gets
         // a topic from what it has.
-        const filed = dump.classifiedBy ? null : classifyHeuristic({ ...dump, title: dump.title ?? titleFromUrl(dump.url) });
+        // Item metadata that did arrive (e.g. oEmbed) only fills fields still empty; it never
+        // overwrites a saved snapshot. The URL-derived words stay searchable without
+        // becoming the stored title, so a later successful fetch can still supply one.
+        const kept: Partial<Dump> = {};
+        const fill = <K extends keyof Dump>(key: K, value: Dump[K] | null | undefined) => {
+          const had = dump[key];
+          const empty = had == null || (Array.isArray(had) && !had.length);
+          const has = value != null && !(Array.isArray(value) && !value.length);
+          if (empty && has) kept[key] = value as Dump[K];
+        };
+        fill("title", truncate(ex.title, 300));
+        fill("description", truncate(ex.description, 1000));
+        fill("imageUrl", ex.imageUrl);
+        fill("imageUrls", ex.imageUrls);
+        fill("siteName", ex.siteName);
+        fill("author", ex.author);
+        fill("authorHandle", ex.authorHandle);
+        fill("authorAvatarUrl", ex.authorAvatarUrl);
+        fill("videoPosterUrl", ex.videoPosterUrl);
+        const title = kept.title ?? dump.title;
+        fill("content", title ? ex.content : [titleFromUrl(dump.url), ex.content].filter(Boolean).join("\n") || null);
+        const merged = { ...dump, ...kept };
+        const filed = dump.classifiedBy ? null : classifyHeuristic({ ...merged, title: merged.title ?? titleFromUrl(dump.url) });
         const cls: Partial<Dump> = filed ? { topic: filed.topic, tags: filed.tags, classifiedBy: "rules" } : {};
-        return commitEnrichment(id, { ...cls, sourceState: "unavailable", status: "ready" }, dump);
+        return commitEnrichment(id, { ...kept, ...cls, sourceState: "unavailable", status: "ready" }, dump);
       }
       const title = dump.title ?? truncate(ex.title, 300);
       // Only user-supplied or fetched titles are stored, so a later retry can always fill one in.
