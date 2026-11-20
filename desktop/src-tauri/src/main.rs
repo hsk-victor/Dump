@@ -2,6 +2,9 @@
 // localhost and shows it in the app window. Data lives in the OS app-data folder.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+#[cfg(windows)]
+mod window_bounds;
+
 use std::fs::{self, File};
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
@@ -165,7 +168,7 @@ fn stop_server(app: &AppHandle) {
 }
 
 fn main() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
         // A second launch focuses the running window instead of starting another server on the same library.
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             if let Some(window) = app.get_webview_window("main") {
@@ -179,27 +182,36 @@ fn main() {
                 .open_js_links_on_click(false)
                 .build(),
         )
-        .manage(Server(Mutex::new(None)))
+        .manage(Server(Mutex::new(None)));
+    #[cfg(windows)]
+    let builder = builder.manage(window_bounds::WindowBounds::default());
+    builder
         .setup(|app| {
             let port = pick_port();
             let nav_app = app.handle().clone();
             let popup_app = app.handle().clone();
-            WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
-                .title("Dump")
-                .inner_size(1280.0, 860.0)
-                .min_inner_size(400.0, 500.0)
-                .on_navigation(move |url| {
-                    if is_app_url(url, port) {
-                        return true;
-                    }
-                    open_external(&nav_app, url);
-                    false
-                })
-                .on_new_window(move |url, _features| {
-                    open_external(&popup_app, &url);
-                    NewWindowResponse::Deny
-                })
-                .build()?;
+            let window =
+                WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
+                    .title("Dump")
+                    .inner_size(1280.0, 860.0)
+                    .min_inner_size(400.0, 500.0)
+                    .visible(!cfg!(windows))
+                    .on_navigation(move |url| {
+                        if is_app_url(url, port) {
+                            return true;
+                        }
+                        open_external(&nav_app, url);
+                        false
+                    })
+                    .on_new_window(move |url, _features| {
+                        open_external(&popup_app, &url);
+                        NewWindowResponse::Deny
+                    })
+                    .build()?;
+            #[cfg(windows)]
+            window_bounds::restore(&window);
+            #[cfg(not(windows))]
+            drop(window);
             if let Err(e) = start(app.handle(), port) {
                 show_error(app.handle(), &format!("Dump couldn't start: {e}"));
             }
@@ -209,6 +221,8 @@ fn main() {
         .expect("error while building Dump")
         .run(|app, event| {
             if let RunEvent::Exit = event {
+                #[cfg(windows)]
+                window_bounds::persist(app);
                 stop_server(app);
             }
         });

@@ -936,6 +936,8 @@ dependencies = [
  "arboard",
  "dunce",
  "getrandom 0.3.4",
+ "serde",
+ "serde_json",
  "tauri",
  "tauri-build",
  "tauri-plugin-global-shortcut",
