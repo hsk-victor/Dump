@@ -62,7 +62,12 @@ export async function POST(req: NextRequest) {
     let dump;
     if ((req.headers.get("content-type") ?? "").includes("multipart/form-data")) {
       const form = await req.formData();
-      const file = form.get("file");
+      const files = form.getAll("file");
+      if (files.length > 1) throw new InputError("Dump one file at a time.");
+      const [file] = files;
+      if (file instanceof File && (/[\\/]/.test(file.name) || file.type === "inode/directory" || file.type === "application/x-directory")) {
+        throw new InputError("Folders can’t be dumped. Choose a file instead.");
+      }
       const value = form.get("text");
       const text = typeof value === "string" ? value : "";
       dump = file instanceof File ? await createFromFile(file, text) : createFromText(text);
