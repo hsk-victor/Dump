@@ -159,6 +159,23 @@ describe("enrichDump", () => {
     expect(db.getDump(d.id)).toMatchObject({ imageUrl: `/api/files/${d.id}-thumb-ig.jpg` });
   });
 
+  it.each([false, true])("copies the bookmarklet's signed thumbnail and keeps its gallery when the page fetch fails (filed: %s)", async (filed) => {
+    const igImage = `https://scontent.cdninstagram.com/v/${filed}.jpg?oh=00_AY&oe=6744F1A2`;
+    const second = `https://scontent.cdninstagram.com/v/${filed}-2.jpg`;
+    const d = createFromText(`https://www.instagram.com/p/offline-${filed}/`, { imageUrl: igImage });
+    db.updateDump(d.id, { imageUrls: [igImage, second], ...(filed ? { topic: "travel", classifiedBy: "rules" } : {}) });
+    extractUrl.mockResolvedValue(page({ kind: "link", title: null, description: null, siteName: "instagram.com", unreachable: true }));
+    storeRemoteImage.mockResolvedValue(`/api/files/${d.id}-thumb-ig.jpg`);
+    await enrichDump(d.id);
+    expect(storeRemoteImage).toHaveBeenCalledWith(d.id, igImage);
+    expect(db.getDump(d.id)).toMatchObject({
+      imageUrl: `/api/files/${d.id}-thumb-ig.jpg`,
+      imageUrls: [`/api/files/${d.id}-thumb-ig.jpg`, second],
+      status: "failed",
+      sourceState: "unreachable",
+    });
+  });
+
   it("keeps the remote thumbnail when storing a copy fails, and leaves unsigned ones remote", async () => {
     const d = createFromText("https://www.tiktok.com/@someone/video/2");
     extractUrl.mockResolvedValue(page({ kind: "video", imageUrl: signedCover, imageUrls: [signedCover] }));

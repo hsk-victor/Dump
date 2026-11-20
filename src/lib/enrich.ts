@@ -176,13 +176,15 @@ async function runEnrich(id: string): Promise<Dump | null> {
         fields.sourceState = dump.sourceState === "unavailable" ? "unavailable" : "unreachable";
       }
       // Signed CDN thumbnails (TikTok's x-expires, Instagram's oe=) die within days, so keep a copy.
-      const lead = fields.imageUrl;
+      // An unreachable fetch kept the saved image out of `fields`, but a signed one still needs its copy.
+      const lead = fields.imageUrl ?? (unreachable ? dump.imageUrl : null);
       if (isExpiringUrl(lead)) {
         newThumb = await storeRemoteImage(id, lead!).catch(() => null);
         const stored = newThumb ?? (isStoredThumb(id, dump.imageUrl) ? dump.imageUrl : null);
         if (stored) {
+          const gallery = fields.imageUrls ?? dump.imageUrls ?? [];
           fields.imageUrl = stored;
-          fields.imageUrls = [stored, ...(fields.imageUrls ?? []).filter((u) => u !== lead && u !== stored)];
+          fields.imageUrls = [stored, ...gallery.filter((u) => u !== lead && u !== stored)];
         }
       }
       // The native-look render is a snapshot: a failed render keeps any older
@@ -195,7 +197,11 @@ async function runEnrich(id: string): Promise<Dump | null> {
     }
     // A re-check that reached nothing has no new data to file by: a dump that was already
     // filed keeps its topic.
-    if (unreachable && dump.classifiedBy) return commit(id, { ...fields, status: "failed" }, dump);
+    if (unreachable && dump.classifiedBy) {
+      const kept = commit(id, { ...fields, status: "failed" }, dump);
+      if (!kept && newThumb) await removeStoredThumb(newThumb);
+      return kept;
+    }
     const merged = { ...dump, ...fields };
 
     // Clips/images get a second pass to name what they're about, before the topic is decided,
