@@ -5,6 +5,7 @@ import { enrichDump, isEnriching, refreshXRender } from "@/lib/enrich";
 import { STALE_PROCESSING_MS } from "@/lib/card-state";
 import { aiEnabled } from "@/lib/llm";
 import { isKind } from "@/lib/taxonomy";
+import { reconcileVideoCopy } from "@/lib/video-archive";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -49,7 +50,7 @@ export async function GET(req: NextRequest) {
   // The three aggregate scans only matter to the header/nav — skip them for paged fetches.
   const wantCounts = offset === 0 || sp.get("counts") === "1";
   return NextResponse.json({
-    items: rows.slice(0, limit),
+    items: await Promise.all(rows.slice(0, limit).map(reconcileVideoCopy)),
     hasMore: rows.length > limit,
     ...(wantCounts ? { counts: counts(), topics: listTopics() } : {}),
     ai: aiEnabled(),

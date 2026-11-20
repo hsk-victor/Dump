@@ -10,7 +10,7 @@ process.env.DUMP_DATA_DIR = dir;
 const fetchImage = vi.fn();
 vi.mock("../extract", () => ({ fetchImage: (url: string) => fetchImage(url) }));
 
-const { UPLOAD_DIR } = await import("../db");
+const { UPLOAD_DIR } = await import("../storage");
 const { isExpiringUrl, storeRemoteImage } = await import("../thumbs");
 
 const image = (format: "jpeg" | "png" | "tiff") => sharp({ create: { width: 4, height: 6, channels: 3, background: "#f80" } }).toFormat(format).toBuffer();

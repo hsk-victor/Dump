@@ -1,22 +1,45 @@
 import { after, NextResponse, type NextRequest } from "next/server";
-import fs from "node:fs/promises";
-import path from "node:path";
-import { deleteDump, getDump, topPosition, topicExists, updateDump, UPLOAD_DIR } from "@/lib/db";
+import { deleteDump, getDump, topPosition, topicExists, updateDump } from "@/lib/db";
 import { enrichDump, noteTitle } from "@/lib/enrich";
+import { fileStorage, storedFileName } from "@/lib/storage";
+import { isArchiving, removeArchiveFiles } from "@/lib/archive";
+import { removeStoredThumbs } from "@/lib/thumbs";
+import { cancelVideoCopy, markVideoMissing, reconcileVideoCopy, saveVideoCopy } from "@/lib/video-archive";
 
 export const runtime = "nodejs";
 
 type Ctx = { params: Promise<{ id: string }> };
 
 export async function GET(_req: NextRequest, { params }: Ctx) {
-  const dump = getDump((await params).id);
-  return dump ? NextResponse.json(dump) : NextResponse.json({ error: "Not found" }, { status: 404 });
+  const found = getDump((await params).id);
+  const dump = found ? await reconcileVideoCopy(found) : null;
+  return dump ? NextResponse.json({ ...dump, archivePending: isArchiving(dump.id) }) : NextResponse.json({ error: "Not found" }, { status: 404 });
 }
 
 export async function PATCH(req: NextRequest, { params }: Ctx) {
   const { id } = await params;
   if (!getDump(id)) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const body = await req.json().catch(() => ({}));
+  if (typeof body.failedVideoUrl === "string") {
+    return NextResponse.json(await markVideoMissing(id, body.failedVideoUrl));
+  }
+  if (typeof body.keepVideo === "boolean") {
+    const current = getDump(id)!;
+    if (body.keepVideo && (!current.videoUrl || !/^https?:\/\//i.test(current.videoUrl) || current.sourceState === "unavailable" || current.sourceState === "unreachable" || (current.videoCopy?.state === "missing" && current.sourceState !== "reachable"))) {
+      return NextResponse.json({ error: "Original not reachable" }, { status: 409 });
+    }
+    const mediaArchive = { ...current.mediaArchive };
+    const removed = current.videoUrl ? mediaArchive[current.videoUrl] : null;
+    if (!body.keepVideo && current.videoUrl) delete mediaArchive[current.videoUrl];
+    if (!body.keepVideo) cancelVideoCopy(id);
+    updateDump(id, { keepVideo: body.keepVideo, mediaArchive, ...(!body.keepVideo ? { videoCopy: null } : {}) });
+    if (!body.keepVideo && removed && !Object.values(mediaArchive).includes(removed)) await removeArchiveFiles([removed]);
+    if (body.keepVideo) {
+      const job = saveVideoCopy(id);
+      after(() => job);
+    }
+    return NextResponse.json({ ...getDump(id), archivePending: isArchiving(id) });
+  }
 
   if (body.reprocess) {
     const dump = updateDump(id, { status: "processing" });
@@ -47,13 +70,13 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
 }
 
 export async function DELETE(_req: NextRequest, { params }: Ctx) {
-  const dump = deleteDump((await params).id);
+  const { id } = await params;
+  cancelVideoCopy(id);
+  const dump = deleteDump(id);
   if (!dump) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  if (dump.imageUrl?.startsWith("/api/files/")) {
-    await fs.rm(path.join(UPLOAD_DIR, path.basename(dump.imageUrl)), { force: true });
-  }
-  // Stored copies of remote thumbnails, including ones a re-fetch has since replaced.
-  const thumbs = (await fs.readdir(UPLOAD_DIR).catch(() => [] as string[])).filter((f) => f.startsWith(`${dump.id}-thumb-`));
-  await Promise.all(thumbs.map((f) => fs.rm(path.join(UPLOAD_DIR, f), { force: true })));
+  await removeArchiveFiles(Object.values(dump.mediaArchive));
+  const name = storedFileName(dump.imageUrl);
+  if (name) await fileStorage.remove(name);
+  await removeStoredThumbs(dump.id);
   return new NextResponse(null, { status: 204 });
 }

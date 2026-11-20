@@ -1,10 +1,9 @@
 import { createHash } from "node:crypto";
-import fs from "node:fs/promises";
-import path from "node:path";
 import { loadXeet, type Xeet } from "@xeet/core/node";
 import { whatwgHost } from "@xeet/core/resolve";
-import { UPLOAD_DIR, type XRender } from "./db";
+import type { XRender } from "./db";
 import { fetchWithTimeout } from "./extract";
+import { fileStorage } from "./storage";
 import { xStatusId } from "./x-post";
 
 /** The resolver crawls a post's links and card images — route it through the same
@@ -43,15 +42,13 @@ export async function renderXPostImage(url: string): Promise<XRender | null> {
     renderer.render(post, { ...options, theme: "light" }),
     renderer.render(post, { ...options, theme: "dark" }),
   ];
-  await fs.mkdir(UPLOAD_DIR, { recursive: true });
   // /api/files is immutable-cached, so the content hash in the name gives each new
   // render a fresh URL. Older renders for the same post stay on disk on purpose:
   // a differently-shaped saved URL can share the post id and still points at them.
   const tag = createHash("sha256").update(light.png).update(dark.png).digest("hex").slice(0, 8);
-  const names = { light: `xeet-${id}-light-${tag}.png`, dark: `xeet-${id}-dark-${tag}.png` };
-  await Promise.all([
-    fs.writeFile(path.join(UPLOAD_DIR, names.light), light.png),
-    fs.writeFile(path.join(UPLOAD_DIR, names.dark), dark.png),
+  const [lightUrl, darkUrl] = await Promise.all([
+    fileStorage.put(`xeet-${id}-light-${tag}.png`, light.png),
+    fileStorage.put(`xeet-${id}-dark-${tag}.png`, dark.png),
   ]);
-  return { light: `/api/files/${names.light}`, dark: `/api/files/${names.dark}` };
+  return { light: lightUrl, dark: darkUrl };
 }

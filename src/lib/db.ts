@@ -5,12 +5,20 @@ import { randomUUID } from "node:crypto";
 import type { Kind, Provider, Subject, Topic, TopicMeta } from "./taxonomy";
 import { TOPICS, TOPIC_CRITERIA } from "./taxonomy";
 import { providerFromUrl } from "./detect";
+import { DATA_DIR } from "./data-dir";
 import { canonicalUrl } from "./canonical-url";
 
 export type Status = "processing" | "ready" | "failed";
 /** What the last fetch learned about the original: "unavailable" only on a definitive 404/410,
  *  "unreachable" for a network error/timeout — never evidence the item is gone. Null = unknown. */
 export type SourceState = "reachable" | "unavailable" | "unreachable";
+
+export interface VideoCopy {
+  state: "pending" | "failed" | "missing";
+  startedAt: number;
+  attempt?: string;
+  error?: string;
+}
 
 /** xeet-rendered post PNGs, one per theme — /api/files/ paths into uploads. JSON in the DB. */
 export interface XRender {
@@ -19,6 +27,9 @@ export interface XRender {
 }
 
 export interface Dump {
+  mediaArchive: Record<string, string>;
+  keepVideo: boolean;
+  videoCopy: VideoCopy | null;
   id: string;
   kind: Kind;
   topic: Topic;
@@ -58,6 +69,9 @@ export interface Dump {
 }
 
 interface Row {
+  media_archive: string;
+  keep_video: number;
+  video_copy: string | null;
   id: string;
   kind: string;
   topic: string;
@@ -91,11 +105,11 @@ interface Row {
   updated_at: number;
 }
 
-export const DATA_DIR = path.resolve(process.env.DUMP_DATA_DIR ?? path.join(process.cwd(), "data"));
-export const UPLOAD_DIR = path.join(DATA_DIR, "uploads");
-
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS dumps (
+  media_archive TEXT NOT NULL DEFAULT '{}',
+  keep_video INTEGER NOT NULL DEFAULT 0,
+  video_copy TEXT,
   id TEXT PRIMARY KEY,
   kind TEXT NOT NULL,
   topic TEXT NOT NULL DEFAULT 'other',
@@ -182,14 +196,17 @@ END;
 
 const globalForDb = globalThis as unknown as { __dumpDb?: Database.Database };
 
-export function db(): Database.Database {
+function db(): Database.Database {
   if (!globalForDb.__dumpDb) {
-    fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+    fs.mkdirSync(DATA_DIR, { recursive: true });
     const conn = new Database(path.join(DATA_DIR, "dump.db"));
     conn.pragma("journal_mode = WAL");
     conn.exec(SCHEMA);
     // Columns added after v1 land here for databases created before them.
     const cols = conn.prepare("PRAGMA table_info(dumps)").all() as { name: string }[];
+    if (!cols.some((c) => c.name === "media_archive")) conn.exec("ALTER TABLE dumps ADD COLUMN media_archive TEXT NOT NULL DEFAULT '{}'");
+    if (!cols.some((c) => c.name === "keep_video")) conn.exec("ALTER TABLE dumps ADD COLUMN keep_video INTEGER NOT NULL DEFAULT 0");
+    if (!cols.some((c) => c.name === "video_copy")) conn.exec("ALTER TABLE dumps ADD COLUMN video_copy TEXT");
     if (!cols.some((c) => c.name === "subject")) conn.exec("ALTER TABLE dumps ADD COLUMN subject TEXT");
     if (!cols.some((c) => c.name === "provider")) conn.exec("ALTER TABLE dumps ADD COLUMN provider TEXT");
     if (!cols.some((c) => c.name === "image_urls")) conn.exec("ALTER TABLE dumps ADD COLUMN image_urls TEXT");
@@ -220,7 +237,7 @@ function seedTopics(conn: Database.Database) {
   const { n } = conn.prepare("SELECT COUNT(*) AS n FROM topics").get() as { n: number };
   if (n > 0) return;
   const insert = conn.prepare(
-    "INSERT OR IGNORE INTO topics (id, label, color, description, position, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+    "INSERT INTO topics (id, label, color, description, position, created_at) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT (id) DO NOTHING",
   );
   const now = Date.now();
   for (const [i, t] of TOPICS.entries()) {
@@ -230,6 +247,9 @@ function seedTopics(conn: Database.Database) {
 
 function toDump(r: Row): Dump {
   return {
+    mediaArchive: JSON.parse(r.media_archive || "{}"),
+    keepVideo: !!r.keep_video,
+    videoCopy: r.video_copy ? JSON.parse(r.video_copy) : null,
     id: r.id,
     kind: r.kind as Kind,
     topic: r.topic as Topic,
@@ -291,6 +311,9 @@ function safeJsonArray(s: string): string[] {
 }
 
 const COLUMN: Record<string, string> = {
+  mediaArchive: "media_archive",
+  keepVideo: "keep_video",
+  videoCopy: "video_copy",
   kind: "kind",
   topic: "topic",
   status: "status",
@@ -328,10 +351,10 @@ function toColumns(patch: Patch): Record<string, unknown> {
   for (const [key, value] of Object.entries(patch)) {
     const col = COLUMN[key];
     if (!col || value === undefined) continue;
-    if (key === "tags") out[col] = JSON.stringify(value);
+    if (key === "tags" || key === "mediaArchive") out[col] = JSON.stringify(value);
     else if (key === "imageUrls") out[col] = (value as string[] | null)?.length ? JSON.stringify(value) : null;
-    else if (key === "subject" || key === "xRender") out[col] = value ? JSON.stringify(value) : null;
-    else if (key === "topicLocked" || key === "pinned") out[col] = value ? 1 : 0;
+    else if (key === "subject" || key === "xRender" || key === "videoCopy") out[col] = value ? JSON.stringify(value) : null;
+    else if (key === "topicLocked" || key === "pinned" || key === "keepVideo") out[col] = value ? 1 : 0;
     else out[col] = value;
   }
   return out;
@@ -342,19 +365,29 @@ export function topPosition(): number {
   return (db().prepare("SELECT COALESCE(MAX(position), 0) + 1 AS p FROM dumps").get() as { p: number }).p;
 }
 
-export function createDump(fields: Patch & { kind: Kind }, id: string = randomUUID()): Dump {
-  const now = Date.now();
+function insertDump(fields: Patch & { kind: Kind }, id: string, createdAt: number): void {
   const cols = {
-    ...toColumns({ topic: "other", status: "processing", tags: [], position: topPosition(), ...fields }),
+    ...toColumns(fields),
     id,
-    created_at: now,
-    updated_at: now,
+    created_at: createdAt,
+    updated_at: createdAt,
   };
   const names = Object.keys(cols);
   db()
     .prepare(`INSERT INTO dumps (${names.join(", ")}) VALUES (${names.map((n) => `@${n}`).join(", ")})`)
     .run(cols);
+}
+
+export function createDump(fields: Patch & { kind: Kind }, id: string = randomUUID()): Dump {
+  const now = Date.now();
+  insertDump({ topic: "other", status: "processing", tags: [], position: topPosition(), ...fields }, id, now);
   return getDump(id)!;
+}
+
+export function insertDumps(rows: readonly (Patch & { kind: Kind; createdAt: number })[]): void {
+  db().transaction(() => {
+    for (const { createdAt, ...fields } of rows) insertDump(fields, randomUUID(), createdAt);
+  })();
 }
 
 export function updateDump(id: string, patch: Patch): Dump | null {
@@ -371,6 +404,43 @@ export function updateDump(id: string, patch: Patch): Dump | null {
 export function getDump(id: string): Dump | null {
   const row = db().prepare("SELECT * FROM dumps WHERE id = ?").get(id) as Row | undefined;
   return row ? toDump(row) : null;
+}
+
+/**
+ * Writes enrichment results, re-reading the row in the same transaction so a topic the user
+ * picked while enrichment was running is never overwritten — and neither is any other field
+ * that changed since this run read its snapshot (e.g. a duplicate backfilling bookmarklet
+ * metadata, or a user edit). Those fields hold newer data than what this run saw.
+ */
+export function commitEnrichment(id: string, patch: Partial<Dump>, snapshot?: Dump): Dump | null {
+  return db().transaction(() => {
+    const current = getDump(id);
+    if (!current) return null;
+    const { topic, classifiedBy, ...fields } = patch;
+    // A category deleted while this run was in flight files to the catch-all, not a dead id.
+    const filedTopic = topic !== undefined && !topicExists(topic) ? "other" : topic;
+    for (const key of Object.keys(fields) as (keyof Dump)[]) {
+      if (snapshot && JSON.stringify(current[key] ?? null) !== JSON.stringify(snapshot[key] ?? null)) {
+        delete (fields as Record<string, unknown>)[key];
+      }
+    }
+    // topic/classifiedBy get the same staleness guard as the other fields, but only for
+    // commits that don't end a processing run themselves (resort carries no status):
+    // a row that re-entered processing, or moved on since this run's snapshot, must not
+    // be filed under a classification computed from older data. Enrich commits set the
+    // final status, so 'processing' mid-run is expected for them, not stale.
+    const finishesRun = patch.status !== undefined;
+    const topicStale =
+      current.topicLocked ||
+      (!finishesRun &&
+        (current.status === "processing" ||
+          (!!snapshot &&
+            (current.topic !== snapshot.topic ||
+              current.classifiedBy !== snapshot.classifiedBy ||
+              current.status !== snapshot.status ||
+              current.updatedAt !== snapshot.updatedAt))));
+    return updateDump(id, topicStale ? fields : { ...fields, topic: filedTopic, classifiedBy });
+  })();
 }
 
 export function findByUrl(url: string): Dump | null {
@@ -440,7 +510,7 @@ export interface ListOptions {
 const FEED_COLS = `d.id, d.kind, d.topic, d.status, d.source_state, d.url, d.domain, d.provider, d.title, d.description,
   CASE WHEN d.kind = 'note' THEN d.content END AS content,
   d.note, d.image_url, d.image_urls, d.site_name, d.author, d.author_handle, d.author_avatar_url,
-  d.video_url, d.video_poster_url, d.video_type, d.x_render, d.summary, d.subject, d.tags,
+  d.video_url, d.video_poster_url, d.video_type, d.x_render, d.summary, d.subject, d.tags, d.media_archive, d.keep_video, d.video_copy,
   d.classified_by, d.topic_locked, d.pinned, d.position, d.created_at, d.updated_at`;
 
 export function listDumps({ q, kind, topic, limit = 200, offset = 0 }: ListOptions = {}): Dump[] {

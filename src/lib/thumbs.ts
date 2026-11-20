@@ -1,9 +1,8 @@
 import { createHash } from "node:crypto";
-import fs from "node:fs/promises";
 import path from "node:path";
 import sharp from "sharp";
-import { UPLOAD_DIR } from "./db";
 import { fetchImage } from "./extract";
+import { fileStorage, storedFileName } from "./storage";
 
 /** Query params CDNs use to sign a URL that stops working after a deadline (TikTok, Instagram/Facebook, S3, CloudFront). */
 const EXPIRY_PARAMS = [["x-expires"], ["x-signature"], ["x-amz-expires"], ["x-amz-signature"], ["oe", "oh"], ["expires", "signature"]];
@@ -38,17 +37,7 @@ export async function storeRemoteImage(dumpId: string, url: string): Promise<str
     return null;
   }
   const name = `${path.basename(dumpId)}-thumb-${createHash("sha256").update(data).digest("hex").slice(0, 12)}.${ext}`;
-  await fs.mkdir(UPLOAD_DIR, { recursive: true });
-  // Served as immutable, so readers must never see a half-written file: write aside, then rename.
-  const tmp = path.join(UPLOAD_DIR, `.${name}.${process.pid}.${Date.now()}.tmp`);
-  try {
-    await fs.writeFile(tmp, data);
-    await fs.rename(tmp, path.join(UPLOAD_DIR, name));
-  } catch (err) {
-    await fs.rm(tmp, { force: true });
-    throw err;
-  }
-  return `/api/files/${name}`;
+  return fileStorage.put(name, data);
 }
 
 export function isStoredThumb(dumpId: string, url: string | null | undefined): url is string {
@@ -56,5 +45,12 @@ export function isStoredThumb(dumpId: string, url: string | null | undefined): u
 }
 
 export async function removeStoredThumb(url: string): Promise<void> {
-  await fs.rm(path.join(UPLOAD_DIR, path.basename(url)), { force: true });
+  const name = storedFileName(url);
+  if (name) await fileStorage.remove(name);
+}
+
+/** Every thumbnail copy kept for a dump, including ones a re-fetch has since replaced. */
+export async function removeStoredThumbs(dumpId: string): Promise<void> {
+  const names = await fileStorage.list(`${path.basename(dumpId)}-thumb-`);
+  await Promise.all(names.map((n) => fileStorage.remove(n)));
 }

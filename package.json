@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "archive:backfill": "tsx scripts/archive-backfill.ts",
     "dev": "next dev",
     "build": "next build",
     "postbuild": "node scripts/write-build-sha.mjs",
@@ -31,7 +32,9 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "15.5.29",
+    "jiti": "2.7.0",
     "tailwindcss": "^4",
+    "tsx": "^4.23.15",
     "typescript": "^5",
     "vitest": "^5.1.0"
   }

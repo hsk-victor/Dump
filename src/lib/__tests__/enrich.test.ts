@@ -7,6 +7,8 @@ const dir = fs.mkdtempSync(path.join(os.tmpdir(), "dump-enrich-"));
 process.env.DUMP_DATA_DIR = dir;
 
 const extractUrl = vi.fn();
+const archive = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+vi.mock("../archive", () => ({ archiveDump: archive }));
 vi.mock("../extract", () => ({ extractUrl: (url: string) => extractUrl(url) }));
 const storeRemoteImage = vi.fn();
 vi.mock("../thumbs", async (importOriginal) => ({
@@ -21,6 +23,7 @@ vi.mock("../llm", () => ({
 }));
 
 const db = await import("../db");
+const { UPLOAD_DIR } = await import("../storage");
 const { enrichDump, resortAll } = await import("../enrich");
 const { createFromText } = await import("../create");
 
@@ -50,6 +53,18 @@ const severance = (over: Record<string, unknown> = {}) => ({
 });
 
 describe("enrichDump", () => {
+  it("settles enrichment while archival is pending and handles archive rejection", async () => {
+    let reject!: (error: Error) => void;
+    archive.mockReturnValueOnce(new Promise<void>((_resolve, fail) => { reject = fail; }));
+    const d = createFromText("https://example.com/detached-archive");
+    extractUrl.mockResolvedValue(page());
+    const result = await enrichDump(d.id);
+    expect(result?.status).toBe("ready");
+    const { isEnriching } = await import("../enrich");
+    expect(isEnriching(d.id)).toBe(false);
+    reject(new Error("archive unavailable"));
+    await Promise.resolve();
+  });
   it.each([
     ["preview-a", undefined, "Fetched page title"],
     ["preview-b", "Bookmarklet title", "Bookmarklet title"],
@@ -202,13 +217,13 @@ describe("enrichDump", () => {
     const name = `${d.id}-thumb-late.jpg`;
     extractUrl.mockResolvedValue(page({ kind: "video", imageUrl: signedCover, imageUrls: [signedCover] }));
     storeRemoteImage.mockImplementation(async () => {
-      fs.mkdirSync(db.UPLOAD_DIR, { recursive: true });
-      fs.writeFileSync(path.join(db.UPLOAD_DIR, name), "x");
+      fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+      fs.writeFileSync(path.join(UPLOAD_DIR, name), "x");
       db.deleteDump(d.id);
       return `/api/files/${name}`;
     });
     expect(await enrichDump(d.id)).toBeNull();
-    expect(fs.existsSync(path.join(db.UPLOAD_DIR, name))).toBe(false);
+    expect(fs.existsSync(path.join(UPLOAD_DIR, name))).toBe(false);
   });
 
   it("removes a re-copied thumbnail with the same bytes when the card is deleted mid-run", async () => {
@@ -218,12 +233,12 @@ describe("enrichDump", () => {
     extractUrl.mockResolvedValue(page({ kind: "video", imageUrl: signedCover, imageUrls: [signedCover] }));
     storeRemoteImage.mockImplementation(async () => {
       db.deleteDump(d.id);
-      fs.mkdirSync(db.UPLOAD_DIR, { recursive: true });
-      fs.writeFileSync(path.join(db.UPLOAD_DIR, name), "x");
+      fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+      fs.writeFileSync(path.join(UPLOAD_DIR, name), "x");
       return `/api/files/${name}`;
     });
     expect(await enrichDump(d.id)).toBeNull();
-    expect(fs.existsSync(path.join(db.UPLOAD_DIR, name))).toBe(false);
+    expect(fs.existsSync(path.join(UPLOAD_DIR, name))).toBe(false);
   });
 
   it("keeps a topic the user picked while enrichment was running", async () => {

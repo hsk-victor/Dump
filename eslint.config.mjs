@@ -18,6 +18,10 @@ const eslintConfig = [
       "out/**",
       "build/**",
       "next-env.d.ts",
+      "desktop/node_modules/**",
+      "desktop/src-tauri/target/**",
+      "desktop/src-tauri/gen/**",
+      "desktop/src-tauri/server/**",
     ],
   },
 ];

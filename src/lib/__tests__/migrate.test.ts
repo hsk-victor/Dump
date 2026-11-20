@@ -42,6 +42,14 @@ describe("pre-migration database", () => {
   it("opens a database without pinned/position and migrates it", () => {
     const d = db.createDump({ kind: "note", title: "hi", content: "body" });
     expect(d.id).toBeTruthy();
+    expect(d.mediaArchive).toEqual({});
+    expect(d.keepVideo).toBe(false);
+    expect(d.videoCopy).toBeNull();
+    const videoCopy = { state: "failed" as const, startedAt: Date.now(), error: "Video download failed (503)" };
+    db.updateDump(d.id, { videoCopy });
+    expect(db.getDump(d.id)?.videoCopy).toEqual(videoCopy);
+    expect(db.listDumps({ limit: 1 })[0].videoCopy).toEqual(videoCopy);
+    expect(db.updateDump(d.id, { mediaArchive: { "https://a/image": "/api/files/a.webp" }, keepVideo: true })).toMatchObject({ keepVideo: true, mediaArchive: { "https://a/image": "/api/files/a.webp" } });
     expect(db.counts().total).toBe(1);
     expect(db.listDumps({ q: "body" })).toHaveLength(1);
   });
