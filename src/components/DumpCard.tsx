@@ -305,6 +305,7 @@ interface CardBits {
   processing: boolean;
   /** Failed, unavailable or saving a video copy: media cards show their retained details in flow. */
   exposed: boolean;
+  showSavedText: boolean;
   /** Original confirmed gone. */
   gone: boolean;
   posterOnly: boolean;
@@ -576,6 +577,7 @@ function XCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
           )}
         </>
       )}
+      {!xr && media && bits.showSavedText && text && <p className="d-post-text" dir="auto">{text}</p>}
       {dump.note && <p className="d-annotation" dir="auto">{dump.note}</p>}
       {bits.rail(xr || media ? <SourceGlyph dump={dump} /> : null)}
     </article>
@@ -999,8 +1001,9 @@ function IgCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
  *  player. Without art: the title and artist, with the service mark as the source cue. */
 function MusicCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
   const provider = providerMeta(dump.provider);
-  const sub = dump.author ?? (bits.dek !== bits.title ? bits.dek : null) ?? provider?.label ?? null;
   const title = bits.title ?? provider?.label ?? "Audio";
+  const dek = bits.dek !== title && bits.dek !== dump.author ? bits.dek : null;
+  const sub = dump.author ?? (!bits.showSavedText && bits.dek !== bits.title ? bits.dek : null) ?? provider?.label ?? null;
   if (bits.showMedia) {
     return (
       <article {...bits.cardProps} className="d-card d-mediacard d-muscard group" data-open={bits.exposed || undefined}>
@@ -1010,7 +1013,7 @@ function MusicCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
             <FadeImg dump={dump} bits={bits} alt={title} />
           </a>
         </div>
-        <MediaFoot dump={dump} bits={bits} title={title} byline={sub} dek={null} />
+        <MediaFoot dump={dump} bits={bits} title={title} byline={sub} dek={bits.showSavedText ? dek : null} />
       </article>
     );
   }
@@ -1027,6 +1030,7 @@ function MusicCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
             {sub && <p className="d-dek" dir="auto">{sub}</p>}
           </>
         )}
+        {bits.showSavedText && dek && <p className="d-dek" dir="auto">{dek}</p>}
         {dump.note && <p className="d-annotation" dir="auto">{dump.note}</p>}
         {bits.rail(<SourceGlyph dump={dump} />)}
       </div>
@@ -1299,6 +1303,7 @@ function LinkCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
             )}
           </h3>
         )}
+        {!empty && bits.showSavedText && bits.dek && bits.dek !== headline && <p className="d-dek" dir="auto">{bits.dek}</p>}
         {dump.note && (
           <p className="d-annotation" dir="auto">
             {dump.note}
@@ -1335,6 +1340,10 @@ export default function DumpCard({ dump, phone = false, fresh, removing, onTopic
   const state = cardState(effectiveDump, now, online);
   const gone = !!state.unavailable;
   const exposed = !!(state.failed || state.unavailable || videoCopy);
+  const showSavedText = phone && !!(state.failed || state.unavailable);
+  const preview = showSavedText
+    ? { ...dump, summary: dump.summary?.trim() || null, description: dump.description?.trim() || null }
+    : dump;
 
   const topic = topicMeta(dump.topic, topics);
   const kind = dump.kind;
@@ -1346,7 +1355,7 @@ export default function DumpCard({ dump, phone = false, fresh, removing, onTopic
   const href = gone ? (kind === "image" ? localImage : null) : dump.url ?? (kind === "image" ? dump.imageUrl : null);
   const site = dump.siteName && dump.siteName.length < 30 ? dump.siteName : dump.domain;
   const showMedia = !!dump.imageUrl && !imgFailed;
-  const dek = dump.summary ?? dump.description;
+  const dek = preview.summary ?? preview.description;
 
   const grip = drag && (
     <button
@@ -1491,6 +1500,7 @@ export default function DumpCard({ dump, phone = false, fresh, removing, onTopic
     // In-flow menus put the rail under every media card, with no source cue on the media's card.
     mediaFoot: (glyph) => (inFlow ? rail() : exposed || dump.note || (kind === "video" && dump.videoUrl) ? rail(glyph) : stateRows),
     exposed,
+    showSavedText,
     gone,
     posterOnly: state.posterOnly,
     onVideoMissing,
@@ -1500,7 +1510,7 @@ export default function DumpCard({ dump, phone = false, fresh, removing, onTopic
     site,
     showMedia,
     setImgFailed,
-    processing,
+    processing: processing && !(phone && state.failed),
     pinBadge: dump.pinned && !inFlow ? (
       <span className="d-pin-badge" title="Pinned">
         <Glyph name="pin" />
@@ -1522,7 +1532,7 @@ export default function DumpCard({ dump, phone = false, fresh, removing, onTopic
     },
   };
 
-  const card = renderCard(dump, bits);
+  const card = renderCard(preview, bits);
   return phone ? card : <div className="d-card-shell">{card}{!coarse && hoverActions}</div>;
 }
 
