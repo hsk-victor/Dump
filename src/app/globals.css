@@ -2099,7 +2099,7 @@ button {
   border-radius: 0;
 }
 
-/* Notes — index card: a catalog header (uppercase title + date) over ruled
+/* Notes — index card: a catalog header (label + date) over ruled
    writing lines, with a red margin rule on the leading edge. Card stock stays
    plain — the topic tint lives in the meta row, not the paper. */
 .d-card[data-kind="note"] {
@@ -2133,15 +2133,11 @@ button {
   border-bottom: 1.5px solid var(--note-rule);
 }
 .d-note-title {
-  min-width: 0;
   font-size: 0.7rem;
   font-weight: 700;
   letter-spacing: 0.07em;
   text-transform: uppercase;
   color: var(--ink-2);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 .d-note-date {
   flex-shrink: 0;
@@ -2159,10 +2155,6 @@ button {
   color: var(--ink-2);
   white-space: pre-line;
   overflow-wrap: anywhere;
-  display: -webkit-box;
-  -webkit-line-clamp: 10;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
   cursor: text;
   background: repeating-linear-gradient(
     to bottom,
@@ -2977,6 +2969,12 @@ body.d-dragging * {
   }
   .d-meta .ml-auto {
     display: none;
+  }
+}
+
+@media (width < 480px) {
+  .d-grid {
+    --full-width-notes: 1;
   }
 }
 
