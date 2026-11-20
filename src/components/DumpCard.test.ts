@@ -333,8 +333,10 @@ it("draws X, GitHub and Reddit with their own anatomy and no engagement or date 
   expect(repo).toContain('class="d-gh-repo"');
   expect(repo).toContain("emilkowalski / <strong>skills</strong>");
   expect(repo).toContain('<p class="d-gh-about" dir="auto">Design engineering, interaction and motion.</p>');
-  // GitHub's generated og:image is stats, not the repository: never the card.
-  expect(repo).not.toContain("opengraph.githubassets.com");
+  // A working saved cover stays, above the repository header.
+  expect(repo.indexOf("opengraph.githubassets.com")).toBeGreaterThan(-1);
+  expect(repo.indexOf("opengraph.githubassets.com")).toBeLessThan(repo.indexOf('class="d-gh-path"'));
+  expect(card({ ...link, kind: "link", provider: "github", url: "https://github.com/acme/tidepool", domain: "github.com", title: "acme/tidepool", imageUrl: null })).not.toContain("d-gh-cover");
 
   const thread = card({ ...link, kind: "post", provider: "reddit", url: "https://www.reddit.com/r/Design/comments/1/x/", domain: "reddit.com", title: "What’s one thing you stopped keeping on your desk?", author: "u/deskless", description: "I’m clearing mine down." });
   expect(thread).toContain("r/Design");
@@ -349,4 +351,27 @@ it("gives an inline player a rail of its own so the actions never cover its cont
   expect(html).toContain("<video");
   expect(html).toContain('class="d-rail"');
   expect(card(photo)).not.toContain('class="d-rail"');
+});
+
+it("never makes up an X handle from a display name", () => {
+  const post: Dump = { ...link, kind: "post", provider: "x", domain: "x.com", title: null, author: "Madonna", authorHandle: null, description: "Hello." };
+  const anon = card({ ...post, url: "https://x.com/i/status/1" });
+  expect(anon).toContain("Madonna");
+  expect(anon).not.toContain("@Madonna");
+  expect(anon).not.toContain("d-author-site");
+  expect(card({ ...post, url: "https://x.com/madonna/status/1" })).toContain('<span class="d-author-site" dir="auto">@madonna</span>');
+  expect(card({ ...post, url: "https://twitter.com/i/status/1", authorHandle: "Madonna" })).toContain("@Madonna");
+});
+
+it("gives a narrow card one in-flow overflow menu and nothing over a healthy cover", () => {
+  const props = { onTopic: vi.fn(), onDelete: vi.fn(), onRetry: vi.fn(), onPin: vi.fn(), onSaveNote: vi.fn(), topics: [], phone: true, drag: { onPointerDown: vi.fn() } };
+  const media = renderToStaticMarkup(createElement(DumpCard, { ...props, dump: photo }));
+  expect(media.match(/aria-label="Card actions"/g)).toHaveLength(1);
+  expect(media).not.toContain('aria-label="Drag to move"');
+  const rail = media.slice(media.indexOf('class="d-rail"'));
+  expect(rail).not.toContain("d-src");
+  expect(media.slice(0, media.indexOf('class="d-rail"'))).not.toContain("d-pin-badge");
+  const text = renderToStaticMarkup(createElement(DumpCard, { ...props, dump: link }));
+  expect(text.match(/aria-label="Card actions"/g)).toHaveLength(1);
+  expect(text).not.toContain('aria-label="Drag to move"');
 });

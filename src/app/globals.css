@@ -3561,20 +3561,6 @@ body.d-dragging * {
     background: color-mix(in srgb, var(--ink) 8%, transparent);
   }
 }
-/* Touch on wide screens: no hover, so the controls stay put at a 44px size. */
-@media (width > 600px) and ((hover: none) or (pointer: coarse)) {
-  .d-card-shell > .d-actions {
-    opacity: 1;
-    pointer-events: auto;
-  }
-  .d-card-shell > .d-actions :is(.d-more, .d-drag) {
-    width: 44px;
-    height: 44px;
-  }
-  .d-card-shell .d-rail {
-    min-height: 44px;
-  }
-}
 .d-menu-danger {
   color: var(--error-text);
 }
@@ -3813,14 +3799,36 @@ body.d-dragging * {
   }
 }
 
-/* Phones: the rail is the card footer, with the source cue and the 44px overflow target in flow. */
+/* Touch and narrow layouts: the rail is the card footer, with one in-flow 44px overflow menu. */
 .d-rail > .d-phone-actions {
+  display: flex;
   order: 0;
   min-height: 0;
   margin-inline-start: auto;
   margin-inline-end: -0.5rem;
   padding: 0;
   border-top: 0;
+  color: var(--ink-2);
+}
+.d-rail > .d-phone-actions .d-more {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+}
+.d-rail:has(> .d-phone-actions) {
+  min-height: 44px;
+}
+.d-gh-cover {
+  background: var(--hairline);
+}
+.d-gh-cover-img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 22rem;
+  object-fit: cover;
 }
 .d-rail:has(> .d-phone-actions) {
   margin-top: 0.25rem;

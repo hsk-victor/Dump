@@ -91,6 +91,7 @@ function FeedItem({
   onGripDown,
   onItemDown,
   onItemClickCapture,
+  onNudge,
   ...handlers
 }: {
   dump: Dump;
@@ -102,6 +103,7 @@ function FeedItem({
   onGripDown: (e: ReactPointerEvent<HTMLButtonElement>, id: string) => void;
   onItemDown: (e: ReactPointerEvent<HTMLDivElement>, id: string) => void;
   onItemClickCapture: (e: ReactMouseEvent<HTMLDivElement>) => void;
+  onNudge: (id: string, delta: -1 | 1) => void;
   onTopic: (id: string, topic: string) => void;
   onDelete: (id: string) => void;
   onRetry: (id: string) => void;
@@ -122,6 +124,7 @@ function FeedItem({
         fresh={fresh}
         removing={removing}
         drag={sortable ? { onPointerDown: (e) => onGripDown(e, dump.id) } : undefined}
+        reorder={sortable ? { earlier: () => onNudge(dump.id, -1), later: () => onNudge(dump.id, 1) } : undefined}
         {...handlers}
       />
     </div>
@@ -609,11 +612,24 @@ export default function DumpApp() {
     document.body.classList.remove("d-dragging");
     setDragId(null); // restores transitions; the card eases into its slot
     const j = cancelled ? null : d.j;
-    if (j === null) return;
+    if (j !== null) moveTo(d.id, j);
+  }
+
+  /** Menu reorder (touch/narrow): one step earlier or later, never across the pinned boundary. */
+  function nudge(id: string, delta: -1 | 1) {
     const all = itemsRef.current;
-    const dragged = all.find((x) => x.id === d.id);
+    const i = all.findIndex((x) => x.id === id);
+    const neighbour = all[i + delta];
+    if (i < 0 || !neighbour || neighbour.pinned !== all[i].pinned) return;
+    moveTo(id, i + delta);
+  }
+
+  /** Lands a card at index `j` of the order with it removed, and saves the new position. */
+  function moveTo(id: string, j: number) {
+    const all = itemsRef.current;
+    const dragged = all.find((x) => x.id === id);
     if (!dragged || j === all.indexOf(dragged)) return;
-    const list = all.filter((x) => x.id !== d.id);
+    const list = all.filter((x) => x.id !== id);
     // Crossing the pinned boundary flips the flag: dragging below every pinned card
     // unpins, dragging an unpinned card into the pinned block pins it.
     const pinnedCount = list.filter((x) => x.pinned).length;
@@ -628,7 +644,7 @@ export default function DumpApp() {
     const position = prev && next ? (prev.position + next.position) / 2 : prev ? prev.position - 1 : next ? next.position + 1 : 1;
     const moved = { ...dragged, pinned, position };
     setItems([...list.slice(0, j), moved, ...list.slice(j)]);
-    fetch(`/api/dumps/${d.id}`, {
+    fetch(`/api/dumps/${id}`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(pinned === dragged.pinned ? { position } : { pinned, position }),
@@ -994,6 +1010,7 @@ export default function DumpApp() {
                 onGripDown={onGripDown}
                 onItemDown={onItemDown}
                 onItemClickCapture={onItemClickCapture}
+                onNudge={nudge}
                 onTopic={handleTopic}
                 onDelete={handleDelete}
                 onRetry={handleRetry}

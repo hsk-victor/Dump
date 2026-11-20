@@ -29,6 +29,8 @@ interface Props {
   onSaveNote: (id: string, content: string) => Promise<boolean>;
   /** Present when the card can be grabbed and reordered. */
   drag?: DragHandle;
+  /** Menu reordering for touch and narrow layouts, where there is no hover grip. */
+  reorder?: { earlier: () => void; later: () => void };
   /** Live category list — colors chips and fills the Move menu. */
   topics: TopicMeta[];
 }
@@ -240,6 +242,16 @@ const subscribeOnline = (cb: () => void) => {
 };
 function useOnline() {
   return useSyncExternalStore(subscribeOnline, () => navigator.onLine, () => true);
+}
+
+const COARSE_QUERY = "(hover: none), (pointer: coarse)";
+const subscribeCoarse = (cb: () => void) => {
+  const query = window.matchMedia(COARSE_QUERY);
+  query.addEventListener("change", cb);
+  return () => query.removeEventListener("change", cb);
+};
+function useCoarse() {
+  return useSyncExternalStore(subscribeCoarse, () => window.matchMedia(COARSE_QUERY).matches, () => false);
 }
 
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -487,10 +499,11 @@ function XCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
   const [failedIdx, setFailedIdx] = useState<ReadonlySet<number>>(new Set());
   const [xrFailed, setXrFailed] = useState(false);
   const author = postAuthor(dump);
-  const raw = (dump.authorHandle ?? dump.author)?.replace(/^@/, "");
-  // oEmbed author_name can be a display name ("Jane Doe"), not a handle — only @-ify real handles.
+  // Only a captured handle or the one in the post's URL: a display name is never @-ified.
+  const urlHandle = dump.url?.match(/(?:\/\/|\.)(?:x|twitter)\.com\/(?!i\/)(\w{1,15})\/status\//i)?.[1];
+  const raw = (dump.authorHandle ?? urlHandle)?.replace(/^@/, "");
   const handle = raw && /^[\w.]{1,30}$/.test(raw) ? `@${raw}` : null;
-  const byline = (handle && handle !== author ? handle : null) ?? "X";
+  const byline = handle && handle !== author ? handle : null;
   const postText = dump.description ?? dump.summary;
   const text = postText || null;
   const headline =
@@ -549,7 +562,7 @@ function XCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
             </span>
             <span className="min-w-0">
               <span className="d-author-name" dir="auto">{author ?? "Post"}</span>
-              <span className="d-author-site" dir="auto">{byline}</span>
+              {byline && <span className="d-author-site" dir="auto">{byline}</span>}
             </span>
             <ProviderIcon provider="x" className="d-prov d-post-prov" />
           </a>
@@ -714,8 +727,8 @@ function HnCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
   );
 }
 
-/** github — a repository reads as GitHub's own repository card: the repo glyph, blue
- *  owner / name and its real description, never invented stats. Other pages (issues,
+/** github — a repository reads as GitHub's own repository card: any working saved cover,
+ *  then the repo glyph, blue owner / name and its real description, never invented stats. Other pages (issues,
  *  PRs, files, profiles) keep their type and title; a saved preview image still leads. */
 function GithubCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
   const info = githubInfo(dump.url);
@@ -739,6 +752,12 @@ function GithubCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
     );
     return (
       <article {...bits.cardProps} className="d-card d-gh group">
+        {/* A working saved cover stays, above GitHub's own repository header. */}
+        {bits.showMedia && (
+          <div className="d-gh-cover">
+            <Img dump={dump} bits={bits} className="d-gh-cover-img" />
+          </div>
+        )}
         <div className="d-body">
           <h3 className="d-gh-path">
             <RepoGlyph />
@@ -1293,7 +1312,7 @@ function LinkCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
 
 /* ================================== dispatch ================================== */
 
-export default function DumpCard({ dump, phone = false, fresh, removing, onTopic, onDelete, onRetry, onPin, onSaveNote, drag, topics }: Props) {
+export default function DumpCard({ dump, phone = false, fresh, removing, onTopic, onDelete, onRetry, onPin, onSaveNote, drag, reorder, topics }: Props) {
   const [videoIssue, setVideoIssue] = useState<{ version: number; value: VideoCopy | null } | null>(null);
   const videoCopy = videoIssue?.version === dump.updatedAt ? videoIssue.value : dump.videoCopy;
   const effectiveDump = { ...dump, videoCopy };
@@ -1312,6 +1331,7 @@ export default function DumpCard({ dump, phone = false, fresh, removing, onTopic
   const processing = dump.status === "processing";
   const now = useStateClock(processing, dump.updatedAt);
   const online = useOnline();
+  const coarse = useCoarse();
   const state = cardState(effectiveDump, now, online);
   const gone = !!state.unavailable;
   const exposed = !!(state.failed || state.unavailable || videoCopy);
@@ -1378,54 +1398,67 @@ export default function DumpCard({ dump, phone = false, fresh, removing, onTopic
       <circle cx="5" cy="12" r="1.6" /><circle cx="12" cy="12" r="1.6" /><circle cx="19" cy="12" r="1.6" />
     </svg>
   );
-  // Hover/focus adds only these: reorder and one overflow menu (the source cue rides along on media cards).
-  const actions = phone ? (
-    <div className="d-phone-actions">
-      {grip}
-      <PhoneMenuRoot>
-        <Menu.Trigger className="d-more" aria-label="Card actions">{dots}</Menu.Trigger>
-        <PhoneMenu>
-          {leadItems}
-          {destinations.length > 0 && (
-            <PhoneMenuRoot submenu>
-              <Menu.SubmenuTrigger className="d-menu-item" data-move-trigger>Move…</Menu.SubmenuTrigger>
-              <PhoneMenu submenu>{destinations}</PhoneMenu>
-            </PhoneMenuRoot>
-          )}
-          {sourceItems}
-          <Menu.Item className="d-menu-item" onClick={() => onDelete(dump.id)}>Delete</Menu.Item>
-        </PhoneMenu>
-      </PhoneMenuRoot>
-    </div>
-  ) : (
+  // Touch is a capability, not a width: narrow or coarse input gets one in-flow 44px menu,
+  // with source and reorder inside it, instead of hover actions.
+  const inFlow = phone || coarse;
+  const reorderItems = inFlow && reorder && (
+    <>
+      <Menu.Item className="d-menu-item" onClick={reorder.earlier}>Move earlier</Menu.Item>
+      <Menu.Item className="d-menu-item" onClick={reorder.later}>Move later</Menu.Item>
+    </>
+  );
+  const phoneMenu = (
+    <PhoneMenuRoot>
+      <Menu.Trigger className="d-more" aria-label="Card actions">{dots}</Menu.Trigger>
+      <PhoneMenu>
+        {leadItems}
+        {reorderItems}
+        {destinations.length > 0 && (
+          <PhoneMenuRoot submenu>
+            <Menu.SubmenuTrigger className="d-menu-item" data-move-trigger>Move…</Menu.SubmenuTrigger>
+            <PhoneMenu submenu>{destinations}</PhoneMenu>
+          </PhoneMenuRoot>
+        )}
+        {sourceItems}
+        <Menu.Item className="d-menu-item" onClick={() => onDelete(dump.id)}>Delete</Menu.Item>
+      </PhoneMenu>
+    </PhoneMenuRoot>
+  );
+  const desktopMenu = (
+    <Menu.Root>
+      <Menu.Trigger className="d-more" aria-label="Card actions" title="More">{dots}</Menu.Trigger>
+      <Menu.Portal>
+        <Menu.Positioner className="d-menu-positioner" side="bottom" align="end" sideOffset={4}>
+          <Menu.Popup className="d-menu">
+            {leadItems}
+            {reorderItems}
+            {destinations.length > 0 && (
+              <Menu.SubmenuRoot>
+                <Menu.SubmenuTrigger className="d-menu-item" data-move-trigger>Move…</Menu.SubmenuTrigger>
+                <Menu.Portal>
+                  <Menu.Positioner className="d-menu-positioner" sideOffset={4}>
+                    <Menu.Popup className="d-menu">{destinations}</Menu.Popup>
+                  </Menu.Positioner>
+                </Menu.Portal>
+              </Menu.SubmenuRoot>
+            )}
+            {sourceItems}
+            <Menu.Separator className="d-menu-sep" />
+            <Menu.Item className="d-menu-item d-menu-danger" onClick={() => onDelete(dump.id)}>Delete</Menu.Item>
+          </Menu.Popup>
+        </Menu.Positioner>
+      </Menu.Portal>
+    </Menu.Root>
+  );
+  const inFlowActions = <div className="d-phone-actions">{phone ? phoneMenu : desktopMenu}</div>;
+  // Fine pointers: hover/focus adds only reorder and the menu (the source cue rides along on media cards).
+  const hoverActions = (
     <div className="d-actions">
       <span className="d-actions-src">
         <SourceGlyph dump={dump} />
       </span>
       {grip}
-      <Menu.Root>
-        <Menu.Trigger className="d-more" aria-label="Card actions" title="More">{dots}</Menu.Trigger>
-        <Menu.Portal>
-          <Menu.Positioner className="d-menu-positioner" side="bottom" align="end" sideOffset={4}>
-            <Menu.Popup className="d-menu">
-              {leadItems}
-              {destinations.length > 0 && (
-                <Menu.SubmenuRoot>
-                  <Menu.SubmenuTrigger className="d-menu-item" data-move-trigger>Move…</Menu.SubmenuTrigger>
-                  <Menu.Portal>
-                    <Menu.Positioner className="d-menu-positioner" sideOffset={4}>
-                      <Menu.Popup className="d-menu">{destinations}</Menu.Popup>
-                    </Menu.Positioner>
-                  </Menu.Portal>
-                </Menu.SubmenuRoot>
-              )}
-              {sourceItems}
-              <Menu.Separator className="d-menu-sep" />
-              <Menu.Item className="d-menu-item d-menu-danger" onClick={() => onDelete(dump.id)}>Delete</Menu.Item>
-            </Menu.Popup>
-          </Menu.Positioner>
-        </Menu.Portal>
-      </Menu.Root>
+      {desktopMenu}
     </div>
   );
 
@@ -1445,7 +1478,7 @@ export default function DumpCard({ dump, phone = false, fresh, removing, onTopic
       <div className="d-rail">
         {glyph}
         {dump.pinned && <Glyph name="pin" className="d-meta-pin" />}
-        {phone && actions}
+        {inFlow && inFlowActions}
       </div>
     </>
   );
@@ -1455,7 +1488,8 @@ export default function DumpCard({ dump, phone = false, fresh, removing, onTopic
     rail,
     // Retained details, the owner's note and inline players' native controls get a rail too,
     // so the actions never cover text or video controls.
-    mediaFoot: (glyph) => (phone || exposed || dump.note || (kind === "video" && dump.videoUrl) ? rail(glyph) : stateRows),
+    // In-flow menus put the rail under every media card, with no source cue on the media's card.
+    mediaFoot: (glyph) => (inFlow ? rail() : exposed || dump.note || (kind === "video" && dump.videoUrl) ? rail(glyph) : stateRows),
     exposed,
     gone,
     posterOnly: state.posterOnly,
@@ -1467,7 +1501,7 @@ export default function DumpCard({ dump, phone = false, fresh, removing, onTopic
     showMedia,
     setImgFailed,
     processing,
-    pinBadge: dump.pinned && !phone ? (
+    pinBadge: dump.pinned && !inFlow ? (
       <span className="d-pin-badge" title="Pinned">
         <Glyph name="pin" />
       </span>
@@ -1489,7 +1523,7 @@ export default function DumpCard({ dump, phone = false, fresh, removing, onTopic
   };
 
   const card = renderCard(dump, bits);
-  return phone ? card : <div className="d-card-shell">{card}{actions}</div>;
+  return phone ? card : <div className="d-card-shell">{card}{!coarse && hoverActions}</div>;
 }
 
 function renderCard(dump: Dump, bits: CardBits) {
