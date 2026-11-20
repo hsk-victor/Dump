@@ -6,8 +6,6 @@
     "archive:backfill": "tsx scripts/archive-backfill.ts",
     "dev": "next dev",
     "build": "next build",
-    "postbuild": "node scripts/write-build-sha.mjs",
-    "start": "next start",
     "lint": "eslint",
     "test": "vitest run"
   },
