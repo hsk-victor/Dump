@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { packFeed } from "../feed-layout";
+import { feedColumns, packFeed } from "../feed-layout";
 
 const items = [
   { id: "link-a", kind: "link" },
@@ -37,4 +37,18 @@ it("reserves a full-width landing slot for a dragged narrow note", () => {
   expect(ghost).toEqual({ x: 0, y: 86, w: 366, h: 140 });
   expect(slots.has("note")).toBe(false);
   expect(slots.get("image")).toEqual({ x: 0, y: 232, w: 180, h: 100 });
+});
+
+it.each([200, 260, 440])("packs a single 358px lane at saved density %i", (density) => {
+  const phone = { ...metrics, width: 358, gap: 12, columns: feedColumns(true, 358, density, 12) };
+  const { slots, ghost } = packFeed(items, heights, phone, { id: "note", j: 2, h: 140 });
+
+  expect([...slots.values()].every(({ x, w }) => x === 0 && w === 358)).toBe(true);
+  expect(ghost).toEqual({ x: 0, y: 204, w: 358, h: 140 });
+  expect(slots.get("link-b")?.y).toBe(356);
+});
+
+it("keeps the desktop density calculation above the phone breakpoint", () => {
+  expect(feedColumns(false, 1145, 260, 6)).toBe(4);
+  expect(feedColumns(false, 1145, 440, 6)).toBe(2);
 });

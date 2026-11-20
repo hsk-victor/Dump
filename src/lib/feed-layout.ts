@@ -1,5 +1,11 @@
 import type { Dump } from "./db";
 
+export const PHONE_QUERY = "(max-width: 600px)";
+
+export function feedColumns(phone: boolean, width: number, target: number, gap: number) {
+  return phone ? 1 : Math.max(1, Math.floor((width + gap) / (target + gap)));
+}
+
 export interface Rect {
   x: number;
   y: number;

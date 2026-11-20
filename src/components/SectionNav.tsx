@@ -11,6 +11,7 @@ export interface Counts {
 }
 
 interface Props {
+  phone: boolean;
   counts: Counts;
   topics: TopicMeta[];
   topic: string | null;
@@ -37,7 +38,7 @@ async function read(res: Response): Promise<{ topic?: TopicMeta; topics?: TopicM
 /** Topic tabs, left side of the header. Double-click a tab to rename it in
  *  place; clicking the active tab (or right-click / long-press on any tab)
  *  opens an anchored popover with the dump count and delete. */
-export default function SectionNav({ counts, topics: all, topic, onSelect, onChange, toast }: Props) {
+export default function SectionNav({ phone, counts, topics: all, topic, onSelect, onChange, toast }: Props) {
   const topics = all.filter((t) => counts.topics[t.id]).sort(
     (a, b) => Number(a.id === "other") - Number(b.id === "other") || (counts.topics[b.id] ?? 0) - (counts.topics[a.id] ?? 0),
   );
@@ -47,6 +48,7 @@ export default function SectionNav({ counts, topics: all, topic, onSelect, onCha
   const [pop, setPop] = useState<Pop | null>(null);
   const [confirmDel, setConfirmDel] = useState<string | null>(null);
   const popRef = useRef<HTMLDivElement>(null);
+  const stripRef = useRef<HTMLElement>(null);
   const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // A finished long-press still emits a click on release — flag it so the
   // tab's onClick doesn't toggle the filter after the popover opens.
@@ -60,6 +62,17 @@ export default function SectionNav({ counts, topics: all, topic, onSelect, onCha
   const dismissClick = useRef<string | null>(null);
 
   const popTopic = pop ? all.find((t) => t.id === pop.id) : null;
+
+  useEffect(() => {
+    if (!phone) return;
+    const strip = stripRef.current;
+    const selected = strip?.querySelector<HTMLElement>('[aria-pressed="true"]');
+    if (!strip || !selected) return;
+    const left = selected.offsetLeft;
+    const right = left + selected.offsetWidth;
+    if (left < strip.scrollLeft) strip.scrollLeft = left;
+    else if (right + 16 > strip.scrollLeft + strip.clientWidth) strip.scrollLeft = right + 16 - strip.clientWidth;
+  }, [phone, topic, counts, all]);
 
   function closePop() {
     setPop(null);
@@ -171,12 +184,12 @@ export default function SectionNav({ counts, topics: all, topic, onSelect, onCha
 
   return (
     <div className="d-subnav">
-      <nav className="d-topics" aria-label="Topics">
+      <nav className="d-topics" aria-label="Topics" ref={stripRef}>
         <button className="d-topic" aria-pressed={!topic} onClick={() => onSelect({ topic: null })}>
           All
         </button>
         {topics.map((t) =>
-          renaming === t.id ? (
+          !phone && renaming === t.id ? (
             // Editing inside the tab itself: the label becomes a live input.
             <div className="d-topic d-topic-edit" key={t.id}>
               <input
@@ -210,6 +223,10 @@ export default function SectionNav({ counts, topics: all, topic, onSelect, onCha
               data-tid={t.id}
               aria-pressed={topic === t.id}
               onClick={(e) => {
+                if (phone) {
+                  onSelect({ topic: topic === t.id ? null : t.id });
+                  return;
+                }
                 if (e.detail === 1) toggleRestore.current = undefined; // a burst starts
                 if (dismissClick.current === t.id) {
                   dismissClick.current = null;
@@ -231,6 +248,7 @@ export default function SectionNav({ counts, topics: all, topic, onSelect, onCha
                 onSelect({ topic: topic === t.id ? null : t.id });
               }}
               onDoubleClick={(e) => {
+                if (phone) return;
                 e.preventDefault();
                 // The first click may have toggled the filter — undo it.
                 if (toggleRestore.current !== undefined) {
@@ -240,11 +258,12 @@ export default function SectionNav({ counts, topics: all, topic, onSelect, onCha
                 setRenaming(t.id);
               }}
               onContextMenu={(e) => {
+                if (phone) return;
                 e.preventDefault();
                 if (t.id === "other") return;
                 anchorPop(t, e.currentTarget);
               }}
-              onPointerDown={(e) => startHold(t, e.currentTarget, e)}
+              onPointerDown={phone ? undefined : (e) => startHold(t, e.currentTarget, e)}
               onPointerUp={endHold}
               onPointerCancel={endHold}
               onPointerLeave={endHold}
@@ -253,7 +272,7 @@ export default function SectionNav({ counts, topics: all, topic, onSelect, onCha
             </button>
           ),
         )}
-        {adding ? (
+        {!phone && (adding ? (
           <div className="d-topic d-topic-edit d-topic-add">
             <input
               className="d-topic-rn"
@@ -275,9 +294,9 @@ export default function SectionNav({ counts, topics: all, topic, onSelect, onCha
               <path d="M12 5v14M5 12h14" />
             </svg>
           </button>
-        )}
+        ))}
       </nav>
-      {popTopic &&
+      {!phone && popTopic &&
         createPortal(
           <div
             className="d-tpop"

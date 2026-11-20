@@ -6,6 +6,7 @@ import type { Dump } from "@/lib/db";
 import { SUBJECT_MIN_CONFIDENCE, subjectLine, kindMeta, providerMeta, topicMeta, type TopicMeta } from "@/lib/taxonomy";
 import { timeAgo, shortDate } from "@/lib/format";
 import { GITHUB_TAG, githubInfo, type GithubInfo, titleFromUrl } from "@/lib/detect";
+import { PhoneMenu, PhoneMenuRoot } from "./PhoneMenu";
 
 /** Wiring for the actions-row grip: the parent feed owns the drag lifecycle. */
 export interface DragHandle {
@@ -14,6 +15,7 @@ export interface DragHandle {
 
 interface Props {
   dump: Dump;
+  phone?: boolean;
   fresh?: boolean;
   removing?: boolean;
   onTopic: (id: string, topic: string) => void;
@@ -204,6 +206,7 @@ function githubDek(dump: Dump, info: GithubInfo): string | null {
 }
 
 interface CardBits {
+  phone: boolean;
   actions: ReactNode;
   meta: ReactNode;
   /** The meta row without the site label, for cards whose kicker already names the site. */
@@ -1170,6 +1173,8 @@ function noteDir(text: string): "rtl" | "ltr" {
  *  the ruled text for an editor on the same lines. */
 function NoteCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
   const body = dump.content || bits.title;
+  const [expanded, setExpanded] = useState(false);
+  const preview = bits.phone && body ? notePreview(body) : body;
   const areaRef = useRef<HTMLTextAreaElement>(null);
   const openTimer = useRef<number | undefined>(undefined);
   const [saving, setSaving] = useState(false);
@@ -1247,8 +1252,9 @@ function NoteCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
               <p
                 className="d-note-lines"
                 dir="auto"
-                title="Click to edit"
+                title={bits.phone ? undefined : "Click to edit"}
                 onClick={(e) => {
+                  if (bits.phone) return;
                   // Entering edit removes the text, so a single click only arms
                   // a timer — a second click (or an in-flight selection) cancels
                   // it, leaving double-click word select and drag-select intact.
@@ -1261,8 +1267,13 @@ function NoteCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
                   }
                 }}
               >
-                {body}
+                {expanded ? body : preview}
               </p>
+            )}
+            {preview !== body && (
+              <button type="button" className="d-note-more" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>
+                {expanded ? "Read less" : "Read more"}
+              </button>
             )}
           </>
         )}
@@ -1275,6 +1286,15 @@ function NoteCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
       </div>
     </article>
   );
+}
+
+export function notePreview(text: string) {
+  if (text.length <= 360 && text.split("\n").length <= 6) return text;
+  const firstLines = text.split("\n").slice(0, 6).join("\n").trimEnd();
+  if (firstLines.length <= 360) return firstLines;
+  const prefix = Array.from(firstLines).slice(0, 360).join("");
+  const boundary = prefix.search(/\s+\S*$/);
+  return boundary > 220 ? prefix.slice(0, boundary) : prefix;
 }
 
 /** The URL as a readable address: host + path, query dropped unless it's the whole story. */
@@ -1366,7 +1386,7 @@ function LinkCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
 
 /* ================================== dispatch ================================== */
 
-export default function DumpCard({ dump, fresh, removing, onTopic, onDelete, onRetry, onPin, onSaveNote, drag, topics }: Props) {
+export default function DumpCard({ dump, phone = false, fresh, removing, onTopic, onDelete, onRetry, onPin, onSaveNote, drag, topics }: Props) {
   const [imgFailed, setImgFailed] = useState(false);
   const [revealed, setRevealed] = useState(false);
   const [editingNote, setEditingNote] = useState(false);
@@ -1376,14 +1396,16 @@ export default function DumpCard({ dump, fresh, removing, onTopic, onDelete, onR
   useEffect(() => {
     if (!revealed) return;
     const onDown = (e: PointerEvent) => {
-      if (cardRef.current && !cardRef.current.contains(e.target as Node)) setRevealed(false);
+      const card = cardRef.current;
+      const bounds = card?.closest(".d-card-shell") ?? card;
+      if (bounds && !bounds.contains(e.target as Node)) setRevealed(false);
     };
     document.addEventListener("pointerdown", onDown, true);
     return () => document.removeEventListener("pointerdown", onDown, true);
   }, [revealed]);
 
   const onCardPointerDown = (e: ReactPointerEvent<HTMLElement>) => {
-    if (revealed || dump.status === "failed") return;
+    if (phone || revealed || dump.status === "failed") return;
     if (!window.matchMedia("(hover: none), (pointer: coarse)").matches) return;
     if ((e.target as HTMLElement).closest(".d-inline-video .d-media")) setRevealed(true);
   };
@@ -1395,7 +1417,7 @@ export default function DumpCard({ dump, fresh, removing, onTopic, onDelete, onR
    * directly). Failed dumps keep their always-open panel, so this never runs
    * for them. e.detail === 0 lets keyboard-initiated clicks navigate. */
   const onCardClick = (e: MouseEvent<HTMLElement>) => {
-    if (revealed || dump.status === "failed" || e.detail === 0) return;
+    if (phone || revealed || dump.status === "failed" || e.detail === 0) return;
     const card = e.currentTarget;
     if (!card.classList.contains("d-mediacard") && !card.classList.contains("d-mus")) return;
     if (!window.matchMedia("(hover: none), (pointer: coarse)").matches) return;
@@ -1415,19 +1437,53 @@ export default function DumpCard({ dump, fresh, removing, onTopic, onDelete, onR
   const dek = dump.summary ?? dump.description;
   const filedBy = dump.classifiedBy === "you" ? "Filed by you" : dump.classifiedBy === "ai" ? "Filed by AI" : "Filed automatically";
 
-  const actions = (
+  const grip = drag && (
+    <button
+      className="d-drag"
+      onPointerDown={drag.onPointerDown}
+      onContextMenu={(e) => e.preventDefault()}
+      aria-label="Drag to move"
+      title="Drag to move"
+    >
+      <Glyph name="grip" />
+    </button>
+  );
+  const destinations = topics.filter((t) => t.id !== dump.topic).map((t) => (
+    <Menu.Item key={t.id} className="d-menu-item" onClick={() => onTopic(dump.id, t.id)}>
+      <span className="d-dot" style={{ "--topic": t.color } as CSSProperties} />
+      {t.label}
+    </Menu.Item>
+  ));
+  const actions = phone ? (
+    <div className="d-phone-actions">
+      {grip}
+      <PhoneMenuRoot>
+        <Menu.Trigger className="d-more" aria-label="Card actions">
+          <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20" aria-hidden>
+            <circle cx="5" cy="12" r="1.6" /><circle cx="12" cy="12" r="1.6" /><circle cx="19" cy="12" r="1.6" />
+          </svg>
+        </Menu.Trigger>
+        <PhoneMenu>
+          {kind === "note" && !editingNote && (
+            <Menu.Item className="d-menu-item" onClick={() => setEditingNote(true)}>Edit</Menu.Item>
+          )}
+          <Menu.Item className="d-menu-item" onClick={() => onPin(dump.id, !dump.pinned)}>{dump.pinned ? "Unpin" : "Pin"}</Menu.Item>
+          {destinations.length > 0 && (
+            <PhoneMenuRoot submenu>
+              <Menu.SubmenuTrigger className="d-menu-item" data-move-trigger>Move…</Menu.SubmenuTrigger>
+              <PhoneMenu submenu>{destinations}</PhoneMenu>
+            </PhoneMenuRoot>
+          )}
+          {dump.status === "failed" && (
+            <Menu.Item className="d-menu-item" onClick={() => onRetry(dump.id)}>Retry</Menu.Item>
+          )}
+          <Menu.Item className="d-menu-item" onClick={() => onDelete(dump.id)}>Delete</Menu.Item>
+        </PhoneMenu>
+      </PhoneMenuRoot>
+    </div>
+  ) : (
     <div className="d-actions">
-      {drag && (
-        <button
-          className="d-drag"
-          onPointerDown={drag.onPointerDown}
-          onContextMenu={(e) => e.preventDefault()}
-          aria-label="Drag to move"
-          title="Drag to move"
-        >
-          <Glyph name="grip" />
-        </button>
-      )}
+      {grip}
       <button
         className="d-pintoggle"
         onClick={() => onPin(dump.id, !dump.pinned)}
@@ -1452,12 +1508,7 @@ export default function DumpCard({ dump, fresh, removing, onTopic, onDelete, onR
         <Menu.Portal>
           <Menu.Positioner side="bottom" align="end" sideOffset={4}>
             <Menu.Popup className="d-menu">
-              {topics.filter((t) => t.id !== dump.topic).map((t) => (
-                <Menu.Item key={t.id} className="d-menu-item" onClick={() => onTopic(dump.id, t.id)}>
-                  <span className="d-dot" style={{ "--topic": t.color } as CSSProperties} />
-                  {t.label}
-                </Menu.Item>
-              ))}
+              {destinations}
             </Menu.Popup>
           </Menu.Positioner>
         </Menu.Portal>
@@ -1480,7 +1531,7 @@ export default function DumpCard({ dump, fresh, removing, onTopic, onDelete, onR
       {dump.pinned && <Glyph name="pin" className="d-meta-pin" />}
       {topicChip}
       {siteLabel && <span className="min-w-0 truncate">{siteLabel}</span>}
-      {dump.status === "failed" && (
+      {!phone && dump.status === "failed" && (
         <button onClick={() => onRetry(dump.id)} className="d-retry">Retry</button>
       )}
       <time className="ml-auto shrink-0 whitespace-nowrap" dateTime={new Date(dump.createdAt).toISOString()}>
@@ -1491,7 +1542,8 @@ export default function DumpCard({ dump, fresh, removing, onTopic, onDelete, onR
   const meta = metaRow(site ?? provider?.label ?? kindMeta(kind).singular);
 
   const bits: CardBits = {
-    actions,
+    phone,
+    actions: phone ? actions : null,
     meta,
     bareMeta: metaRow(null),
     href,
@@ -1524,7 +1576,25 @@ export default function DumpCard({ dump, fresh, removing, onTopic, onDelete, onR
     },
   };
 
+  const card = renderCard(dump, bits);
+  return phone ? card : <div className="d-card-shell">{card}{actions}</div>;
+}
+
+function renderCard(dump: Dump, bits: CardBits) {
+  const { kind } = dump;
   if (kind === "note") return <NoteCard dump={dump} bits={bits} />;
+  if (bits.phone && dump.status === "failed" && !bits.showMedia && !dump.videoUrl && !dump.xRender) {
+    return (
+      <article {...bits.cardProps} className="d-card d-body">
+        {bits.actions}
+        <p className="d-kicker"><SiteMark dump={dump} />{providerMeta(dump.provider)?.label ?? bits.site ?? kindMeta(kind).singular}</p>
+        <p className="d-headline" dir="auto">{dump.title || linkAddress(dump) || dump.domain || "Preview unavailable"}</p>
+        {dump.note && <p className="d-annotation" dir="auto">{dump.note}</p>}
+        {dump.url && <a className="d-original" href={dump.url} target="_blank" rel="noreferrer">Open original</a>}
+        {bits.meta}
+      </article>
+    );
+  }
   if (kind === "video" && dump.videoUrl) return <VideoCard dump={dump} bits={bits} />;
   if (dump.provider === "x") return <XCard dump={dump} bits={bits} />;
   if (dump.provider === "reddit") return <RedditCard dump={dump} bits={bits} />;
@@ -1533,7 +1603,7 @@ export default function DumpCard({ dump, fresh, removing, onTopic, onDelete, onR
   if (dump.provider === "instagram") return <IgCard dump={dump} bits={bits} />;
   if (kind === "audio") return <MusicCard dump={dump} bits={bits} />;
   if (kind === "video") return <VideoCard dump={dump} bits={bits} />;
-  if (kind === "image" && showMedia) return <MediaCard dump={dump} bits={bits} />;
+  if (kind === "image" && bits.showMedia) return <MediaCard dump={dump} bits={bits} />;
   if (kind === "post" || SOCIAL_PROVIDERS.has(dump.provider ?? "")) return <PostCard dump={dump} bits={bits} />;
   if (kind === "article") return <ArticleCard dump={dump} bits={bits} />;
   return <LinkCard dump={dump} bits={bits} />;
