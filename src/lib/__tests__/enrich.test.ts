@@ -121,6 +121,32 @@ describe("enrichDump", () => {
     expect(await enrichDump(d.id)).toMatchObject({ topic: "travel", status: "failed", sourceState: "unreachable" });
   });
 
+  it.each([404, 410])("keeps oEmbed metadata that arrived with a %s page, without marking the original live", async (code) => {
+    const d = createFromText(`https://vimeo.com/gone-${code}`);
+    extractUrl.mockResolvedValue(page({ kind: "video", title: "Harbour at dusk", imageUrl: "https://i.vimeocdn.com/t.jpg", imageUrls: ["https://i.vimeocdn.com/t.jpg"], gone: true }));
+    expect(await enrichDump(d.id)).toMatchObject({ title: "Harbour at dusk", imageUrl: "https://i.vimeocdn.com/t.jpg", sourceState: "unavailable", status: "ready" });
+  });
+
+  it("never lets gone-page metadata overwrite a saved snapshot", async () => {
+    const d = createFromText("https://vimeo.com/kept-snapshot");
+    extractUrl.mockResolvedValue(page({ title: "Saved title", imageUrl: "https://example.com/saved.jpg", imageUrls: ["https://example.com/saved.jpg"] }));
+    await enrichDump(d.id);
+    db.updateDump(d.id, { status: "processing" });
+    extractUrl.mockResolvedValue(page({ title: "Other title", imageUrl: "https://example.com/other.jpg", imageUrls: ["https://example.com/other.jpg"], gone: true }));
+    expect(await enrichDump(d.id)).toMatchObject({ title: "Saved title", imageUrl: "https://example.com/saved.jpg", sourceState: "unavailable" });
+  });
+
+  it.each([404, 410])("keeps a gone bookmark's URL words searchable (%s) without storing them as its title", async (code) => {
+    const d = createFromText(`https://example.com/oak-elm-${code}`);
+    extractUrl.mockResolvedValue(page({ title: null, description: null, content: null, siteName: "example.com", gone: true }));
+    const out = await enrichDump(d.id);
+    expect(out).toMatchObject({ title: null, sourceState: "unavailable" });
+    expect(out?.content).toMatch(/oak elm/i);
+    const ids = (q: string) => db.listDumps({ q }).map((r) => r.id);
+    expect(ids("oak")).toContain(d.id);
+    expect(ids("elm")).toContain(d.id);
+  });
+
   it("treats a network failure as a retryable fetch error, not a removed original", async () => {
     const d = createFromText("https://example.com/flaky");
     extractUrl.mockResolvedValue(page({ title: null, unreachable: true }));
