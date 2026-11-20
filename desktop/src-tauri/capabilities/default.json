@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "The splash page needs no IPC; the Dump UI talks only to its own server.",
+  "windows": ["main"],
+  "permissions": []
+}
