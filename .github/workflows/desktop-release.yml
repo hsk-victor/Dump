@@ -20,8 +20,11 @@ jobs:
           cache-dependency-path: |
             package-lock.json
             desktop/package-lock.json
-      - name: Verify the release version
-        run: node -e "const v = require('./desktop/src-tauri/tauri.conf.json').version; if (process.env.GITHUB_REF_NAME !== ('desktop-v' + v)) throw new Error('Tag must match desktop version ' + v)"
+      - name: Verify release configuration
+        run: |
+          node -e "const v = require('./desktop/src-tauri/tauri.conf.json').version; if (process.env.GITHUB_REF_NAME !== ('desktop-v' + v)) throw new Error('Tag must match desktop version ' + v)"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node -e "const key = require('./desktop/src-tauri/tauri.release.conf.json').plugins.updater.pubkey; if (!key?.trim() || key === 'REPLACE_WITH_VICTORS_TAURI_UPDATER_PUBLIC_KEY') throw new Error('Configure the updater public key before tagging a release; see desktop/RELEASING.md')"
       - run: npm ci
       - run: npm ci
         working-directory: desktop
@@ -31,6 +34,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           projectPath: desktop
           args: --config src-tauri/tauri.release.conf.json

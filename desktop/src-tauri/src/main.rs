@@ -188,11 +188,15 @@ fn main() {
     #[cfg(windows)]
     let builder = builder.manage(window_bounds::WindowBounds::default());
     #[cfg(windows)]
-    let builder = builder
-        .plugin(tauri_plugin_updater::Builder::new().build())
-        .manage(updater::PendingUpdate::default());
+    let builder = builder.manage(updater::PendingUpdate::default());
     builder
         .setup(|app| {
+            #[cfg(windows)]
+            let updater_enabled = app.config().plugins.0.contains_key("updater");
+            #[cfg(windows)]
+            if updater_enabled {
+                app.handle().plugin(tauri_plugin_updater::Builder::new().build())?;
+            }
             let port = pick_port();
             let nav_app = app.handle().clone();
             let popup_app = app.handle().clone();
@@ -222,7 +226,9 @@ fn main() {
                 show_error(app.handle(), &format!("Dump couldn't start: {e}"));
             }
             #[cfg(windows)]
-            updater::prepare(app.handle());
+            if updater_enabled {
+                updater::prepare(app.handle());
+            }
             Ok(())
         })
         .build(tauri::generate_context!())

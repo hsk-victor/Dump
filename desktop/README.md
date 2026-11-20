@@ -42,15 +42,5 @@ running the script into `src-tauri/server/`, the folder Tauri ships as a resourc
 
 ## Publish a Windows update
 
-Set the repository Actions secret `TAURI_SIGNING_PRIVATE_KEY` to the contents of the desktop
-updater's private key file. Do not commit or rotate that key without planning how existing
-installations will receive a new trusted public key.
-
-1. Set `version` in `src-tauri/tauri.conf.json` and push a matching tag (for example, `desktop-v0.1.1`).
-2. The Windows release workflow builds the installer and uploads it, its signature and `latest.json`
-   to a draft GitHub Release. Review the artifacts, then publish the draft as the latest release.
-3. Dump checks GitHub on launch and hourly while open. It verifies and downloads newer releases in
-   the background and installs the update when you close the app. Open Dump again to use it.
-
-The public release and its assets must be reachable without a GitHub login; Dump does not ship a
-GitHub credential. If an update fails, the installed version still runs and retries later.
+See [Windows release setup and publishing](RELEASING.md). Local builds do not enable the updater;
+the Windows release workflow supplies the release configuration.

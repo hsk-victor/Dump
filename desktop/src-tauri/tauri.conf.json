@@ -12,13 +12,6 @@
       "csp": null
     }
   },
-  "plugins": {
-    "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEIwRUQ2RjgwNkMwNUMyOUQKUldTZHdnVnNnRy90c0JVOXVKNFJIOHdUMkRLdTFXVHU2SlkvSHlkVk84bFBUMWZjWXFueDNOUzcK",
-      "endpoints": ["https://github.com/hsk-victor/Dump/releases/latest/download/latest.json"],
-      "windows": { "installMode": "quiet" }
-    }
-  },
   "bundle": {
     "active": true,
     "targets": ["nsis"],

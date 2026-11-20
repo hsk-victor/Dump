@@ -1,4 +1,11 @@
 {
+  "plugins": {
+    "updater": {
+      "pubkey": "REPLACE_WITH_VICTORS_TAURI_UPDATER_PUBLIC_KEY",
+      "endpoints": ["https://github.com/hsk-victor/Dump/releases/latest/download/latest.json"],
+      "windows": { "installMode": "quiet" }
+    }
+  },
   "bundle": {
     "createUpdaterArtifacts": true
   }
