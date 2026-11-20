@@ -3,6 +3,7 @@ import { domainOf, isDirectVideoUrl, kindFromUrl, parseInput, providerFromUrl } 
 import { bumpDump, createDump, findByUrl, type Dump } from "./db";
 import { noteTitle } from "./enrich";
 import { fileStorage } from "./storage";
+import { MAX_UPLOAD_BYTES } from "./upload";
 
 export class InputError extends Error {}
 
@@ -13,7 +14,6 @@ const IMAGE_TYPES: Record<string, string> = {
   "image/webp": "webp",
   "image/avif": "avif",
 };
-export const MAX_UPLOAD_BYTES = 15 * 1024 * 1024;
 
 export type Created = Dump & { duplicate?: boolean; /** True when a duplicate learned new metadata worth re-enriching for. */ resync?: boolean };
 
@@ -77,21 +77,30 @@ export function createFromText(raw: string, opts?: CreateOptions | string | null
 }
 
 export async function createFromFile(file: File, note?: string | null): Promise<Dump> {
-  const ext = IMAGE_TYPES[file.type];
-  if (!ext) throw new InputError("Only PNG, JPEG, GIF, WebP and AVIF images are supported for now");
-  if (file.size > MAX_UPLOAD_BYTES) throw new InputError("Image is larger than 15 MB");
+  const ext = Object.hasOwn(IMAGE_TYPES, file.type) ? IMAGE_TYPES[file.type] : null;
+  if (file.size > MAX_UPLOAD_BYTES) throw new InputError(`${ext ? "Image" : "File"} is larger than 15 MB`);
 
   const id = randomUUID();
-  const imageUrl = await fileStorage.put(`${id}.${ext}`, new Uint8Array(await file.arrayBuffer()));
-
-  const baseName = file.name && file.name !== "image.png" ? file.name.replace(/\.[^.]+$/, "").replace(/[-_]+/g, " ") : null;
-  return createDump(
-    {
+  const key = `${id}.${ext ?? "attachment"}`;
+  const url = await fileStorage.put(key, new Uint8Array(await file.arrayBuffer()));
+  const name = file.name.split(/[/\\]/).pop()?.replace(/[\x00-\x1f\x7f]/g, "").trim().slice(0, 255) || "File";
+  const annotation = note?.trim().slice(0, 50000) || null;
+  try {
+    if (!ext) return createDump({
+      kind: "file",
+      title: name,
+      note: annotation,
+      attachment: { name, type: file.type || "application/octet-stream", size: file.size, url },
+    }, id);
+    const baseName = file.name && file.name !== "image.png" ? file.name.replace(/\.[^.]+$/, "").replace(/[-_]+/g, " ") : null;
+    return createDump({
       kind: "image",
-      title: baseName || (note ? noteTitle(note) : "Image"),
-      note: note?.trim() || null,
-      imageUrl,
-    },
-    id,
-  );
+      title: baseName || (annotation ? noteTitle(annotation) : "Image"),
+      note: annotation,
+      imageUrl: url,
+    }, id);
+  } catch (error) {
+    await fileStorage.remove(key).catch(() => {});
+    throw error;
+  }
 }

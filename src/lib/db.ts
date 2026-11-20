@@ -30,6 +30,7 @@ export interface Dump {
   mediaArchive: Record<string, string>;
   keepVideo: boolean;
   videoCopy: VideoCopy | null;
+  attachment: { name: string; type: string; size: number; url: string } | null;
   id: string;
   kind: Kind;
   topic: Topic;
@@ -72,6 +73,7 @@ interface Row {
   media_archive: string;
   keep_video: number;
   video_copy: string | null;
+  attachment: string | null;
   id: string;
   kind: string;
   topic: string;
@@ -110,6 +112,7 @@ CREATE TABLE IF NOT EXISTS dumps (
   media_archive TEXT NOT NULL DEFAULT '{}',
   keep_video INTEGER NOT NULL DEFAULT 0,
   video_copy TEXT,
+  attachment TEXT,
   id TEXT PRIMARY KEY,
   kind TEXT NOT NULL,
   topic TEXT NOT NULL DEFAULT 'other',
@@ -207,6 +210,7 @@ function db(): Database.Database {
     if (!cols.some((c) => c.name === "media_archive")) conn.exec("ALTER TABLE dumps ADD COLUMN media_archive TEXT NOT NULL DEFAULT '{}'");
     if (!cols.some((c) => c.name === "keep_video")) conn.exec("ALTER TABLE dumps ADD COLUMN keep_video INTEGER NOT NULL DEFAULT 0");
     if (!cols.some((c) => c.name === "video_copy")) conn.exec("ALTER TABLE dumps ADD COLUMN video_copy TEXT");
+    if (!cols.some((c) => c.name === "attachment")) conn.exec("ALTER TABLE dumps ADD COLUMN attachment TEXT");
     if (!cols.some((c) => c.name === "subject")) conn.exec("ALTER TABLE dumps ADD COLUMN subject TEXT");
     if (!cols.some((c) => c.name === "provider")) conn.exec("ALTER TABLE dumps ADD COLUMN provider TEXT");
     if (!cols.some((c) => c.name === "image_urls")) conn.exec("ALTER TABLE dumps ADD COLUMN image_urls TEXT");
@@ -250,6 +254,7 @@ function toDump(r: Row): Dump {
     mediaArchive: JSON.parse(r.media_archive || "{}"),
     keepVideo: !!r.keep_video,
     videoCopy: r.video_copy ? JSON.parse(r.video_copy) : null,
+    attachment: r.attachment ? JSON.parse(r.attachment) : null,
     id: r.id,
     kind: r.kind as Kind,
     topic: r.topic as Topic,
@@ -314,6 +319,7 @@ const COLUMN: Record<string, string> = {
   mediaArchive: "media_archive",
   keepVideo: "keep_video",
   videoCopy: "video_copy",
+  attachment: "attachment",
   kind: "kind",
   topic: "topic",
   status: "status",
@@ -353,7 +359,7 @@ function toColumns(patch: Patch): Record<string, unknown> {
     if (!col || value === undefined) continue;
     if (key === "tags" || key === "mediaArchive") out[col] = JSON.stringify(value);
     else if (key === "imageUrls") out[col] = (value as string[] | null)?.length ? JSON.stringify(value) : null;
-    else if (key === "subject" || key === "xRender" || key === "videoCopy") out[col] = value ? JSON.stringify(value) : null;
+    else if (key === "subject" || key === "xRender" || key === "videoCopy" || key === "attachment") out[col] = value ? JSON.stringify(value) : null;
     else if (key === "topicLocked" || key === "pinned" || key === "keepVideo") out[col] = value ? 1 : 0;
     else out[col] = value;
   }
@@ -510,7 +516,7 @@ export interface ListOptions {
 const FEED_COLS = `d.id, d.kind, d.topic, d.status, d.source_state, d.url, d.domain, d.provider, d.title, d.description,
   CASE WHEN d.kind = 'note' THEN d.content END AS content,
   d.note, d.image_url, d.image_urls, d.site_name, d.author, d.author_handle, d.author_avatar_url,
-  d.video_url, d.video_poster_url, d.video_type, d.x_render, d.summary, d.subject, d.tags, d.media_archive, d.keep_video, d.video_copy,
+  d.video_url, d.video_poster_url, d.video_type, d.x_render, d.summary, d.subject, d.tags, d.media_archive, d.keep_video, d.video_copy, d.attachment,
   d.classified_by, d.topic_locked, d.pinned, d.position, d.created_at, d.updated_at`;
 
 export function listDumps({ q, kind, topic, limit = 200, offset = 0 }: ListOptions = {}): Dump[] {
