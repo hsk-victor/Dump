@@ -7,7 +7,7 @@ import { exhaustedVideoAsset, videoCopyAction, videoSources } from "@/lib/media"
 
 const title = "Mobile reminder: book a train to Kyoto this weekend";
 const note: Dump = {
-  mediaArchive: {}, keepVideo: false, videoCopy: null,
+  mediaArchive: {}, keepVideo: false, videoCopy: null, attachment: null,
   id: "note",
   kind: "note",
   topic: "other",
