@@ -342,3 +342,11 @@ it("draws X, GitHub and Reddit with their own anatomy and no engagement or date 
   expect(thread).not.toContain("u/deskless");
   for (const html of [x, repo, thread]) expect(html).not.toContain("<time");
 });
+
+it("gives an inline player a rail of its own so the actions never cover its controls", () => {
+  const clip: Dump = { ...photo, kind: "video", provider: "vimeo", url: "https://vimeo.com/1", domain: "vimeo.com", videoUrl: "https://example.com/clip.mp4", sourceState: "reachable" };
+  const html = card(clip);
+  expect(html).toContain("<video");
+  expect(html).toContain('class="d-rail"');
+  expect(card(photo)).not.toContain('class="d-rail"');
+});

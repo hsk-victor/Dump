@@ -1453,8 +1453,9 @@ export default function DumpCard({ dump, phone = false, fresh, removing, onTopic
   const bits: CardBits = {
     phone,
     rail,
-    // A retained-details footer or the owner's note gets the rail too, so the actions never cover text.
-    mediaFoot: (glyph) => (phone || exposed || dump.note ? rail(glyph) : stateRows),
+    // Retained details, the owner's note and inline players' native controls get a rail too,
+    // so the actions never cover text or video controls.
+    mediaFoot: (glyph) => (phone || exposed || dump.note || (kind === "video" && dump.videoUrl) ? rail(glyph) : stateRows),
     exposed,
     gone,
     posterOnly: state.posterOnly,
