@@ -1,9 +1,8 @@
-import fs from "node:fs/promises";
-import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { domainOf, isDirectVideoUrl, kindFromUrl, parseInput, providerFromUrl } from "./detect";
-import { bumpDump, createDump, findByUrl, UPLOAD_DIR, type Dump } from "./db";
+import { bumpDump, createDump, findByUrl, type Dump } from "./db";
 import { noteTitle } from "./enrich";
+import { fileStorage } from "./storage";
 
 export class InputError extends Error {}
 
@@ -83,9 +82,7 @@ export async function createFromFile(file: File, note?: string | null): Promise<
   if (file.size > MAX_UPLOAD_BYTES) throw new InputError("Image is larger than 15 MB");
 
   const id = randomUUID();
-  const name = `${id}.${ext}`;
-  await fs.mkdir(UPLOAD_DIR, { recursive: true });
-  await fs.writeFile(path.join(UPLOAD_DIR, name), Buffer.from(await file.arrayBuffer()));
+  const imageUrl = await fileStorage.put(`${id}.${ext}`, new Uint8Array(await file.arrayBuffer()));
 
   const baseName = file.name && file.name !== "image.png" ? file.name.replace(/\.[^.]+$/, "").replace(/[-_]+/g, " ") : null;
   return createDump(
@@ -93,7 +90,7 @@ export async function createFromFile(file: File, note?: string | null): Promise<
       kind: "image",
       title: baseName || (note ? noteTitle(note) : "Image"),
       note: note?.trim() || null,
-      imageUrl: `/api/files/${name}`,
+      imageUrl,
     },
     id,
   );

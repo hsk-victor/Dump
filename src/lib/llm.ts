@@ -1,9 +1,7 @@
-import fs from "node:fs/promises";
-import path from "node:path";
 import sharp from "sharp";
 import { isSubjectType, SUBJECT_TYPES, TOPICS, TOPIC_CRITERIA, type Subject, type Topic, type TopicMeta } from "./taxonomy";
-import { UPLOAD_DIR } from "./db";
 import { fetchImage } from "./extract";
+import { fileStorage, storedFileName } from "./storage";
 import type { ClassifyInput } from "./classify";
 
 export interface AiClassification {
@@ -74,7 +72,8 @@ export async function prepareImage(input: Buffer): Promise<string | null> {
 async function loadImage(imageUrl: string | null | undefined): Promise<string | null> {
   if (!imageUrl) return null;
   let bytes: Buffer | null = null;
-  if (imageUrl.startsWith("/api/files/")) bytes = await fs.readFile(path.join(UPLOAD_DIR, path.basename(imageUrl))).catch(() => null);
+  const name = storedFileName(imageUrl);
+  if (name) bytes = await fileStorage.read(name).catch(() => null);
   else if (/^https?:\/\//.test(imageUrl)) bytes = await fetchImage(imageUrl);
   return bytes ? prepareImage(bytes) : null;
 }

@@ -1,8 +1,7 @@
 import { after, NextResponse, type NextRequest } from "next/server";
-import fs from "node:fs/promises";
-import path from "node:path";
-import { deleteDump, getDump, topPosition, topicExists, updateDump, UPLOAD_DIR } from "@/lib/db";
+import { deleteDump, getDump, topPosition, topicExists, updateDump } from "@/lib/db";
 import { enrichDump, noteTitle } from "@/lib/enrich";
+import { fileStorage, storedFileName } from "@/lib/storage";
 
 export const runtime = "nodejs";
 
@@ -49,8 +48,7 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
 export async function DELETE(_req: NextRequest, { params }: Ctx) {
   const dump = deleteDump((await params).id);
   if (!dump) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  if (dump.imageUrl?.startsWith("/api/files/")) {
-    await fs.rm(path.join(UPLOAD_DIR, path.basename(dump.imageUrl)), { force: true });
-  }
+  const name = storedFileName(dump.imageUrl);
+  if (name) await fileStorage.remove(name);
   return new NextResponse(null, { status: 204 });
 }

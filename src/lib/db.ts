@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 import type { Kind, Provider, Subject, Topic, TopicMeta } from "./taxonomy";
 import { TOPICS, TOPIC_CRITERIA } from "./taxonomy";
 import { providerFromUrl } from "./detect";
+import { DATA_DIR } from "./data-dir";
 import { canonicalUrl } from "./canonical-url";
 
 export type Status = "processing" | "ready" | "failed";
@@ -90,9 +91,6 @@ interface Row {
   created_at: number;
   updated_at: number;
 }
-
-export const DATA_DIR = path.resolve(process.env.DUMP_DATA_DIR ?? path.join(process.cwd(), "data"));
-export const UPLOAD_DIR = path.join(DATA_DIR, "uploads");
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS dumps (
@@ -182,9 +180,9 @@ END;
 
 const globalForDb = globalThis as unknown as { __dumpDb?: Database.Database };
 
-export function db(): Database.Database {
+function db(): Database.Database {
   if (!globalForDb.__dumpDb) {
-    fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+    fs.mkdirSync(DATA_DIR, { recursive: true });
     const conn = new Database(path.join(DATA_DIR, "dump.db"));
     conn.pragma("journal_mode = WAL");
     conn.exec(SCHEMA);
@@ -220,7 +218,7 @@ function seedTopics(conn: Database.Database) {
   const { n } = conn.prepare("SELECT COUNT(*) AS n FROM topics").get() as { n: number };
   if (n > 0) return;
   const insert = conn.prepare(
-    "INSERT OR IGNORE INTO topics (id, label, color, description, position, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+    "INSERT INTO topics (id, label, color, description, position, created_at) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT (id) DO NOTHING",
   );
   const now = Date.now();
   for (const [i, t] of TOPICS.entries()) {
@@ -342,19 +340,29 @@ export function topPosition(): number {
   return (db().prepare("SELECT COALESCE(MAX(position), 0) + 1 AS p FROM dumps").get() as { p: number }).p;
 }
 
-export function createDump(fields: Patch & { kind: Kind }, id: string = randomUUID()): Dump {
-  const now = Date.now();
+function insertDump(fields: Patch & { kind: Kind }, id: string, createdAt: number): void {
   const cols = {
-    ...toColumns({ topic: "other", status: "processing", tags: [], position: topPosition(), ...fields }),
+    ...toColumns(fields),
     id,
-    created_at: now,
-    updated_at: now,
+    created_at: createdAt,
+    updated_at: createdAt,
   };
   const names = Object.keys(cols);
   db()
     .prepare(`INSERT INTO dumps (${names.join(", ")}) VALUES (${names.map((n) => `@${n}`).join(", ")})`)
     .run(cols);
+}
+
+export function createDump(fields: Patch & { kind: Kind }, id: string = randomUUID()): Dump {
+  const now = Date.now();
+  insertDump({ topic: "other", status: "processing", tags: [], position: topPosition(), ...fields }, id, now);
   return getDump(id)!;
+}
+
+export function insertDumps(rows: readonly (Patch & { kind: Kind; createdAt: number })[]): void {
+  db().transaction(() => {
+    for (const { createdAt, ...fields } of rows) insertDump(fields, randomUUID(), createdAt);
+  })();
 }
 
 export function updateDump(id: string, patch: Patch): Dump | null {
@@ -371,6 +379,43 @@ export function updateDump(id: string, patch: Patch): Dump | null {
 export function getDump(id: string): Dump | null {
   const row = db().prepare("SELECT * FROM dumps WHERE id = ?").get(id) as Row | undefined;
   return row ? toDump(row) : null;
+}
+
+/**
+ * Writes enrichment results, re-reading the row in the same transaction so a topic the user
+ * picked while enrichment was running is never overwritten — and neither is any other field
+ * that changed since this run read its snapshot (e.g. a duplicate backfilling bookmarklet
+ * metadata, or a user edit). Those fields hold newer data than what this run saw.
+ */
+export function commitEnrichment(id: string, patch: Partial<Dump>, snapshot?: Dump): Dump | null {
+  return db().transaction(() => {
+    const current = getDump(id);
+    if (!current) return null;
+    const { topic, classifiedBy, ...fields } = patch;
+    // A category deleted while this run was in flight files to the catch-all, not a dead id.
+    const filedTopic = topic !== undefined && !topicExists(topic) ? "other" : topic;
+    for (const key of Object.keys(fields) as (keyof Dump)[]) {
+      if (snapshot && JSON.stringify(current[key] ?? null) !== JSON.stringify(snapshot[key] ?? null)) {
+        delete (fields as Record<string, unknown>)[key];
+      }
+    }
+    // topic/classifiedBy get the same staleness guard as the other fields, but only for
+    // commits that don't end a processing run themselves (resort carries no status):
+    // a row that re-entered processing, or moved on since this run's snapshot, must not
+    // be filed under a classification computed from older data. Enrich commits set the
+    // final status, so 'processing' mid-run is expected for them, not stale.
+    const finishesRun = patch.status !== undefined;
+    const topicStale =
+      current.topicLocked ||
+      (!finishesRun &&
+        (current.status === "processing" ||
+          (!!snapshot &&
+            (current.topic !== snapshot.topic ||
+              current.classifiedBy !== snapshot.classifiedBy ||
+              current.status !== snapshot.status ||
+              current.updatedAt !== snapshot.updatedAt))));
+    return updateDump(id, topicStale ? fields : { ...fields, topic: filedTopic, classifiedBy });
+  })();
 }
 
 export function findByUrl(url: string): Dump | null {

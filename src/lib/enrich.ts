@@ -1,5 +1,5 @@
 import { classifyHeuristic } from "./classify";
-import { db, getDump, listResortable, listTopics, topicExists, updateDump, type Dump } from "./db";
+import { commitEnrichment, getDump, listResortable, listTopics, type Dump } from "./db";
 import { extractUrl } from "./extract";
 import { renderXPostImage } from "./x-render";
 import { providerFromUrl, titleFromUrl } from "./detect";
@@ -15,44 +15,6 @@ function truncate(s: string | null | undefined, n: number, preserveLines = false
 export function noteTitle(text: string): string {
   const firstLine = text.split("\n").find((l) => l.trim()) ?? text;
   return truncate(firstLine, 80) ?? "Note";
-}
-
-/**
- * Writes enrichment results, re-reading the row in the same transaction so a topic the user
- * picked while enrichment was running is never overwritten — and neither is any other field
- * that changed since this run read its snapshot (e.g. a duplicate backfilling bookmarklet
- * metadata, or a user edit). Those fields hold newer data than what this run saw.
- */
-function commit(id: string, patch: Partial<Dump>, snapshot?: Dump): Dump | null {
-  return db().transaction(() => {
-    const current = getDump(id);
-    if (!current) return null;
-    const { topic, classifiedBy, ...rest } = patch;
-    // A category deleted while this run was in flight files to the catch-all, not a dead id.
-    const filedTopic = topic !== undefined && !topicExists(topic) ? "other" : topic;
-    const fields = rest as Partial<Dump>;
-    for (const key of Object.keys(fields) as (keyof Dump)[]) {
-      if (snapshot && JSON.stringify(current[key] ?? null) !== JSON.stringify(snapshot[key] ?? null)) {
-        delete (fields as Record<string, unknown>)[key];
-      }
-    }
-    // topic/classifiedBy get the same staleness guard as the other fields, but only for
-    // commits that don't end a processing run themselves (resort carries no status):
-    // a row that re-entered processing, or moved on since this run's snapshot, must not
-    // be filed under a classification computed from older data. Enrich commits set the
-    // final status, so 'processing' mid-run is expected for them, not stale.
-    const finishesRun = patch.status !== undefined;
-    const topicStale =
-      current.topicLocked ||
-      (!finishesRun &&
-        (current.status === "processing" ||
-          (!!snapshot &&
-            (current.topic !== snapshot.topic ||
-              current.classifiedBy !== snapshot.classifiedBy ||
-              current.status !== snapshot.status ||
-              current.updatedAt !== snapshot.updatedAt))));
-    return updateDump(id, topicStale ? fields : { ...fields, topic: filedTopic, classifiedBy });
-  })();
 }
 
 /** A subject the model is sure enough about to name on the card. */
@@ -115,7 +77,7 @@ export function refreshXRender(id: string, restoreStatus: Dump["status"]): Promi
     if (!dump?.url) return null;
     const xRender = await renderXPostImage(dump.url).catch(() => null);
     // A failed render keeps whatever the row had — restoring status is the whole commit.
-    return commit(id, xRender ? { xRender, status: restoreStatus } : { status: restoreStatus }, dump);
+    return commitEnrichment(id, xRender ? { xRender, status: restoreStatus } : { status: restoreStatus }, dump);
   });
   const tail = job.then(
     () => { if (enrichTail.get(id) === tail) enrichTail.delete(id); },
@@ -141,7 +103,7 @@ async function runEnrich(id: string): Promise<Dump | null> {
         // a topic from what it has.
         const filed = dump.classifiedBy ? null : classifyHeuristic({ ...dump, title: dump.title ?? titleFromUrl(dump.url) });
         const cls: Partial<Dump> = filed ? { topic: filed.topic, tags: filed.tags, classifiedBy: "rules" } : {};
-        return commit(id, { ...cls, sourceState: "unavailable", status: "ready" }, dump);
+        return commitEnrichment(id, { ...cls, sourceState: "unavailable", status: "ready" }, dump);
       }
       const title = dump.title ?? truncate(ex.title, 300);
       // Only user-supplied or fetched titles are stored, so a later retry can always fill one in.
@@ -183,7 +145,7 @@ async function runEnrich(id: string): Promise<Dump | null> {
     }
     // A re-check that reached nothing has no new data to file by: a dump that was already
     // filed keeps its topic.
-    if (unreachable && dump.classifiedBy) return commit(id, { ...fields, status: "failed" }, dump);
+    if (unreachable && dump.classifiedBy) return commitEnrichment(id, { ...fields, status: "failed" }, dump);
     const merged = { ...dump, ...fields };
 
     // Clips/images get a second pass to name what they're about, before the topic is decided,
@@ -203,11 +165,11 @@ async function runEnrich(id: string): Promise<Dump | null> {
 
     const classification = await classify(forClassifying, merged.kind === "image");
     // Couldn't reach the site at all: keep the fallback topic but mark it failed so it can be retried.
-    return commit(id, { ...fields, ...classification, status: unreachable ? "failed" : "ready" }, dump);
+    return commitEnrichment(id, { ...fields, ...classification, status: unreachable ? "failed" : "ready" }, dump);
   } catch (err) {
     console.warn(`[dump] enrich failed for ${id}:`, (err as Error).message);
     const rules = classifyHeuristic({ ...dump, title: dump.title ?? (dump.url ? titleFromUrl(dump.url) : null) });
-    return commit(id, { status: "failed", topic: rules.topic, classifiedBy: "rules", tags: rules.tags }, dump);
+    return commitEnrichment(id, { status: "failed", topic: rules.topic, classifiedBy: "rules", tags: rules.tags }, dump);
   }
 }
 
@@ -218,7 +180,7 @@ export async function resortDump(id: string): Promise<{ before: string; after: s
   if (!dump || dump.topicLocked || dump.status === "processing") return null;
   const classification = await classify({ ...dump, title: dump.title ?? (dump.url ? titleFromUrl(dump.url) : null) }, dump.kind === "image");
   if (classification.classifiedBy !== "ai") return null;
-  const out = commit(id, classification, dump);
+  const out = commitEnrichment(id, classification, dump);
   return out ? { before: dump.topic, after: out.topic } : null;
 }
 
