@@ -234,6 +234,35 @@ it("keeps a gone card's saved text in the narrow layout", () => {
   expect(html).toContain("Original unavailable");
 });
 
+it.each([
+  ["article summary", { summary: "A guide to the lower trail." }, "A guide to the lower trail."],
+  ["bookmarklet description", { kind: "link", summary: " ", title: null }, "Tide pools at dawn"],
+  ["image caption without media", { kind: "image" }, "Tide pools at dawn"],
+  ["post caption", { kind: "post", provider: "bluesky" }, "Tide pools at dawn"],
+  ["video description", { kind: "video", provider: "youtube" }, "Tide pools at dawn"],
+  ["audio description alongside the artist", { kind: "audio", provider: "spotify", author: "Lumen Avenue" }, "Tide pools at dawn"],
+  ["X caption alongside saved media", { kind: "post", provider: "x", imageUrl: "/api/files/pools.jpg" }, "Tide pools at dawn"],
+] satisfies [string, Partial<Dump>, string][])("keeps the saved %s visible on a failed phone card", (_, fields, savedText) => {
+  const html = card({ ...link, ...fields, status: "failed", sourceState: "unreachable" }, true);
+  expect(html).toContain(`>${savedText}</`);
+  expect(html).toContain("Couldn&#x27;t get preview");
+  expect(html).not.toContain("Open original");
+});
+
+it.each([null, " "])("uses the sparse phone fallback for failed previews with no useful saved text (%j)", (text) => {
+  const html = card({ ...link, title: null, description: text, summary: text, status: "failed", sourceState: "unreachable" }, true);
+  expect(html).toContain("example.com/story");
+  expect(html).toContain("Open original");
+  expect(html).toContain("Couldn&#x27;t get preview");
+});
+
+it("shows saved text instead of a loading placeholder once a phone preview times out", () => {
+  const html = card({ ...link, title: null, status: "processing" }, true);
+  expect(html).toContain("Tide pools at dawn");
+  expect(html).toContain("Couldn&#x27;t get preview");
+  expect(html).not.toContain("shimmer");
+});
+
 it("renders desktop actions in their own row outside card content", () => {
   const html = renderToStaticMarkup(createElement(DumpCard, {
     dump: note,

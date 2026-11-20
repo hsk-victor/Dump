@@ -312,6 +312,7 @@ interface CardBits {
   panelMeta: ReactNode;
   /** Failed or unavailable: media cards keep their panel open so the retained details stay readable. */
   exposed: boolean;
+  showSavedText: boolean;
   /** Original confirmed gone. */
   gone: boolean;
   posterOnly: boolean;
@@ -591,6 +592,7 @@ function XCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
           )}
         </>
       )}
+      {!xr && media && bits.showSavedText && text && <p className="d-post-text" dir="auto">{text}</p>}
       {dump.note && <p className="d-annotation" dir="auto">{dump.note}</p>}
       {bits.meta}
     </article>
@@ -902,6 +904,7 @@ function YouTubeCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
             <>
               <span className="d-vid-title">{bits.title ?? provider?.label ?? "Video"}</span>
               <span className="d-vid-channel">{[dump.author, provider?.label].filter(Boolean).join(" · ")}</span>
+              {bits.showSavedText && bits.dek && bits.dek !== bits.title && <span className="d-dek" dir="auto">{bits.dek}</span>}
             </>
           )}
         </span>
@@ -1131,8 +1134,9 @@ function IgCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
  *  Note + meta live in a frosted panel inside the tile, revealed on hover like Media/Video. */
 function MusicCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
   const provider = providerMeta(dump.provider);
-  const sub = dump.author ?? (bits.dek !== bits.title ? bits.dek : null) ?? provider?.label;
   const title = bits.title ?? provider?.label ?? "Audio";
+  const dek = bits.dek !== title && bits.dek !== dump.author ? bits.dek : null;
+  const sub = dump.author ?? (!bits.showSavedText && bits.dek !== bits.title ? bits.dek : null) ?? provider?.label;
   return (
     <article {...bits.cardProps} className="d-card d-mus group" data-open={bits.exposed || bits.revealed || undefined}>
       {bits.actions}
@@ -1167,6 +1171,7 @@ function MusicCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
         <ProviderIcon provider={dump.provider} className="d-prov d-mus-src" />
       </a>
       <div className="d-mus-panel">
+        {bits.showSavedText && dek && <p className="d-dek" dir="auto">{dek}</p>}
         {dump.note && <p className="d-mus-note" dir="auto">{dump.note}</p>}
         {bits.panelMeta}
       </div>
@@ -1477,6 +1482,7 @@ function LinkCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
                 {dump.domain}
               </span>
             )}
+            {bits.showSavedText && bits.dek && bits.dek !== headline && <p className="d-dek" dir="auto">{bits.dek}</p>}
           </div>
         )}
       </div>
@@ -1528,6 +1534,10 @@ export default function DumpCard({ dump, phone = false, fresh, removing, onTopic
   const state = cardState(effectiveDump, now, online);
   const gone = !!state.unavailable;
   const exposed = !!(state.failed || state.unavailable || videoCopy);
+  const showSavedText = phone && !!(state.failed || state.unavailable);
+  const preview = showSavedText
+    ? { ...dump, summary: dump.summary?.trim() || null, description: dump.description?.trim() || null }
+    : dump;
 
   const onCardPointerDown = (e: ReactPointerEvent<HTMLElement>) => {
     if (phone || revealed || exposed) return;
@@ -1560,7 +1570,7 @@ export default function DumpCard({ dump, phone = false, fresh, removing, onTopic
   const href = gone ? (kind === "image" ? localImage : null) : dump.url ?? (kind === "image" ? dump.imageUrl : null);
   const site = dump.siteName && dump.siteName.length < 30 ? dump.siteName : dump.domain;
   const showMedia = !!dump.imageUrl && !imgFailed;
-  const dek = dump.summary ?? dump.description;
+  const dek = preview.summary ?? preview.description;
   const filedBy = dump.classifiedBy === "you" ? "Filed by you" : dump.classifiedBy === "ai" ? "Filed by AI" : "Filed automatically";
 
   const grip = drag && (
@@ -1710,6 +1720,7 @@ export default function DumpCard({ dump, phone = false, fresh, removing, onTopic
     stateRows: phone || exposed ? null : stateRows,
     panelMeta: phone || exposed ? meta : metaLine(siteLabel),
     exposed,
+    showSavedText,
     gone,
     posterOnly: state.posterOnly,
     onVideoMissing,
@@ -1719,7 +1730,7 @@ export default function DumpCard({ dump, phone = false, fresh, removing, onTopic
     site,
     showMedia,
     setImgFailed,
-    processing,
+    processing: processing && !(phone && state.failed),
     revealed,
     pinBadge: dump.pinned ? (
       <span className="d-pin-badge" title="Pinned">
@@ -1744,7 +1755,7 @@ export default function DumpCard({ dump, phone = false, fresh, removing, onTopic
     },
   };
 
-  const card = renderCard(dump, bits);
+  const card = renderCard(preview, bits);
   return phone ? card : <div className="d-card-shell">{card}{actions}</div>;
 }
 
