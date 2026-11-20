@@ -311,6 +311,11 @@ export default function DumpApp() {
   useEffect(() => {
     load();
   }, [load]);
+  useEffect(() => {
+    const refresh = () => { void load(); };
+    window.addEventListener("dump-updated", refresh);
+    return () => window.removeEventListener("dump-updated", refresh);
+  }, [load]);
 
   // If the URL's search changes from outside (Back/Forward, a link), show it in the box.
   useEffect(() => {
@@ -332,7 +337,7 @@ export default function DumpApp() {
 
   // Poll while anything is still being sorted in the background. Pause mid-drag so the
   // list doesn't re-render under the pointer.
-  const anyProcessing = items.some((d) => d.status === "processing") || pendingToasts.current.size > 0;
+  const anyProcessing = items.some((d) => d.status === "processing" || d.videoCopy?.state === "pending") || pendingToasts.current.size > 0;
   useEffect(() => {
     if (!anyProcessing || dragId) return;
     const t = setInterval(load, 1200);

@@ -1,6 +1,7 @@
 import { classifyHeuristic } from "./classify";
 import { commitEnrichment, getDump, listResortable, listTopics, type Dump } from "./db";
 import { extractUrl } from "./extract";
+import { archiveDump } from "./archive";
 import { renderXPostImage } from "./x-render";
 import { providerFromUrl, titleFromUrl } from "./detect";
 import { classifyWithAi, identifySubject } from "./llm";
@@ -54,7 +55,11 @@ export function isEnriching(id: string): boolean {
  */
 export function enrichDump(id: string): Promise<Dump | null> {
   const prev = enrichTail.get(id) ?? Promise.resolve();
-  const job = prev.then(() => runEnrich(id));
+  const job = prev.then(async () => {
+    const dump = await runEnrich(id);
+    void archiveDump(id).catch(() => {});
+    return dump;
+  });
   const tail = job.then(
     () => { if (enrichTail.get(id) === tail) enrichTail.delete(id); },
     () => { if (enrichTail.get(id) === tail) enrichTail.delete(id); },
