@@ -13,7 +13,6 @@ import DumpCard from "./DumpCard";
 import Logo from "./Logo";
 import SectionNav, { type Counts } from "./SectionNav";
 import CategoryManager from "./CategoryManager";
-import UpdateButton from "./UpdateButton";
 import { PhoneMenu, PhoneMenuRoot } from "./PhoneMenu";
 import { fetchRevealWindow } from "@/lib/reveal";
 import DesktopShortcutSettings from "./DesktopShortcutSettings";
@@ -952,7 +951,6 @@ export default function DumpApp() {
           </label>
 
           <div className="d-header-tools">
-            {!phone && <UpdateButton />}
             <div className="d-settings" ref={settingsRef}>
               <button
                 className="d-icon-btn"
@@ -1022,7 +1020,6 @@ export default function DumpApp() {
                       <span className="d-density-icon" aria-hidden />
                     </span>
                   </div>
-                  {phone && <UpdateButton />}
                   <DesktopShortcutSettings open={settingsOpen} />
                 </div>
               )}

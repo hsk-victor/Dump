@@ -38,5 +38,9 @@ running the script into `src-tauri/server/`, the folder Tauri ships as a resourc
   launch would reset them. Hence the preferred port.
 - `server-entry.cjs` polls the app's pid and exits when it is gone, so a crashed or killed app does not
   leave a Node server running in the background.
-- The in-app updater (`/api/update`) needs a git checkout; in the packaged app it reports unsupported.
 - WebView2 is the only system dependency. Windows 10/11 ship it; the installer downloads it if missing.
+
+## Publish a Windows update
+
+See [Windows release setup and publishing](RELEASING.md). Local builds do not enable the updater;
+the Windows release workflow supplies the release configuration.

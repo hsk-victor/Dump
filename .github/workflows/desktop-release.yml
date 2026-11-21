@@ -1,0 +1,44 @@
+name: Build Windows desktop release
+
+on:
+  push:
+    tags:
+      - "desktop-v*"
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            desktop/package-lock.json
+      - name: Verify release configuration
+        run: |
+          node -e "const v = require('./desktop/src-tauri/tauri.conf.json').version; if (process.env.GITHUB_REF_NAME !== ('desktop-v' + v)) throw new Error('Tag must match desktop version ' + v)"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node -e "const key = require('./desktop/src-tauri/tauri.release.conf.json').plugins.updater.pubkey; if (!key?.trim() || key === 'REPLACE_WITH_VICTORS_TAURI_UPDATER_PUBLIC_KEY') throw new Error('Configure the updater public key before tagging a release; see desktop/RELEASING.md')"
+      - run: npm ci
+      - run: npm ci
+        working-directory: desktop
+      - run: npm run stage
+        working-directory: desktop
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          projectPath: desktop
+          args: --config src-tauri/tauri.release.conf.json
+          tagName: ${{ github.ref_name }}
+          releaseName: Dump ${{ github.ref_name }}
+          releaseDraft: true
+          includeUpdaterJson: true
