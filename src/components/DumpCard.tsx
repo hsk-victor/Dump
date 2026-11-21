@@ -729,8 +729,9 @@ function HnCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
   );
 }
 
-/** github — a repository reads as GitHub's own repository card: any working saved cover,
- *  then the repo glyph, blue owner / name and its real description, never invented stats. Other pages (issues,
+/** github — a working saved cover is the whole card, like other media. Without one, a
+ *  repository reads as GitHub's own repository card: the repo glyph, blue owner / name and
+ *  its real description, never invented stats. Other pages (issues,
  *  PRs, files, profiles) keep their type and title; a saved preview image still leads. */
 function GithubCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
   const info = githubInfo(dump.url);
@@ -744,7 +745,7 @@ function GithubCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
   const panelDek = dek && dek !== label ? dek : null;
   const tagLabel = `${tag ?? ""}${tag && info.ref ? ` ${info.ref}` : ""}`;
 
-  if (info.kind === "repo" && info.repo) {
+  if (info.kind === "repo" && info.repo && !bits.showMedia) {
     const [owner, name] = info.repo.split("/");
     const about = dek ?? title;
     const path = (
@@ -754,12 +755,6 @@ function GithubCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
     );
     return (
       <article {...bits.cardProps} className="d-card d-gh group">
-        {/* A working saved cover stays, above GitHub's own repository header. */}
-        {bits.showMedia && (
-          <div className="d-gh-cover">
-            <Img dump={dump} bits={bits} className="d-gh-cover-img" />
-          </div>
-        )}
         <div className="d-body">
           <h3 className="d-gh-path">
             <RepoGlyph />

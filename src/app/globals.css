@@ -3820,16 +3820,6 @@ body.d-dragging * {
 .d-rail:has(> .d-phone-actions) {
   min-height: 44px;
 }
-.d-gh-cover {
-  background: var(--hairline);
-}
-.d-gh-cover-img {
-  display: block;
-  width: 100%;
-  height: auto;
-  max-height: 22rem;
-  object-fit: cover;
-}
 .d-rail:has(> .d-phone-actions) {
   margin-top: 0.25rem;
 }

@@ -359,19 +359,21 @@ it("draws X, GitHub and Reddit with their own anatomy and no engagement or date 
   expect(x).not.toContain('class="d-post-headline"');
 
   const repo = card({ ...link, kind: "link", provider: "github", url: "https://github.com/emilkowalski/skills", domain: "github.com", title: "GitHub - emilkowalski/skills: Design engineering, interaction and motion.", description: "Design engineering, interaction and motion.", imageUrl: "https://opengraph.githubassets.com/1/emilkowalski/skills", imageUrls: [] });
-  expect(repo).toContain('class="d-gh-repo"');
-  expect(repo).toContain("emilkowalski / <strong>skills</strong>");
-  expect(repo).toContain('<p class="d-gh-about" dir="auto">Design engineering, interaction and motion.</p>');
-  // A working saved cover stays, above the repository header.
-  expect(repo.indexOf("opengraph.githubassets.com")).toBeGreaterThan(-1);
-  expect(repo.indexOf("opengraph.githubassets.com")).toBeLessThan(repo.indexOf('class="d-gh-path"'));
-  expect(card({ ...link, kind: "link", provider: "github", url: "https://github.com/acme/tidepool", domain: "github.com", title: "acme/tidepool", imageUrl: null })).not.toContain("d-gh-cover");
+  // A working saved cover is the whole card, like other media.
+  expect(repo).toContain("opengraph.githubassets.com");
+  expect(repo).toContain("d-mediacard");
+  expect(repo).not.toContain('class="d-gh-path"');
+  // Without one, the repository reads as GitHub's own header.
+  const bare = card({ ...link, kind: "link", provider: "github", url: "https://github.com/emilkowalski/skills", domain: "github.com", title: "GitHub - emilkowalski/skills: Design engineering, interaction and motion.", description: "Design engineering, interaction and motion.", imageUrl: null, imageUrls: [] });
+  expect(bare).toContain('class="d-gh-repo"');
+  expect(bare).toContain("emilkowalski / <strong>skills</strong>");
+  expect(bare).toContain('<p class="d-gh-about" dir="auto">Design engineering, interaction and motion.</p>');
 
   const thread = card({ ...link, kind: "post", provider: "reddit", url: "https://www.reddit.com/r/Design/comments/1/x/", domain: "reddit.com", title: "What’s one thing you stopped keeping on your desk?", author: "u/deskless", description: "I’m clearing mine down." });
   expect(thread).toContain("r/Design");
   expect(thread).toContain("What’s one thing you stopped keeping on your desk?");
   expect(thread).not.toContain("u/deskless");
-  for (const html of [x, repo, thread]) expect(html).not.toContain("<time");
+  for (const html of [x, repo, bare, thread]) expect(html).not.toContain("<time");
 });
 
 it("gives an inline player a rail of its own so the actions never cover its controls", () => {
