@@ -3,6 +3,7 @@ import { deleteDump, getDump, topPosition, topicExists, updateDump } from "@/lib
 import { enrichDump, noteTitle } from "@/lib/enrich";
 import { fileStorage, storedFileName } from "@/lib/storage";
 import { isArchiving, removeArchiveFiles } from "@/lib/archive";
+import { removeStoredThumbs } from "@/lib/thumbs";
 import { cancelVideoCopy, markVideoMissing, reconcileVideoCopy, saveVideoCopy } from "@/lib/video-archive";
 
 export const runtime = "nodejs";
@@ -78,5 +79,6 @@ export async function DELETE(_req: NextRequest, { params }: Ctx) {
     const name = storedFileName(url);
     if (name) await fileStorage.remove(name);
   }
+  await removeStoredThumbs(dump.id);
   return new NextResponse(null, { status: 204 });
 }

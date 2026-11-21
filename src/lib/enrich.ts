@@ -1,6 +1,7 @@
 import { classifyHeuristic } from "./classify";
 import { commitEnrichment, getDump, listResortable, listTopics, type Dump } from "./db";
 import { extractUrl } from "./extract";
+import { isExpiringUrl, isStoredThumb, removeStoredThumb, storeRemoteImage } from "./thumbs";
 import { archiveDump } from "./archive";
 import { renderXPostImage } from "./x-render";
 import { providerFromUrl, titleFromUrl } from "./detect";
@@ -99,6 +100,7 @@ async function runEnrich(id: string): Promise<Dump | null> {
   try {
     let fields: Partial<Dump> = {};
     let unreachable = false;
+    let newThumb: string | null = null;
     if (dump.url) {
       const ex = await extractUrl(dump.url);
       unreachable = ex.unreachable;
@@ -162,6 +164,18 @@ async function runEnrich(id: string): Promise<Dump | null> {
         }
         fields.sourceState = dump.sourceState === "unavailable" ? "unavailable" : "unreachable";
       }
+      // Signed CDN thumbnails (TikTok's x-expires, Instagram's oe=) die within days, so keep a copy.
+      // An unreachable fetch kept the saved image out of `fields`, but a signed one still needs its copy.
+      const lead = fields.imageUrl ?? (unreachable ? dump.imageUrl : null);
+      if (isExpiringUrl(lead)) {
+        newThumb = await storeRemoteImage(id, lead!).catch(() => null);
+        const stored = newThumb ?? (isStoredThumb(id, dump.imageUrl) ? dump.imageUrl : null);
+        if (stored) {
+          const gallery = fields.imageUrls ?? dump.imageUrls ?? [];
+          fields.imageUrl = stored;
+          fields.imageUrls = [stored, ...gallery.filter((u) => u !== lead && u !== stored)];
+        }
+      }
       // The native-look render is a snapshot: a failed render keeps any older
       // one. Posts with media show the media itself, so the render is only
       // worth generating for text-only posts.
@@ -172,7 +186,11 @@ async function runEnrich(id: string): Promise<Dump | null> {
     }
     // A re-check that reached nothing has no new data to file by: a dump that was already
     // filed keeps its topic.
-    if (unreachable && dump.classifiedBy) return commitEnrichment(id, { ...fields, status: "failed" }, dump);
+    if (unreachable && dump.classifiedBy) {
+      const kept = commitEnrichment(id, { ...fields, status: "failed" }, dump);
+      if (!kept && newThumb) await removeStoredThumb(newThumb);
+      return kept;
+    }
     const merged = { ...dump, ...fields };
 
     // Clips/images get a second pass to name what they're about, before the topic is decided,
@@ -192,7 +210,10 @@ async function runEnrich(id: string): Promise<Dump | null> {
 
     const classification = await classify(forClassifying, merged.kind === "image");
     // Couldn't reach the site at all: keep the fallback topic but mark it failed so it can be retried.
-    return commitEnrichment(id, { ...fields, ...classification, status: unreachable ? "failed" : "ready" }, dump);
+    const saved = commitEnrichment(id, { ...fields, ...classification, status: unreachable ? "failed" : "ready" }, dump);
+    // Deleted mid-run: the delete's cleanup has already run, so drop the copy written after it.
+    if (!saved && newThumb) await removeStoredThumb(newThumb);
+    return saved;
   } catch (err) {
     console.warn(`[dump] enrich failed for ${id}:`, (err as Error).message);
     const rules = classifyHeuristic({ ...dump, title: dump.title ?? (dump.url ? titleFromUrl(dump.url) : null) });

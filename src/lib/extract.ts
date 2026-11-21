@@ -241,11 +241,57 @@ interface PageMeta {
   imageUrls: string[];
   siteName: string | null;
   author: string | null;
+  authorHandle?: string | null;
   ogType: string | null;
   hasArticleMeta: boolean;
 }
 
+interface TikTokItem {
+  desc?: string;
+  author?: { uniqueId?: string; nickname?: string } | string;
+  video?: { cover?: string; originCover?: string; dynamicCover?: string };
+  imagePost?: { cover?: { imageURL?: { urlList?: string[] } } };
+}
+
+/**
+ * TikTok pages carry no og tags for bots; the post lives in the hydration JSON instead
+ * (`__UNIVERSAL_DATA_FOR_REHYDRATION__`, or `SIGI_STATE` on older builds).
+ */
+export function parseTikTokItem(html: string): { caption: string | null; author: string | null; handle: string | null; cover: string | null } | null {
+  const $ = cheerio.load(html);
+  let item: TikTokItem | undefined;
+  let handle: string | null = null;
+  let nickname: string | null = null;
+  try {
+    const universal = $("script#__UNIVERSAL_DATA_FOR_REHYDRATION__").text();
+    if (universal) {
+      item = JSON.parse(universal)?.__DEFAULT_SCOPE__?.["webapp.video-detail"]?.itemInfo?.itemStruct;
+    } else {
+      const sigi = $("script#SIGI_STATE").text();
+      if (sigi) {
+        const state = JSON.parse(sigi);
+        item = Object.values(state?.ItemModule ?? {})[0] as TikTokItem | undefined;
+        const user = typeof item?.author === "string" ? state?.UserModule?.users?.[item.author] : null;
+        if (user) nickname = user.nickname ?? null;
+      }
+    }
+  } catch {
+    return null;
+  }
+  if (!item || typeof item !== "object") return null;
+  if (typeof item.author === "string") handle = item.author;
+  else if (item.author) {
+    handle = item.author.uniqueId ?? null;
+    nickname = item.author.nickname ?? null;
+  }
+  const cover = item.video?.originCover || item.video?.cover || item.imagePost?.cover?.imageURL?.urlList?.[0] || null;
+  const caption = item.desc?.trim() || null;
+  if (!caption && !cover && !handle) return null;
+  return { caption, author: nickname?.trim() || handle, handle, cover };
+}
+
 export function parseHtml(html: string, baseUrl: string): PageMeta {
+  const tiktok = /(^|\.)tiktok\.com$/.test(domainOf(baseUrl) ?? "") ? parseTikTokItem(html) : null;
   const $ = cheerio.load(html);
   const meta = (...names: string[]) => {
     for (const n of names) {
@@ -289,16 +335,20 @@ export function parseHtml(html: string, baseUrl: string): PageMeta {
     ),
   ].slice(0, 8);
 
+  if (tiktok?.cover && !imageUrls.length) imageUrls.push(tiktok.cover);
+
   const ogType = meta("og:type");
   return {
-    title: meta("og:title", "twitter:title") ?? ($("title").first().text().trim() || null),
-    description: meta("og:description", "twitter:description", "description"),
+    // TikTok's <title> is the generic "TikTok - Make Your Day"; the caption is the post's title.
+    title: tiktok?.caption ?? meta("og:title", "twitter:title") ?? ($("title").first().text().trim() || null),
+    description: tiktok?.caption ?? meta("og:description", "twitter:description", "description"),
     content: content || null,
     imageUrl: imageUrls[0] ?? null,
     imageUrls,
-    siteName: meta("og:site_name", "application-name"),
-    author: meta("author", "article:author", "twitter:creator"),
-    ogType: ogType ?? jsonLdType,
+    siteName: meta("og:site_name", "application-name") ?? (tiktok ? "TikTok" : null),
+    author: tiktok?.author ?? meta("author", "article:author", "twitter:creator"),
+    authorHandle: tiktok?.handle ?? null,
+    ogType: ogType ?? (tiktok ? "video" : jsonLdType),
     hasArticleMeta:
       !!meta("article:published_time", "article:author") ||
       /Article|BlogPosting|NewsArticle|Recipe/i.test(jsonLdType ?? ""),
@@ -393,6 +443,7 @@ export async function extractUrl(url: string): Promise<Extracted> {
     videoType: null,
     siteName: page?.siteName ?? oembed?.provider_name ?? host,
     author: oembed?.author_name ?? page?.author ?? null,
+    authorHandle: page?.authorHandle ?? null,
     unreachable: !reached,
     gone: pageGone,
   };

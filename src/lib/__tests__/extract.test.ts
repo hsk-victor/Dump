@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseHtml, isPrivateIp, isGoneStatus, isTransientStatus } from "../extract";
+import { parseHtml, parseTikTokItem, isPrivateIp, isGoneStatus, isTransientStatus } from "../extract";
 
 describe("parseHtml", () => {
   it("reads Open Graph metadata and resolves relative images", () => {
@@ -37,6 +37,55 @@ describe("isPrivateIp", () => {
   it.each(["8.8.8.8", "1.1.1.1", "2606:4700:4700::1111", "::ffff:8.8.8.8", "::ffff:808:808"])("allows %s", (ip) =>
     expect(isPrivateIp(ip)).toBe(false),
   );
+});
+
+describe("TikTok pages", () => {
+  const signed = "https://p19-common-sign.tiktokcdn-us.com/cover~tplv-tiktokx-origin.image?x-expires=1795240800&x-signature=abc";
+  const universal = (itemStruct: unknown) =>
+    `<html><head><title>TikTok - Make Your Day</title></head><body><script id="__UNIVERSAL_DATA_FOR_REHYDRATION__" type="application/json">${JSON.stringify({
+      __DEFAULT_SCOPE__: { "webapp.video-detail": { itemInfo: { itemStruct } } },
+    })}</script></body></html>`;
+
+  it("reads the caption, author and cover from the hydration JSON", () => {
+    const html = universal({
+      desc: "Scramble up ur name & I’ll try to guess it😍❤️ #foryoupage",
+      author: { uniqueId: "scout2015", nickname: "Scout, Suki & Stella" },
+      video: { cover: "https://cdn.example/cover.jpg", originCover: signed },
+    });
+    expect(parseHtml(html, "https://www.tiktok.com/@scout2015/video/6718335390845095173")).toMatchObject({
+      title: "Scramble up ur name & I’ll try to guess it😍❤️ #foryoupage",
+      description: "Scramble up ur name & I’ll try to guess it😍❤️ #foryoupage",
+      author: "Scout, Suki & Stella",
+      authorHandle: "scout2015",
+      imageUrl: signed,
+      imageUrls: [signed],
+      siteName: "TikTok",
+      ogType: "video",
+    });
+  });
+
+  it("reads older SIGI_STATE pages", () => {
+    const state = {
+      ItemModule: { "1": { desc: "Old caption", author: "olduser", video: { cover: signed } } },
+      UserModule: { users: { olduser: { nickname: "Old User" } } },
+    };
+    const html = `<script id="SIGI_STATE" type="application/json">${JSON.stringify(state)}</script>`;
+    expect(parseTikTokItem(html)).toEqual({ caption: "Old caption", author: "Old User", handle: "olduser", cover: signed });
+  });
+
+  it("falls back to the handle and keeps og tags when the page has them", () => {
+    const html = universal({ desc: "", author: { uniqueId: "someone" } }).replace(
+      "<head>",
+      `<head><meta property="og:image" content="https://cdn.example/og.jpg">`,
+    );
+    expect(parseHtml(html, "https://www.tiktok.com/@someone/video/1")).toMatchObject({ title: "TikTok - Make Your Day", author: "someone", imageUrl: "https://cdn.example/og.jpg" });
+  });
+
+  it("ignores malformed hydration data and non-TikTok hosts", () => {
+    expect(parseTikTokItem(`<script id="__UNIVERSAL_DATA_FOR_REHYDRATION__">{not json</script>`)).toBeNull();
+    const html = universal({ desc: "Caption", author: { uniqueId: "u" } });
+    expect(parseHtml(html, "https://example.com/page")).toMatchObject({ title: "TikTok - Make Your Day", author: null });
+  });
 });
 
 describe("isGoneStatus", () => {

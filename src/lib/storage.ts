@@ -11,9 +11,11 @@ interface FileStorage {
   stat(name: string): Promise<{ size: number }>;
   openReadStream(name: string, range?: { start: number; end: number }): Promise<ReadableStream<Uint8Array>>;
   remove(name: string): Promise<void>;
+  /** Names of stored files starting with `prefix`. */
+  list(prefix: string): Promise<string[]>;
 }
 
-const UPLOAD_DIR = path.join(DATA_DIR, "uploads");
+export const UPLOAD_DIR = path.join(DATA_DIR, "uploads");
 const FILE_URL_PREFIX = "/api/files/";
 
 function isFileName(name: string): boolean {
@@ -59,5 +61,9 @@ export const fileStorage: FileStorage = {
   },
   async remove(name) {
     await fs.rm(localPath(name), { force: true });
+  },
+  async list(prefix) {
+    const names = await fs.readdir(UPLOAD_DIR).catch(() => [] as string[]);
+    return names.filter((n) => n.startsWith(prefix) && isFileName(n) && !n.endsWith(".tmp"));
   },
 };
