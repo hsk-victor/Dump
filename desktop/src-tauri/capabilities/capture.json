@@ -1,0 +1,9 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "capture",
+  "description": "Only quick capture app commands on the authenticated local server.",
+  "local": false,
+  "windows": ["capture"],
+  "remote": { "urls": ["http://127.0.0.1:*/*"] },
+  "permissions": ["allow-capture-hide", "allow-capture-resize", "allow-capture-saved", "allow-capture-writing", "allow-capture-attention", "allow-capture-recents"]
+}

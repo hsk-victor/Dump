@@ -6,6 +6,14 @@
 mod updater;
 #[cfg(windows)]
 mod window_bounds;
+#[cfg(windows)]
+mod capture_window;
+#[cfg(windows)]
+mod tray;
+#[cfg(windows)]
+mod lifecycle;
+#[cfg(windows)]
+mod shortcut_settings;
 
 use std::fs::{self, File};
 use std::net::{SocketAddr, TcpListener, TcpStream};
@@ -151,6 +159,15 @@ fn start(app: &AppHandle, port: u16) -> Result<(), Box<dyn std::error::Error>> {
                 let url = Url::parse(&format!("http://127.0.0.1:{port}/?dump_token={token}")).unwrap();
                 let _ = window.navigate(url);
             }
+            #[cfg(windows)]
+            {
+                let app = handle.clone();
+                let _ = handle.run_on_main_thread(move || {
+                    if let Err(error) = capture_window::create(&app, port, &token) {
+                        eprintln!("Couldn't create quick capture: {error}");
+                    }
+                });
+            }
         } else {
             let log = log_dir.join("server.log");
             show_error(
@@ -169,15 +186,19 @@ fn stop_server(app: &AppHandle) {
     }
 }
 
+fn open_library(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.unminimize();
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+}
+
 fn main() {
     let builder = tauri::Builder::default()
         // A second launch focuses the running window instead of starting another server on the same library.
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            if let Some(window) = app.get_webview_window("main") {
-                let _ = window.unminimize();
-                let _ = window.show();
-                let _ = window.set_focus();
-            }
+            open_library(app);
         }))
         .plugin(
             tauri_plugin_opener::Builder::new()
@@ -186,7 +207,22 @@ fn main() {
         )
         .manage(Server(Mutex::new(None)));
     #[cfg(windows)]
-    let builder = builder.manage(window_bounds::WindowBounds::default());
+    let builder = builder
+        .manage(window_bounds::WindowBounds::default())
+        .manage(capture_window::Capture::default())
+        .manage(tray::Tray::default())
+        .manage(lifecycle::Lifecycle::default())
+        .plugin(dump_desktop::capture_native::shortcut_plugin(capture_window::open))
+        .invoke_handler(tauri::generate_handler![
+            capture_window::capture_hide,
+            capture_window::capture_resize,
+            capture_window::capture_saved,
+            capture_window::capture_writing,
+            capture_window::capture_attention,
+            tray::capture_recents,
+            shortcut_settings::shortcut_settings,
+            shortcut_settings::set_capture_shortcut,
+        ]);
     #[cfg(windows)]
     let builder = builder.manage(updater::PendingUpdate::default());
     builder
@@ -220,6 +256,14 @@ fn main() {
                     .build()?;
             #[cfg(windows)]
             window_bounds::restore(&window);
+            #[cfg(windows)]
+            shortcut_settings::load(app.handle());
+            #[cfg(windows)]
+            if let Err(error) = tray::create(app.handle()) {
+                eprintln!("Couldn't create the tray: {error}");
+            }
+            #[cfg(windows)]
+            lifecycle::install(&window);
             #[cfg(not(windows))]
             drop(window);
             if let Err(e) = start(app.handle(), port) {

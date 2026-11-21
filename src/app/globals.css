@@ -195,6 +195,26 @@ button {
   font-weight: 550;
   color: var(--ink-2);
 }
+.d-shortcut-setting {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  width: min(18rem, calc(100vw - 64px));
+  max-width: 100%;
+}
+.d-shortcut-setting form {
+  display: flex;
+  gap: 0.4rem;
+}
+.d-shortcut-setting input {
+  flex: 1;
+  min-width: 0;
+  width: 0;
+}
+.d-shortcut-setting p {
+  font-size: 0.75rem;
+  color: var(--ink-2);
+}
 .d-seg {
   display: flex;
   gap: 2px;
@@ -476,6 +496,11 @@ button {
 }
 /* Each card sits at its packed slot via translate3d; whenever the pack changes
    the transform transition carries it there — that's the FLIP. */
+.d-item:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 3px;
+  border-radius: 18px;
+}
 .d-item {
   position: absolute;
   top: 0;

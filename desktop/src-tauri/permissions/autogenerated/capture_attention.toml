@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-capture-attention"
+description = "Enables the capture_attention command without any pre-configured scope."
+commands.allow = ["capture_attention"]
+
+[[permission]]
+identifier = "deny-capture-attention"
+description = "Denies the capture_attention command without any pre-configured scope."
+commands.deny = ["capture_attention"]

@@ -7,6 +7,7 @@ import { TOPICS, TOPIC_CRITERIA } from "./taxonomy";
 import { providerFromUrl } from "./detect";
 import { DATA_DIR } from "./data-dir";
 import { canonicalUrl } from "./canonical-url";
+import type { RecentSource } from "./recents";
 
 export type Status = "processing" | "ready" | "failed";
 /** What the last fetch learned about the original: "unavailable" only on a definitive 404/410,
@@ -544,6 +545,12 @@ export function listDumps({ q, kind, topic, limit = 200, offset = 0 }: ListOptio
            ORDER BY d.pinned DESC, d.position DESC, d.created_at DESC, d.id LIMIT @limit OFFSET @offset`;
   }
   return (db().prepare(sql).all(params) as Row[]).map(toDump);
+}
+
+export function listRecentDumps(): RecentSource[] {
+  return db().prepare(`SELECT id, kind, CASE WHEN kind = 'note' THEN NULL ELSE title END AS title,
+    json_extract(attachment, '$.name') AS filename, domain
+    FROM dumps ORDER BY created_at DESC, id LIMIT 3`).all() as RecentSource[];
 }
 
 /** Dumps whose topic can be re-decided: not filed by hand and not mid-enrichment. */

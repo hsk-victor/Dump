@@ -1,0 +1,28 @@
+.qc-panel { width: 100%; min-height: 164px; padding: 16px; border: 1px solid var(--hairline); border-radius: 18px; background: var(--surface); box-shadow: var(--dock-shadow); color: var(--ink); }
+.qc-panel header, .qc-panel h1, .qc-panel footer { display: flex; align-items: center; }
+.qc-panel header { justify-content: space-between; margin-bottom: 12px; }
+.qc-panel h1 { gap: 6px; font-size: 14px; font-weight: 750; letter-spacing: -.04em; }
+.qc-panel button { cursor: pointer; }
+.qc-panel button:disabled { cursor: default; }
+.qc-panel button:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; transition: none; }
+.qc-esc { border: 1px solid var(--hairline); border-radius: 6px; padding: 3px 6px; color: var(--ink-2); font-size: 11px; }
+.qc-editor { padding: 10px 12px; border: 2px solid var(--hairline); border-radius: 10px; background: var(--bg); transition: none; }
+.qc-editor:focus-within { outline: 2px solid var(--ink); outline-offset: 2px; }
+.qc-editor textarea { display: block; width: 100%; resize: none; outline: none; font: inherit; font-size: 14px; line-height: 24px; background: transparent; color: var(--ink); }
+.qc-editor textarea::placeholder { color: var(--ink-2); opacity: 1; }
+.qc-panel footer { gap: 9px; margin-top: 12px; }
+.qc-attach { width: 34px; height: 34px; flex-shrink: 0; border: 1px solid var(--hairline); border-radius: 9px; font-size: 23px; line-height: 1; background: var(--bg); }
+.qc-helper { flex: 1; min-width: 0; color: var(--ink-2); font-size: 11px; line-height: 17px; }
+.qc-submit { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 10px; background: var(--ink); color: var(--surface); font-size: 13px; font-weight: 700; flex-shrink: 0; }
+.qc-submit:disabled { background: var(--hairline); color: var(--ink-2); }
+.qc-submit kbd { border: 1px solid currentColor; border-radius: 4px; padding: 0 3px; font-size: 14px; line-height: 20px; opacity: .7; }
+.qc-attachment { display: flex; gap: 10px; align-items: center; margin-top: 10px; padding: 6px; background: var(--bg); border: 1px solid var(--hairline); border-radius: 10px; }
+.qc-attachment img, .qc-file { width: 36px; height: 36px; object-fit: cover; border-radius: 6px; }
+.qc-file { display: grid; place-items: center; font-size: 26px; }
+.qc-attachment > div { flex: 1; min-width: 0; }
+.qc-attachment strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.qc-attachment small { display: block; font-size: 10px; color: var(--ink-2); }
+.qc-attachment button { width: 26px; height: 26px; border-radius: 6px; background: var(--hairline); color: var(--ink-2); }
+.qc-panel[data-dragging] { outline: 2px solid var(--ink); outline-offset: -3px; }
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) { .qc-submit { transition: transform 160ms ease-out; } .qc-submit[data-pressed]:not(:disabled) { transform: scale(.97); } }
+@media (forced-colors: active) { .qc-panel, .qc-editor, .qc-attachment, .qc-panel button { border: 1px solid CanvasText; } .qc-panel[data-dragging], .qc-editor:focus-within, .qc-panel button:focus-visible { outline-color: Highlight; } }

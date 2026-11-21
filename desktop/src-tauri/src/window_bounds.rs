@@ -112,7 +112,7 @@ fn fit(
     (size, PhysicalPosition::new(area.x + dx, area.y + dy))
 }
 
-fn remember(window: &WebviewWindow) {
+pub(crate) fn remember(window: &WebviewWindow) {
     let Ok(hwnd) = window.hwnd() else { return };
     let raw = hwnd.0.cast();
     if unsafe { IsWindowVisible(raw) == 0 || IsIconic(raw) != 0 } {
