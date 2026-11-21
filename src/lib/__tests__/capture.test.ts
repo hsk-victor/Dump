@@ -30,6 +30,14 @@ describe("drop selection", () => {
     expect(selectDrop(data([file], "https://example.com"))).toEqual({ file, text: "" });
     expect(selectDrop(data([], "https://fallback.com", "https://example.com"))).toEqual({ text: "https://example.com/", file: null });
   });
+  it("rejects browser-local URLs without extracting their embedded HTTP origin", () => {
+    for (const value of ["blob:https://example.com/uuid", "BLOB:https://example.com/uuid", "filesystem:https://example.com/temporary/file", "view-source:https://example.com/", "about:blank#https://example.com/", "data:text/plain,https://example.com/"]) {
+      expect(extractDropUrl(value)).toBeNull();
+      expect(selectDrop(data([], value))).toEqual({ error: "Drop one HTTP or HTTPS link, image or file." });
+      expect(selectDrop(data([], "https://fallback.com", value))).toHaveProperty("error");
+    }
+    expect(extractDropUrl("Title: https://example.com/path")).toBe("https://example.com/path");
+  });
   it("rejects multiple items, folders, invalid text and oversize files", () => {
     expect(selectDrop(data([new File([], "a"), new File([], "b")]))).toHaveProperty("error");
     expect(selectDrop(data([], "", "", [{ kind: "file", webkitGetAsEntry: () => ({ isDirectory: true }) }]))).toHaveProperty("error");

@@ -10,11 +10,11 @@ export function submitsEditor(event: { key: string; shiftKey: boolean; isComposi
 
 export function extractDropUrl(value: string): string | null {
   const lines = value.split(/\r?\n/).filter((line) => !line.trim().startsWith("#")).join(" ");
-  const matches = lines.match(/https?:\/\/[^\s<>"']+/gi) ?? [];
+  const matches = lines.match(/[a-z][a-z0-9+.-]*:[^\s<>"']+/gi) ?? [];
   if (matches.length !== 1) return null;
   try {
     const url = new URL(matches[0]);
-    return url.hostname ? url.href : null;
+    return (url.protocol === "http:" || url.protocol === "https:") && url.hostname ? url.href : null;
   } catch { return null; }
 }
 
