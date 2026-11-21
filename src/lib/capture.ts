@@ -1,5 +1,9 @@
 export interface CaptureDraft { text: string; file: File | null }
 
+export function captureHelper(dragging: boolean, warning: string, message: string) {
+  return warning || (dragging ? "Drop to dump" : message || "Drop a link, image or file");
+}
+
 export function canSubmit(draft: CaptureDraft, writing: boolean) {
   return !writing && Boolean(draft.text.trim() || draft.file);
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canSubmit, dragOverError, extractDropUrl, fileError, selectDrop, submitsEditor } from "../capture";
+import { canSubmit, captureHelper, dragOverError, extractDropUrl, fileError, selectDrop, submitsEditor } from "../capture";
 
 describe("capture submit gating", () => {
   it("requires content and locks writes", () => {
@@ -15,6 +15,16 @@ describe("capture submit gating", () => {
     expect(submitsEditor({ ...key, isComposing: true })).toBe(false);
     expect(submitsEditor({ ...key, keyCode: 229 })).toBe(false);
     expect(submitsEditor({ ...key, key: "a" })).toBe(false);
+  });
+});
+
+describe("capture helper", () => {
+  it("restores the default helper or prior save error after a transient drag ends", () => {
+    expect(captureHelper(false, "", "")).toBe("Drop a link, image or file");
+    expect(captureHelper(true, "", "Save failed")).toBe("Drop to dump");
+    expect(captureHelper(false, "Dump one item at a time.", "Save failed")).toBe("Dump one item at a time.");
+    expect(captureHelper(false, "", "Save failed")).toBe("Save failed");
+    expect(captureHelper(false, "", "Dump one item at a time.")).toBe("Dump one item at a time.");
   });
 });
 

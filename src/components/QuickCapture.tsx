@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Logo from "./Logo";
-import { canSubmit, dragOverError, fileError, selectDrop, submitsEditor, type CaptureDraft } from "@/lib/capture";
+import { canSubmit, captureHelper, dragOverError, fileError, selectDrop, submitsEditor, type CaptureDraft } from "@/lib/capture";
 import { captureNative, type ClipboardPayload } from "@/lib/capture-native";
 import "./quick-capture.css";
 
@@ -15,17 +15,25 @@ export default function QuickCapture() {
   const [delayed, setDelayed] = useState(false);
   const [message, setMessage] = useState("");
   const [dragging, setDragging] = useState(false);
+  const [dragWarning, setDragWarning] = useState("");
   const [preview, setPreview] = useState<string | null>(null);
   const draftRef = useRef(draft);
   const locked = useRef(false);
   const editor = useRef<HTMLTextAreaElement>(null);
   const picker = useRef<HTMLInputElement>(null);
   const panel = useRef<HTMLElement>(null);
+  const dragDepth = useRef(0);
   draftRef.current = draft;
 
   function dismiss() {
     if (!locked.current) { setDraft(empty); setMessage(""); }
     void captureNative.hide().catch(ignoreNativeError);
+  }
+
+  function clearDrag() {
+    dragDepth.current = 0;
+    setDragging(false);
+    setDragWarning("");
   }
 
   async function save(value: CaptureDraft, separate = false, clipboard = false) {
@@ -128,20 +136,27 @@ export default function QuickCapture() {
     const unlisten = captureNative.listen({ focus, open: focus, clipboard });
     const key = (event: KeyboardEvent) => { if (event.key === "Escape" && !event.isComposing && event.keyCode !== 229) { event.preventDefault(); dismiss(); } };
     window.addEventListener("keydown", key);
-    return () => { unlisten(); window.removeEventListener("keydown", key); };
+    window.addEventListener("dragend", clearDrag);
+    return () => { unlisten(); window.removeEventListener("keydown", key); window.removeEventListener("dragend", clearDrag); };
   }, []);
 
   return <main ref={panel} className="qc-panel" data-dragging={dragging || undefined}
+    onDragEnter={() => { dragDepth.current++; }}
     onDragOver={(event) => {
       event.preventDefault();
       const error = dragOverError(event.dataTransfer);
       event.dataTransfer.dropEffect = error ? "none" : "copy";
       setDragging(!error);
-      if (error) setMessage(error);
+      setDragWarning(error || "");
     }}
-    onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragging(false); }}
+    onDragLeave={(event) => {
+      dragDepth.current = Math.max(0, dragDepth.current - 1);
+      if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) return;
+      if (!dragDepth.current || event.relatedTarget) clearDrag();
+    }}
+    onDragEnd={clearDrag}
     onDrop={(event) => {
-      event.preventDefault(); setDragging(false);
+      event.preventDefault(); clearDrag();
       if (locked.current) { setMessage("A save is in progress. Drop again when it finishes."); return; }
       const value = selectDrop(event.dataTransfer);
       if ("error" in value) setMessage(value.error); else void save(value, true);
@@ -160,7 +175,7 @@ export default function QuickCapture() {
       <button type="button" disabled={writing} onClick={() => setDraft((value) => ({ ...value, file: null }))} aria-label="Remove attachment">×</button>
     </div>}
     <footer><button type="button" className="qc-attach" disabled={writing} onClick={() => picker.current?.click()} aria-label={draft.file ? "Replace attachment" : "Attach a file"} title={draft.file ? "Replace attachment" : "Attach a file"}>+</button>
-      <span className="qc-helper" aria-live="polite">{dragging ? "Drop to dump" : message || "Drop a link, image or file"}</span>
+      <span className="qc-helper" aria-live="polite">{captureHelper(dragging, dragWarning, message)}</span>
       <button type="button" className="qc-submit" disabled={!canSubmit(draft, writing)} onPointerDown={(event) => { event.currentTarget.dataset.pressed = "true"; }} onPointerUp={(event) => { delete event.currentTarget.dataset.pressed; }} onPointerLeave={(event) => { delete event.currentTarget.dataset.pressed; }} onPointerCancel={(event) => { delete event.currentTarget.dataset.pressed; }} onClick={() => void save(draft)}><span aria-live="polite">{delayed ? "Dumping…" : "Dump"}</span><kbd aria-hidden>↵</kbd></button>
     </footer>
     <input ref={picker} type="file" hidden onChange={(event) => { if (event.target.files?.length) attach(Array.from(event.target.files)); event.target.value = ""; }} />
