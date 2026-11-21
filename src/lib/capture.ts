@@ -24,6 +24,16 @@ export function fileError(file: File): string | null {
   return null;
 }
 
+export function dragOverError(data: Pick<DataTransfer, "files" | "items" | "types">): string | null {
+  const files = Array.from(data.files);
+  const items = Array.from(data.items).filter((item) => item.kind === "file");
+  if (files.length > 1 || items.length > 1) return "Dump one item at a time.";
+  if (items.some((item) => item.webkitGetAsEntry?.()?.isDirectory || item.type === "inode/directory" || item.type === "application/x-directory")) return "Folders can’t be dumped. Choose a file instead.";
+  const file = files[0] ?? items[0]?.getAsFile?.();
+  if (file) return fileError(file);
+  return items.length || Array.from(data.types).some((type) => ["Files", "text/plain", "text/uri-list"].includes(type)) ? null : "Drop one HTTP or HTTPS link, image or file.";
+}
+
 export function selectDrop(data: Pick<DataTransfer, "files" | "items" | "getData">): CaptureDraft | { error: string } {
   const items = Array.from(data.items);
   if (items.some((item) => item.kind === "file" && item.webkitGetAsEntry?.()?.isDirectory)) return { error: "Folders can’t be dumped. Choose a file instead." };

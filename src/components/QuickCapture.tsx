@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Logo from "./Logo";
-import { canSubmit, fileError, selectDrop, submitsEditor, type CaptureDraft } from "@/lib/capture";
+import { canSubmit, dragOverError, fileError, selectDrop, submitsEditor, type CaptureDraft } from "@/lib/capture";
 import { captureNative, type ClipboardPayload } from "@/lib/capture-native";
 import "./quick-capture.css";
 
@@ -132,7 +132,13 @@ export default function QuickCapture() {
   }, []);
 
   return <main ref={panel} className="qc-panel" data-dragging={dragging || undefined}
-    onDragOver={(event) => { event.preventDefault(); setDragging(true); }}
+    onDragOver={(event) => {
+      event.preventDefault();
+      const error = dragOverError(event.dataTransfer);
+      event.dataTransfer.dropEffect = error ? "none" : "copy";
+      setDragging(!error);
+      if (error) setMessage(error);
+    }}
     onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragging(false); }}
     onDrop={(event) => {
       event.preventDefault(); setDragging(false);
