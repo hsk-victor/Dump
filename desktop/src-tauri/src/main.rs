@@ -4,6 +4,8 @@
 
 #[cfg(windows)]
 mod window_bounds;
+#[cfg(windows)]
+mod capture_window;
 
 use std::fs::{self, File};
 use std::net::{SocketAddr, TcpListener, TcpStream};
@@ -149,6 +151,15 @@ fn start(app: &AppHandle, port: u16) -> Result<(), Box<dyn std::error::Error>> {
                 let url = Url::parse(&format!("http://127.0.0.1:{port}/?dump_token={token}")).unwrap();
                 let _ = window.navigate(url);
             }
+            #[cfg(windows)]
+            {
+                let app = handle.clone();
+                let _ = handle.run_on_main_thread(move || {
+                    if let Err(error) = capture_window::create(&app, port, &token) {
+                        eprintln!("Couldn't create quick capture: {error}");
+                    }
+                });
+            }
         } else {
             let log = log_dir.join("server.log");
             show_error(
@@ -184,7 +195,16 @@ fn main() {
         )
         .manage(Server(Mutex::new(None)));
     #[cfg(windows)]
-    let builder = builder.manage(window_bounds::WindowBounds::default());
+    let builder = builder
+        .manage(window_bounds::WindowBounds::default())
+        .manage(capture_window::Capture::default())
+        .plugin(dump_desktop::capture_native::shortcut_plugin(capture_window::open))
+        .invoke_handler(tauri::generate_handler![
+            capture_window::capture_hide,
+            capture_window::capture_resize,
+            capture_window::capture_saved,
+            capture_window::capture_writing,
+        ]);
     builder
         .setup(|app| {
             let port = pick_port();

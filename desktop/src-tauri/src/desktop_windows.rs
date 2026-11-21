@@ -18,7 +18,7 @@ pub struct WorkArea {
     pub scale: f64,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct ForegroundWindow(isize);
 
 impl ForegroundWindow {
