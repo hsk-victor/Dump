@@ -82,6 +82,13 @@ pub fn create(app: &AppHandle, port: u16, token: &str) -> tauri::Result<()> {
         })
         .on_new_window(|_, _| NewWindowResponse::Deny)
         .build()?;
+    let capture = window.clone();
+    window.on_window_event(move |event| {
+        if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+            api.prevent_close();
+            let _ = capture_hide(capture.clone());
+        }
+    });
     if let Ok(hwnd) = window.hwnd() {
         unsafe {
             let raw = hwnd.0.cast();
