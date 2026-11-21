@@ -363,6 +363,8 @@ it("draws X, GitHub and Reddit with their own anatomy and no engagement or date 
   expect(repo).toContain("opengraph.githubassets.com");
   expect(repo).toContain("d-mediacard");
   expect(repo).not.toContain('class="d-gh-path"');
+  // The cover's link still names the repository and its description for screen readers.
+  expect(repo).toContain('aria-label="emilkowalski/skills, Design engineering, interaction and motion."');
   // Without one, the repository reads as GitHub's own header.
   const bare = card({ ...link, kind: "link", provider: "github", url: "https://github.com/emilkowalski/skills", domain: "github.com", title: "GitHub - emilkowalski/skills: Design engineering, interaction and motion.", description: "Design engineering, interaction and motion.", imageUrl: null, imageUrls: [] });
   expect(bare).toContain('class="d-gh-repo"');

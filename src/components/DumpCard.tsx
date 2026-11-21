@@ -783,7 +783,7 @@ function GithubCard({ dump, bits }: { dump: Dump; bits: CardBits }) {
       <article {...bits.cardProps} className="d-card d-mediacard d-ghcard group" data-open={bits.exposed || undefined}>
         {bits.pinBadge}
         <div className="d-mframe">
-          <a href={bits.href ?? undefined} target="_blank" rel="noreferrer" className="d-media" aria-label={label}>
+          <a href={bits.href ?? undefined} target="_blank" rel="noreferrer" className="d-media" aria-label={[label, panelDek].filter(Boolean).join(", ")}>
             <FadeImg dump={dump} bits={bits} alt={titled ? (title ?? "") : ""} />
             <MediaMark dump={dump} />
             {tag && <span className="d-gh-tag">{tagLabel}</span>}
