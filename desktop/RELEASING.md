@@ -21,10 +21,10 @@ public key**:
 Get-Content -Raw "$key.pub"
 ```
 
-Replace `REPLACE_WITH_VICTORS_TAURI_UPDATER_PUBLIC_KEY` in
-`desktop/src-tauri/tauri.release.conf.json` (`plugins.updater.pubkey`) with the single line from
-`dump-windows.key.pub`, without the trailing newline. Commit and push only that public-key change
-to PR #44. Keep using this key pair for subsequent releases: existing installs trust its public key.
+Victor’s public key is already configured in
+`desktop/src-tauri/tauri.release.conf.json` (`plugins.updater.pubkey`). Check that the single line
+from `dump-windows.key.pub` matches it before setting the repository secrets. Keep using this
+key pair for subsequent releases: existing installs trust its public key.
 
 In the same PowerShell session, use your GitHub account with permission to manage repository secrets:
 

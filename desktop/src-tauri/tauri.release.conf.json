@@ -1,7 +1,7 @@
 {
   "plugins": {
     "updater": {
-      "pubkey": "REPLACE_WITH_VICTORS_TAURI_UPDATER_PUBLIC_KEY",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDFEMzNCRjI4NTFEQjJGNTIKUldSU0w5dFJLTDh6SFpPMHk1cjEzZkxtRVVJK3R1WFJzeGUrYUZobGJGN1J3OU9GNFBWRlFlQ3QK",
       "endpoints": ["https://github.com/hsk-victor/Dump/releases/latest/download/latest.json"],
       "windows": { "installMode": "quiet" }
     }
