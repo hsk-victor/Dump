@@ -1,0 +1,135 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import Logo from "./Logo";
+import { canSubmit, fileError, selectDrop, submitsEditor, type CaptureDraft } from "@/lib/capture";
+import { captureNative, type ClipboardPayload } from "@/lib/capture-native";
+import "./quick-capture.css";
+
+const empty: CaptureDraft = { text: "", file: null };
+const ignoreNativeError = () => {};
+
+export default function QuickCapture() {
+  const [draft, setDraft] = useState<CaptureDraft>(empty);
+  const [writing, setWriting] = useState(false);
+  const [delayed, setDelayed] = useState(false);
+  const [message, setMessage] = useState("");
+  const [dragging, setDragging] = useState(false);
+  const [preview, setPreview] = useState<string | null>(null);
+  const draftRef = useRef(draft);
+  const locked = useRef(false);
+  const editor = useRef<HTMLTextAreaElement>(null);
+  const picker = useRef<HTMLInputElement>(null);
+  const panel = useRef<HTMLElement>(null);
+  draftRef.current = draft;
+
+  function dismiss() {
+    if (!locked.current) { setDraft(empty); setMessage(""); }
+    void captureNative.hide().catch(ignoreNativeError);
+  }
+
+  async function save(value: CaptureDraft, separate = false) {
+    if (!canSubmit(value, locked.current)) return;
+    const preserve = separate && canSubmit(draftRef.current, false);
+    locked.current = true;
+    setWriting(true);
+    setMessage("");
+    void captureNative.writing(true).catch(ignoreNativeError);
+    const timer = setTimeout(() => setDelayed(true), 300);
+    try {
+      const body = value.file ? new FormData() : JSON.stringify({ text: value.text.trim() });
+      if (body instanceof FormData) { body.append("file", value.file!); body.append("text", value.text.trim()); }
+      const response = await fetch("/api/dumps", { method: "POST", body, ...(!(body instanceof FormData) ? { headers: { "Content-Type": "application/json" } } : {}) });
+      if (!response.ok) throw new Error("Save failed");
+      void captureNative.saved().catch(ignoreNativeError);
+      if (preserve) setMessage("Saved to Dump");
+      else { setDraft(empty); void captureNative.hide().catch(ignoreNativeError); }
+    } catch {
+      if (preserve) setMessage("Couldn’t save the drop. Your draft is still here. Drop again to retry.");
+      else { setDraft(value); setMessage("Couldn’t save. Your draft is still here."); }
+    } finally {
+      clearTimeout(timer);
+      locked.current = false;
+      setWriting(false);
+      setDelayed(false);
+      void captureNative.writing(false).catch(ignoreNativeError);
+    }
+  }
+
+  function attach(files: File[]) {
+    if (locked.current) return;
+    if (files.length !== 1) { setMessage("Dump one file at a time."); return; }
+    const error = fileError(files[0]);
+    if (error) { setMessage(error); return; }
+    setDraft((value) => ({ ...value, file: files[0] }));
+    setMessage("");
+  }
+
+  useEffect(() => {
+    editor.current?.focus();
+    const resize = new ResizeObserver(() => { void captureNative.resize(Math.ceil(panel.current?.getBoundingClientRect().height ?? 164)).catch(ignoreNativeError); });
+    if (panel.current) resize.observe(panel.current);
+    return () => resize.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const input = editor.current;
+    if (input) { input.style.height = "0px"; input.style.height = `${Math.min(72, Math.max(24, input.scrollHeight))}px`; }
+  }, [draft.text]);
+
+  useEffect(() => {
+    if (!draft.file?.type.startsWith("image/")) { setPreview(null); return; }
+    const url = URL.createObjectURL(draft.file);
+    setPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [draft.file]);
+
+  useEffect(() => {
+    const focus = () => editor.current?.focus();
+    const clipboard = (payload: ClipboardPayload) => {
+      if (locked.current) return;
+      try {
+        const file = payload.file ? new File([Uint8Array.from(atob(payload.file.base64), (c) => c.charCodeAt(0))], payload.file.name, { type: payload.file.type }) : null;
+        const value = { text: payload.text ?? "", file };
+        const error = file && fileError(file);
+        if (error || payload.message || !canSubmit(value, false)) {
+          setDraft(error ? { ...value, file: null } : value);
+          setMessage(error || payload.message || "Clipboard is empty or unsupported.");
+        } else void save(value, true);
+      } catch { setMessage("Couldn’t read the clipboard. Paste or attach a file instead."); }
+    };
+    const unlisten = captureNative.listen({ focus, open: focus, clipboard });
+    const key = (event: KeyboardEvent) => { if (event.key === "Escape" && !event.isComposing && event.keyCode !== 229) { event.preventDefault(); dismiss(); } };
+    window.addEventListener("keydown", key);
+    return () => { unlisten(); window.removeEventListener("keydown", key); };
+  }, []);
+
+  return <main ref={panel} className="qc-panel" data-dragging={dragging || undefined}
+    onDragOver={(event) => { event.preventDefault(); setDragging(true); }}
+    onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragging(false); }}
+    onDrop={(event) => {
+      event.preventDefault(); setDragging(false);
+      if (locked.current) { setMessage("A save is in progress. Drop again when it finishes."); return; }
+      const value = selectDrop(event.dataTransfer);
+      if ("error" in value) setMessage(value.error); else void save(value, true);
+    }}>
+    <header><h1><Logo size={22} />Quick capture</h1><button type="button" className="qc-esc" onClick={dismiss} aria-label="Close quick capture">Esc</button></header>
+    <div className="qc-editor"><textarea ref={editor} rows={1} aria-label="Paste a link or write a note" placeholder="Paste a link or write a note…" value={draft.text} readOnly={writing}
+      onChange={(event) => setDraft((value) => ({ ...value, text: event.target.value }))}
+      onKeyDown={(event) => { if (submitsEditor({ ...event, isComposing: event.nativeEvent.isComposing, keyCode: event.nativeEvent.keyCode })) { event.preventDefault(); void save(draft); } }}
+      onPaste={(event) => { const images = Array.from(event.clipboardData.files).filter((file) => file.type.startsWith("image/")); if (images.length) { event.preventDefault(); attach(images); } }} /></div>
+    {draft.file && <div className="qc-attachment">
+      {preview ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={preview} alt="Attachment preview" />
+      ) : <span className="qc-file" aria-hidden>▤</span>}
+      <div><strong>{draft.file.name}</strong><small>{draft.file.type.split("/").pop()?.toUpperCase() || "FILE"} · {Math.max(1, Math.round(draft.file.size / 1024))} KB</small></div>
+      <button type="button" disabled={writing} onClick={() => setDraft((value) => ({ ...value, file: null }))} aria-label="Remove attachment">×</button>
+    </div>}
+    <footer><button type="button" className="qc-attach" disabled={writing} onClick={() => picker.current?.click()} aria-label={draft.file ? "Replace attachment" : "Attach a file"} title={draft.file ? "Replace attachment" : "Attach a file"}>+</button>
+      <span className="qc-helper" aria-live="polite">{dragging ? "Drop to dump" : message || "Drop a link, image or file"}</span>
+      <button type="button" className="qc-submit" disabled={!canSubmit(draft, writing)} onPointerDown={(event) => { event.currentTarget.dataset.pressed = "true"; }} onPointerUp={(event) => { delete event.currentTarget.dataset.pressed; }} onPointerLeave={(event) => { delete event.currentTarget.dataset.pressed; }} onPointerCancel={(event) => { delete event.currentTarget.dataset.pressed; }} onClick={() => void save(draft)}><span aria-live="polite">{delayed ? "Dumping…" : "Dump"}</span><kbd aria-hidden>↵</kbd></button>
+    </footer>
+    <input ref={picker} type="file" hidden onChange={(event) => { if (event.target.files?.length) attach(Array.from(event.target.files)); event.target.value = ""; }} />
+  </main>;
+}
