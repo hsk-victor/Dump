@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { PHONE_QUERY } from "@/lib/feed-layout";
+import { desktopSettings } from "@/lib/desktop-settings";
+import { jumpsToComposer } from "@/lib/main-keyboard";
 
 interface Props {
   onDump: (input: { text: string; file: File | null }) => Promise<boolean>;
@@ -48,8 +50,7 @@ export default function Composer({ onDump, phone }: Props) {
     const onKey = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement;
       if (el.closest("input, textarea, select, [contenteditable]")) return;
-      if (phone) return;
-      if (e.key === "n" && !e.metaKey && !e.ctrlKey) {
+      if (jumpsToComposer(e, { narrow: phone, desktop: desktopSettings.available(), coarse: window.matchMedia("(pointer: coarse)").matches })) {
         e.preventDefault();
         inputRef.current?.focus();
       }

@@ -8,6 +8,10 @@ mod window_bounds;
 mod capture_window;
 #[cfg(windows)]
 mod tray;
+#[cfg(windows)]
+mod lifecycle;
+#[cfg(windows)]
+mod shortcut_settings;
 
 use std::fs::{self, File};
 use std::net::{SocketAddr, TcpListener, TcpStream};
@@ -205,6 +209,7 @@ fn main() {
         .manage(window_bounds::WindowBounds::default())
         .manage(capture_window::Capture::default())
         .manage(tray::Tray::default())
+        .manage(lifecycle::Lifecycle::default())
         .plugin(dump_desktop::capture_native::shortcut_plugin(capture_window::open))
         .invoke_handler(tauri::generate_handler![
             capture_window::capture_hide,
@@ -213,6 +218,8 @@ fn main() {
             capture_window::capture_writing,
             capture_window::capture_attention,
             tray::capture_recents,
+            shortcut_settings::shortcut_settings,
+            shortcut_settings::set_capture_shortcut,
         ]);
     builder
         .setup(|app| {
@@ -240,9 +247,13 @@ fn main() {
             #[cfg(windows)]
             window_bounds::restore(&window);
             #[cfg(windows)]
+            shortcut_settings::load(app.handle());
+            #[cfg(windows)]
             if let Err(error) = tray::create(app.handle()) {
                 eprintln!("Couldn't create the tray: {error}");
             }
+            #[cfg(windows)]
+            lifecycle::install(&window);
             #[cfg(not(windows))]
             drop(window);
             if let Err(e) = start(app.handle(), port) {

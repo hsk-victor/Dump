@@ -16,6 +16,8 @@ import CategoryManager from "./CategoryManager";
 import UpdateButton from "./UpdateButton";
 import { PhoneMenu, PhoneMenuRoot } from "./PhoneMenu";
 import { fetchRevealWindow } from "@/lib/reveal";
+import DesktopShortcutSettings from "./DesktopShortcutSettings";
+import { searchShortcutHint } from "@/lib/main-keyboard";
 
 const PAGE_SIZE = 60;
 /** Matches the server's per-request cap on /api/dumps. */
@@ -160,6 +162,7 @@ export default function DumpApp() {
   const [density, setDensity] = useState(260);
   const [dark, setDark] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [searchKey, setSearchKey] = useState("Ctrl K");
   const settingsRef = useRef<HTMLDivElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
   const cardHeights = useRef(new Map<string, number>());
@@ -188,6 +191,7 @@ export default function DumpApp() {
       if (saved) setDensity(saved);
     } catch {}
     setDark(document.documentElement.dataset.mode === "dark");
+    setSearchKey(searchShortcutHint(navigator.platform));
     // React refuses javascript: hrefs in JSX, so set it directly. Sends the page's og:description
     // and og:image too — a logged-in Instagram/TikTok tab sees a caption and thumbnail the server can't fetch.
     const setBookmarklet = (key: string | null) => {
@@ -944,7 +948,7 @@ export default function DumpApp() {
                 {items.length} {items.length === 1 ? "result" : "results"}
               </span>
             )}
-            <kbd>⌘K</kbd>
+            <kbd>{searchKey}</kbd>
           </label>
 
           <div className="d-header-tools">
@@ -1019,6 +1023,7 @@ export default function DumpApp() {
                     </span>
                   </div>
                   {phone && <UpdateButton />}
+                  <DesktopShortcutSettings open={settingsOpen} />
                 </div>
               )}
             </div>

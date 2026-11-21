@@ -29,7 +29,7 @@ pub fn register_shortcut(app: &AppHandle, binding: &str) -> Result<Shortcut, &'s
     Ok(shortcut)
 }
 
-fn parse_shortcut(binding: &str) -> Result<Shortcut, &'static str> {
+pub fn parse_shortcut(binding: &str) -> Result<Shortcut, &'static str> {
     let binding = binding.trim();
     binding
         .parse::<Shortcut>()

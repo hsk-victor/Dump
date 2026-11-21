@@ -1,0 +1,9 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "main-shortcut",
+  "description": "Only shortcut settings on the authenticated local library.",
+  "local": false,
+  "windows": ["main"],
+  "remote": { "urls": ["http://127.0.0.1:*/*"] },
+  "permissions": ["allow-shortcut-settings", "allow-set-capture-shortcut"]
+}

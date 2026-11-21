@@ -15,6 +15,7 @@ pub struct Recent {
 }
 
 struct TrayState {
+    capture: MenuItem<tauri::Wry>,
     submenu: Submenu<tauri::Wry>,
     clipboard: MenuItem<tauri::Wry>,
     recents: Vec<Recent>,
@@ -79,7 +80,7 @@ pub fn create(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
                     }
                 });
             }
-            "quit" => app.exit(0),
+            "quit" => crate::lifecycle::quit(app),
             id => {
                 let Some(id) = id.strip_prefix("recent:") else { return };
                 let exists = app.state::<Tray>().0.lock().unwrap().as_ref()
@@ -94,10 +95,23 @@ pub fn create(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
         })
         .build(app)?;
     *app.state::<Tray>().0.lock().unwrap() = Some(TrayState {
+        capture,
         submenu,
         clipboard,
         recents: Vec::new(),
     });
+    Ok(())
+}
+
+pub fn initialized(app: &AppHandle) -> bool {
+    app.state::<Tray>().0.lock().unwrap().is_some()
+}
+
+pub fn update_binding(app: &AppHandle, binding: &str) -> Result<(), String> {
+    if let Some(state) = app.state::<Tray>().0.lock().unwrap().as_ref() {
+        state.capture.set_text(format!("Quick capture…\t{binding}"))
+            .map_err(|error| error.to_string())?;
+    }
     Ok(())
 }
 

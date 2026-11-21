@@ -34,7 +34,7 @@ pub struct CaptureState {
     pub writing: bool,
     pub shortcut_error: Option<String>,
     pub binding: String,
-    port: u16,
+    pub port: u16,
 }
 
 impl Default for CaptureState {
