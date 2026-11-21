@@ -35,6 +35,8 @@ pub struct CaptureState {
     pub shortcut_error: Option<String>,
     pub binding: String,
     pub port: u16,
+    clipboard_sequence: u64,
+    clipboard_attention: Option<(u64, Option<ForegroundWindow>)>,
 }
 
 impl Default for CaptureState {
@@ -46,6 +48,8 @@ impl Default for CaptureState {
             shortcut_error: None,
             binding: DEFAULT_SHORTCUT.into(),
             port: 0,
+            clipboard_sequence: 0,
+            clipboard_attention: None,
         }
     }
 }
@@ -139,6 +143,7 @@ fn geometry(area: &WorkArea, height: f64) -> (PhysicalSize<u32>, PhysicalPositio
 }
 
 pub fn open(app: &AppHandle) {
+    app.state::<Capture>().lock().unwrap().clipboard_attention = None;
     let Some(window) = app.get_webview_window("capture") else {
         return;
     };
@@ -214,6 +219,8 @@ pub(crate) fn authorize(window: &WebviewWindow) -> Result<(), String> {
 #[tauri::command]
 pub fn capture_hide(window: WebviewWindow) -> Result<(), String> {
     authorize(&window)?;
+    window.app_handle().state::<Capture>().lock().unwrap().clipboard_attention = None;
+    let _ = window.eval("window.dispatchEvent(new Event('dump:capture-hidden'))");
     let was_foreground = ForegroundWindow::current() == raw_window(&window);
     window.hide().map_err(|error| error.to_string())?;
     let _ = window.set_always_on_top(false);
@@ -285,10 +292,35 @@ pub fn capture_saved(window: WebviewWindow) -> Result<(), String> {
     Ok(())
 }
 
+pub fn begin_clipboard(window: &WebviewWindow) -> (u64, bool) {
+    let hidden = window.is_visible().is_ok_and(|visible| !visible);
+    let state = window.app_handle().state::<Capture>();
+    let mut state = state.lock().unwrap();
+    state.clipboard_sequence += 1;
+    let action = state.clipboard_sequence;
+    state.clipboard_attention = hidden.then_some((action, ForegroundWindow::current()));
+    (action, hidden)
+}
+
+fn owns_clipboard_attention(pending: Option<(u64, Option<ForegroundWindow>)>, action: Option<u64>, foreground: Option<ForegroundWindow>) -> bool {
+    action.is_some_and(|action| pending == Some((action, foreground)))
+}
+
 #[tauri::command]
-pub fn capture_attention(window: WebviewWindow) -> Result<(), String> {
+pub fn capture_attention(window: WebviewWindow, action: Option<u64>) -> Result<(), String> {
     authorize(&window)?;
-    open(window.app_handle());
+    let pending = {
+        let state = window.app_handle().state::<Capture>();
+        let mut state = state.lock().unwrap();
+        if state.clipboard_attention.map(|(id, _)| id) == action {
+            state.clipboard_attention.take()
+        } else {
+            None
+        }
+    };
+    if owns_clipboard_attention(pending, action, ForegroundWindow::current()) {
+        open(window.app_handle());
+    }
     Ok(())
 }
 
@@ -307,6 +339,18 @@ pub fn capture_writing(window: WebviewWindow, writing: bool) -> Result<(), Strin
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn clipboard_attention_requires_the_original_action_and_foreground() {
+        let original = Some(ForegroundWindow::from_raw(1));
+        let other = Some(ForegroundWindow::from_raw(2));
+        let pending = Some((1, original));
+        assert!(owns_clipboard_attention(pending, Some(1), original));
+        assert!(!owns_clipboard_attention(pending, Some(2), original));
+        assert!(!owns_clipboard_attention(pending, None, original));
+        assert!(!owns_clipboard_attention(pending, Some(1), other));
+        assert!(!owns_clipboard_attention(None, Some(1), original));
+    }
 
     #[test]
     fn centers_on_the_foreground_monitor_with_logical_size() {

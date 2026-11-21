@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Logo from "./Logo";
-import { canSubmit, captureHelper, dragOverError, fileError, selectDrop, submitsEditor, type CaptureDraft } from "@/lib/capture";
+import { canSubmit, captureHelper, clipboardMayActivate, dragOverError, fileError, selectDrop, submitsEditor, type CaptureDraft } from "@/lib/capture";
 import { captureNative, type ClipboardPayload } from "@/lib/capture-native";
 import "./quick-capture.css";
 
@@ -23,9 +23,11 @@ export default function QuickCapture() {
   const picker = useRef<HTMLInputElement>(null);
   const panel = useRef<HTMLElement>(null);
   const dragDepth = useRef(0);
+  const interactionGeneration = useRef(0);
   draftRef.current = draft;
 
   function dismiss() {
+    interactionGeneration.current++;
     if (!locked.current) { setDraft(empty); setMessage(""); }
     void captureNative.hide().catch(ignoreNativeError);
   }
@@ -36,7 +38,7 @@ export default function QuickCapture() {
     setDragWarning("");
   }
 
-  async function save(value: CaptureDraft, separate = false, clipboard = false) {
+  async function save(value: CaptureDraft, separate = false, clipboard?: { startedHidden: boolean; generation: number; action?: number }) {
     if (!canSubmit(value, locked.current)) return;
     const preserve = separate && canSubmit(draftRef.current, false);
     locked.current = true;
@@ -55,7 +57,7 @@ export default function QuickCapture() {
     } catch {
       if (preserve) setMessage(clipboard ? "Couldn’t save the clipboard. Your draft is still here. Paste or attach it to retry." : "Couldn’t save the drop. Your draft is still here. Drop again to retry.");
       else { setDraft(value); setMessage("Couldn’t save. Your draft is still here."); }
-      if (clipboard) void captureNative.attention().catch(ignoreNativeError);
+      if (clipboard && clipboardMayActivate(clipboard.startedHidden, clipboard.generation, interactionGeneration.current)) void captureNative.attention(clipboard.action).catch(ignoreNativeError);
     } finally {
       clearTimeout(timer);
       locked.current = false;
@@ -112,11 +114,16 @@ export default function QuickCapture() {
   }, []);
 
   useEffect(() => {
-    const focus = () => editor.current?.focus();
+    const movedOn = () => { interactionGeneration.current++; };
+    const focus = () => { movedOn(); editor.current?.focus(); };
     const clipboard = (payload: ClipboardPayload) => {
+      const interaction = { startedHidden: payload.startedHidden === true, generation: interactionGeneration.current, action: payload.action };
+      const attention = () => {
+        if (clipboardMayActivate(interaction.startedHidden, interaction.generation, interactionGeneration.current)) void captureNative.attention(interaction.action).catch(ignoreNativeError);
+      };
       if (locked.current) {
         setMessage("A save is in progress. Try Dump clipboard again when it finishes.");
-        void captureNative.attention().catch(ignoreNativeError);
+        attention();
         return;
       }
       try {
@@ -126,18 +133,19 @@ export default function QuickCapture() {
         if (error || payload.message || !canSubmit(value, false)) {
           if (canSubmit(value, false)) setDraft(error ? { ...value, file: null } : value);
           setMessage(error || payload.message || "Clipboard is empty or unsupported.");
-          void captureNative.attention().catch(ignoreNativeError);
-        } else void save(value, true, true);
+          attention();
+        } else void save(value, true, interaction);
       } catch {
         setMessage("Couldn’t read the clipboard. Paste or attach a file instead.");
-        void captureNative.attention().catch(ignoreNativeError);
+        attention();
       }
     };
-    const unlisten = captureNative.listen({ focus, open: focus, clipboard });
+    const unlisten = captureNative.listen({ focus, open: focus, hidden: movedOn, clipboard });
     const key = (event: KeyboardEvent) => { if (event.key === "Escape" && !event.isComposing && event.keyCode !== 229) { event.preventDefault(); dismiss(); } };
     window.addEventListener("keydown", key);
+    window.addEventListener("blur", movedOn);
     window.addEventListener("dragend", clearDrag);
-    return () => { unlisten(); window.removeEventListener("keydown", key); window.removeEventListener("dragend", clearDrag); };
+    return () => { unlisten(); window.removeEventListener("keydown", key); window.removeEventListener("blur", movedOn); window.removeEventListener("dragend", clearDrag); };
   }, []);
 
   return <main ref={panel} className="qc-panel" data-dragging={dragging || undefined}

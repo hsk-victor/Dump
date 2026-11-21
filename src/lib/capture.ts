@@ -4,6 +4,10 @@ export function captureHelper(dragging: boolean, warning: string, message: strin
   return warning || (dragging ? "Drop to dump" : message || "Drop a link, image or file");
 }
 
+export function clipboardMayActivate(startedHidden: boolean, generation: number, currentGeneration: number) {
+  return startedHidden && generation === currentGeneration;
+}
+
 export function canSubmit(draft: CaptureDraft, writing: boolean) {
   return !writing && Boolean(draft.text.trim() || draft.file);
 }

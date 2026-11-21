@@ -71,10 +71,14 @@ pub fn create(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
             "open" => crate::open_library(app),
             "capture" => capture_window::open(app),
             "clipboard" => {
+                let Some(window) = app.get_webview_window("capture") else { return };
+                let (action, hidden) = capture_window::begin_clipboard(&window);
                 let app = app.clone();
                 std::thread::spawn(move || {
-                    let payload = dump_desktop::capture_native::clipboard_payload()
+                    let mut payload = dump_desktop::capture_native::clipboard_payload()
                         .unwrap_or_else(|message| serde_json::json!({ "message": message }));
+                    payload["action"] = serde_json::json!(action);
+                    payload["startedHidden"] = serde_json::json!(hidden);
                     if let Some(window) = app.get_webview_window("capture") {
                         let _ = window.eval(format!("window.dispatchEvent(new CustomEvent('dump:clipboard-payload',{{detail:{payload}}}))"));
                     }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canSubmit, captureHelper, dragOverError, extractDropUrl, fileError, selectDrop, submitsEditor } from "../capture";
+import { canSubmit, captureHelper, clipboardMayActivate, dragOverError, extractDropUrl, fileError, selectDrop, submitsEditor } from "../capture";
 
 describe("capture submit gating", () => {
   it("requires content and locks writes", () => {
@@ -25,6 +25,15 @@ describe("capture helper", () => {
     expect(captureHelper(false, "Dump one item at a time.", "Save failed")).toBe("Dump one item at a time.");
     expect(captureHelper(false, "", "Save failed")).toBe("Save failed");
     expect(captureHelper(false, "", "Dump one item at a time.")).toBe("Dump one item at a time.");
+  });
+});
+
+describe("clipboard attention ownership", () => {
+  it("only activates an initial hidden action that has not been dismissed or left", () => {
+    expect(clipboardMayActivate(true, 1, 1)).toBe(true);
+    expect(clipboardMayActivate(false, 1, 1)).toBe(false);
+    expect(clipboardMayActivate(true, 1, 2)).toBe(false);
+    expect(clipboardMayActivate(false, 1, 2)).toBe(false);
   });
 });
 
