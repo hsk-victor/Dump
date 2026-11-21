@@ -4,10 +4,10 @@
 .qc-panel h1 { gap: 6px; font-size: 14px; font-weight: 750; letter-spacing: -.04em; }
 .qc-panel button { cursor: pointer; }
 .qc-panel button:disabled { cursor: default; }
-.qc-panel button:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
+.qc-panel button:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; transition: none; }
 .qc-esc { border: 1px solid var(--hairline); border-radius: 6px; padding: 3px 6px; color: var(--ink-2); font-size: 11px; }
-.qc-editor { padding: 10px 12px; border: 2px solid var(--ink-2); border-radius: 10px; background: var(--bg); }
-.qc-editor:focus-within { border-color: var(--ink-2); }
+.qc-editor { padding: 10px 12px; border: 2px solid var(--hairline); border-radius: 10px; background: var(--bg); transition: none; }
+.qc-editor:focus-within { outline: 2px solid var(--ink); outline-offset: 2px; }
 .qc-editor textarea { display: block; width: 100%; resize: none; outline: none; font: inherit; font-size: 14px; line-height: 24px; background: transparent; color: var(--ink); }
 .qc-editor textarea::placeholder { color: var(--ink-2); opacity: 1; }
 .qc-panel footer { gap: 9px; margin-top: 12px; }
@@ -25,4 +25,4 @@
 .qc-attachment button { width: 26px; height: 26px; border-radius: 6px; background: var(--hairline); color: var(--ink-2); }
 .qc-panel[data-dragging] { outline: 2px solid var(--ink); outline-offset: -3px; }
 @media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) { .qc-submit { transition: transform 160ms ease-out; } .qc-submit[data-pressed]:not(:disabled) { transform: scale(.97); } }
-@media (forced-colors: active) { .qc-panel, .qc-editor, .qc-attachment, .qc-panel button { border: 1px solid CanvasText; } .qc-panel[data-dragging] { outline-color: Highlight; } }
+@media (forced-colors: active) { .qc-panel, .qc-editor, .qc-attachment, .qc-panel button { border: 1px solid CanvasText; } .qc-panel[data-dragging], .qc-editor:focus-within, .qc-panel button:focus-visible { outline-color: Highlight; } }
