@@ -4,6 +4,11 @@ Save ("dump") anything you come across, like X posts, links, articles, videos, i
 
 ## Run it
 
+On Windows, install and open Dump from [GitHub Releases](https://github.com/hsk-victor/Dump/releases).
+The desktop app starts its own server and updates itself; no start or restart script is needed.
+
+For development:
+
 ```bash
 npm install
 npm run dev        # http://localhost:3000
@@ -25,7 +30,7 @@ The same key also powers **subject identification**: clips and images (TikTok/In
 ```bash
 npm test           # unit tests (vitest)
 npm run lint
-npm run build && npm start
+npm run build
 ```
 
 ## Using it

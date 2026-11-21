@@ -13,7 +13,6 @@ import DumpCard from "./DumpCard";
 import Logo from "./Logo";
 import SectionNav, { type Counts } from "./SectionNav";
 import CategoryManager from "./CategoryManager";
-import UpdateButton from "./UpdateButton";
 import { PhoneMenu, PhoneMenuRoot } from "./PhoneMenu";
 
 const PAGE_SIZE = 60;
@@ -872,7 +871,6 @@ export default function DumpApp() {
           </label>
 
           <div className="d-header-tools">
-            {!phone && <UpdateButton />}
             <div className="d-settings" ref={settingsRef}>
               <button
                 className="d-icon-btn"
@@ -942,7 +940,6 @@ export default function DumpApp() {
                       <span className="d-density-icon" aria-hidden />
                     </span>
                   </div>
-                  {phone && <UpdateButton />}
                 </div>
               )}
             </div>

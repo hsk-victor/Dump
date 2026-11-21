@@ -283,44 +283,6 @@ button {
   height: 1.05rem;
 }
 
-.d-update {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
-  padding: 0.42rem 0.8rem;
-  border-radius: 10px;
-  font-size: 0.78rem;
-  font-weight: 550;
-  color: var(--ink-2);
-  background: var(--surface);
-  box-shadow: var(--shadow);
-  cursor: pointer;
-  white-space: nowrap;
-}
-@media (hover: hover) and (pointer: fine) {
-  .d-update:hover {
-    box-shadow: var(--shadow-hover);
-  }
-}
-.d-update-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 999px;
-  background: #22c55e;
-}
-.d-update.is-busy {
-  cursor: progress;
-  color: var(--muted);
-}
-.d-update.is-busy svg {
-  width: 0.95rem;
-  height: 0.95rem;
-  animation: d-spin 0.9s linear infinite;
-}
-@keyframes d-spin {
-  to { transform: rotate(360deg); }
-}
-
 .d-subnav {
   flex: 1;
   min-width: 0;
