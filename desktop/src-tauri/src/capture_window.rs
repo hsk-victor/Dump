@@ -33,6 +33,7 @@ pub struct CaptureState {
     height: f64,
     pub writing: bool,
     pub shortcut_error: Option<String>,
+    pub binding: String,
     port: u16,
 }
 
@@ -43,6 +44,7 @@ impl Default for CaptureState {
             height: 164.0,
             writing: false,
             shortcut_error: None,
+            binding: DEFAULT_SHORTCUT.into(),
             port: 0,
         }
     }
@@ -95,10 +97,10 @@ pub fn create(app: &AppHandle, port: u16, token: &str) -> tauri::Result<()> {
             DwmSetWindowAttribute(raw, 33, (&rounded as *const u32).cast(), 4);
         }
     }
-    let error = register_shortcut(app, DEFAULT_SHORTCUT)
-        .err()
-        .map(str::to_owned);
+    let binding = app.state::<Capture>().lock().unwrap().binding.clone();
+    let error = register_shortcut(app, &binding).err().map(str::to_owned);
     app.state::<Capture>().lock().unwrap().shortcut_error = error;
+    crate::tray::poll_recents(app);
     Ok(())
 }
 
@@ -189,7 +191,7 @@ pub fn open(app: &AppHandle) {
     });
 }
 
-fn authorize(window: &WebviewWindow) -> Result<(), String> {
+pub(crate) fn authorize(window: &WebviewWindow) -> Result<(), String> {
     let port = window.app_handle().state::<Capture>().lock().unwrap().port;
     let url = window.url().map_err(|error| error.to_string())?;
     if window.label() != "capture"
@@ -270,6 +272,16 @@ pub fn capture_saved(window: WebviewWindow) -> Result<(), String> {
         main.eval("window.dispatchEvent(new Event('dump:refresh'))")
             .map_err(|error| error.to_string())?;
     }
+    window
+        .eval("window.dispatchEvent(new Event('dump:recents-refresh'))")
+        .map_err(|error| error.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn capture_attention(window: WebviewWindow) -> Result<(), String> {
+    authorize(&window)?;
+    open(window.app_handle());
     Ok(())
 }
 

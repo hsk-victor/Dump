@@ -5,5 +5,5 @@
   "local": false,
   "windows": ["capture"],
   "remote": { "urls": ["http://127.0.0.1:*/*"] },
-  "permissions": ["allow-capture-hide", "allow-capture-resize", "allow-capture-saved", "allow-capture-writing"]
+  "permissions": ["allow-capture-hide", "allow-capture-resize", "allow-capture-saved", "allow-capture-writing", "allow-capture-attention", "allow-capture-recents"]
 }

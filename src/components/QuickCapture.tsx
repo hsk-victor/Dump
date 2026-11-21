@@ -28,7 +28,7 @@ export default function QuickCapture() {
     void captureNative.hide().catch(ignoreNativeError);
   }
 
-  async function save(value: CaptureDraft, separate = false) {
+  async function save(value: CaptureDraft, separate = false, clipboard = false) {
     if (!canSubmit(value, locked.current)) return;
     const preserve = separate && canSubmit(draftRef.current, false);
     locked.current = true;
@@ -45,8 +45,9 @@ export default function QuickCapture() {
       if (preserve) setMessage("Saved to Dump");
       else { setDraft(empty); void captureNative.hide().catch(ignoreNativeError); }
     } catch {
-      if (preserve) setMessage("Couldn’t save the drop. Your draft is still here. Drop again to retry.");
+      if (preserve) setMessage(clipboard ? "Couldn’t save the clipboard. Your draft is still here. Paste or attach it to retry." : "Couldn’t save the drop. Your draft is still here. Drop again to retry.");
       else { setDraft(value); setMessage("Couldn’t save. Your draft is still here."); }
+      if (clipboard) void captureNative.attention().catch(ignoreNativeError);
     } finally {
       clearTimeout(timer);
       locked.current = false;
@@ -85,18 +86,44 @@ export default function QuickCapture() {
   }, [draft.file]);
 
   useEffect(() => {
+    if (!captureNative.available()) return;
+    let active = true;
+    let pending = false;
+    const refresh = async () => {
+      if (pending) return;
+      pending = true;
+      try {
+        const response = await fetch("/api/dumps/recent", { cache: "no-store" });
+        if (response.ok && active) await captureNative.recents((await response.json()).items);
+      } catch {} finally { pending = false; }
+    };
+    void captureNative.recents([]).catch(ignoreNativeError);
+    void refresh();
+    window.addEventListener("dump:recents-refresh", refresh);
+    return () => { active = false; window.removeEventListener("dump:recents-refresh", refresh); };
+  }, []);
+
+  useEffect(() => {
     const focus = () => editor.current?.focus();
     const clipboard = (payload: ClipboardPayload) => {
-      if (locked.current) return;
+      if (locked.current) {
+        setMessage("A save is in progress. Try Dump clipboard again when it finishes.");
+        void captureNative.attention().catch(ignoreNativeError);
+        return;
+      }
       try {
         const file = payload.file ? new File([Uint8Array.from(atob(payload.file.base64), (c) => c.charCodeAt(0))], payload.file.name, { type: payload.file.type }) : null;
         const value = { text: payload.text ?? "", file };
         const error = file && fileError(file);
         if (error || payload.message || !canSubmit(value, false)) {
-          setDraft(error ? { ...value, file: null } : value);
+          if (canSubmit(value, false)) setDraft(error ? { ...value, file: null } : value);
           setMessage(error || payload.message || "Clipboard is empty or unsupported.");
-        } else void save(value, true);
-      } catch { setMessage("Couldn’t read the clipboard. Paste or attach a file instead."); }
+          void captureNative.attention().catch(ignoreNativeError);
+        } else void save(value, true, true);
+      } catch {
+        setMessage("Couldn’t read the clipboard. Paste or attach a file instead.");
+        void captureNative.attention().catch(ignoreNativeError);
+      }
     };
     const unlisten = captureNative.listen({ focus, open: focus, clipboard });
     const key = (event: KeyboardEvent) => { if (event.key === "Escape" && !event.isComposing && event.keyCode !== 229) { event.preventDefault(); dismiss(); } };

@@ -7,6 +7,9 @@ async function invoke(command: string, args?: Record<string, unknown>) {
 }
 
 export const captureNative = {
+  available: () => Boolean((window as NativeWindow).__TAURI_INTERNALS__),
+  attention: () => invoke("capture_attention"),
+  recents: (items: { id: string; label: string }[]) => invoke("capture_recents", { items }),
   hide: () => invoke("capture_hide"),
   resize: (height: number) => invoke("capture_resize", { height }),
   saved: () => invoke("capture_saved"),

@@ -5,6 +5,8 @@ fn main() {
             "capture_resize",
             "capture_saved",
             "capture_writing",
+            "capture_attention",
+            "capture_recents",
         ]),
     ))
     .expect("failed to build desktop app")

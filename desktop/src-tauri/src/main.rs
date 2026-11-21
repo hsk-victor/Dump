@@ -6,6 +6,8 @@
 mod window_bounds;
 #[cfg(windows)]
 mod capture_window;
+#[cfg(windows)]
+mod tray;
 
 use std::fs::{self, File};
 use std::net::{SocketAddr, TcpListener, TcpStream};
@@ -178,15 +180,19 @@ fn stop_server(app: &AppHandle) {
     }
 }
 
+fn open_library(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.unminimize();
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+}
+
 fn main() {
     let builder = tauri::Builder::default()
         // A second launch focuses the running window instead of starting another server on the same library.
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            if let Some(window) = app.get_webview_window("main") {
-                let _ = window.unminimize();
-                let _ = window.show();
-                let _ = window.set_focus();
-            }
+            open_library(app);
         }))
         .plugin(
             tauri_plugin_opener::Builder::new()
@@ -198,12 +204,15 @@ fn main() {
     let builder = builder
         .manage(window_bounds::WindowBounds::default())
         .manage(capture_window::Capture::default())
+        .manage(tray::Tray::default())
         .plugin(dump_desktop::capture_native::shortcut_plugin(capture_window::open))
         .invoke_handler(tauri::generate_handler![
             capture_window::capture_hide,
             capture_window::capture_resize,
             capture_window::capture_saved,
             capture_window::capture_writing,
+            capture_window::capture_attention,
+            tray::capture_recents,
         ]);
     builder
         .setup(|app| {
@@ -230,6 +239,10 @@ fn main() {
                     .build()?;
             #[cfg(windows)]
             window_bounds::restore(&window);
+            #[cfg(windows)]
+            if let Err(error) = tray::create(app.handle()) {
+                eprintln!("Couldn't create the tray: {error}");
+            }
             #[cfg(not(windows))]
             drop(window);
             if let Err(e) = start(app.handle(), port) {

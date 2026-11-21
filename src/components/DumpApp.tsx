@@ -15,6 +15,7 @@ import SectionNav, { type Counts } from "./SectionNav";
 import CategoryManager from "./CategoryManager";
 import UpdateButton from "./UpdateButton";
 import { PhoneMenu, PhoneMenuRoot } from "./PhoneMenu";
+import { fetchRevealWindow } from "@/lib/reveal";
 
 const PAGE_SIZE = 60;
 /** Matches the server's per-request cap on /api/dumps. */
@@ -115,6 +116,7 @@ function FeedItem({
     <div
       className="d-item"
       data-did={dump.id}
+      tabIndex={-1}
       data-dragging={dragging ? "" : undefined}
       onPointerDown={sortable ? (e) => onItemDown(e, dump.id) : undefined}
       onClickCapture={onItemClickCapture}
@@ -162,6 +164,10 @@ export default function DumpApp() {
   const gridRef = useRef<HTMLDivElement>(null);
   const cardHeights = useRef(new Map<string, number>());
   const itemsRef = useRef(items);
+  const loadGeneration = useRef(0);
+  const revealing = useRef(false);
+  const [revealId, setRevealId] = useState<string | null>(null);
+  const [focusId, setFocusId] = useState<string | null>(null);
   itemsRef.current = items;
   const topicsRef = useRef(topics);
   topicsRef.current = topics;
@@ -248,6 +254,8 @@ export default function DumpApp() {
   );
 
   const load = useCallback(async () => {
+    if (revealing.current) return;
+    const generation = ++loadGeneration.current;
     const page = (offset: number, limit: number) => {
       const sp = new URLSearchParams();
       if (q) sp.set("q", q);
@@ -274,6 +282,7 @@ export default function DumpApp() {
       newTopics ??= resp.topics;
       if (!resp.hasMore) break;
     }
+    if (generation !== loadGeneration.current) return;
     const seen = new Set<string>();
     setItems(rows.filter((d) => !seen.has(d.id) && !!seen.add(d.id)));
     setAiOn(resp!.ai);
@@ -295,6 +304,7 @@ export default function DumpApp() {
   // "Load more" fetches just the next page after what's shown and appends it —
   // growing `limit` and refetching the window from offset 0 scaled badly.
   const loadMore = useCallback(async () => {
+    const generation = loadGeneration.current;
     const sp = new URLSearchParams();
     if (q) sp.set("q", q);
     if (kind) sp.set("kind", kind);
@@ -304,6 +314,7 @@ export default function DumpApp() {
     const res = await fetch(`/api/dumps?${sp}`, { cache: "no-store" });
     if (!res.ok) return;
     const data = (await res.json()) as { items: Dump[]; hasMore: boolean };
+    if (generation !== loadGeneration.current || revealing.current) return;
     setItems((prev) => {
       const seen = new Set(prev.map((d) => d.id));
       return [...prev, ...data.items.filter((d) => !seen.has(d.id))];
@@ -323,6 +334,47 @@ export default function DumpApp() {
       window.removeEventListener("dump:refresh", refresh);
     };
   }, [load]);
+
+  useEffect(() => {
+    const reveal = (event: Event) => {
+      const id = (event as CustomEvent<{ id?: unknown }>).detail?.id;
+      if (typeof id !== "string" || !id || id.length > 128) return;
+      if (itemsRef.current.some((item) => item.id === id)) { setFocusId(id); return; }
+      ++loadGeneration.current;
+      revealing.current = true;
+      setSearch("");
+      setFilter({ q: null, kind: null, topic: null });
+      setRevealId(id);
+    };
+    window.addEventListener("dump:reveal", reveal);
+    return () => window.removeEventListener("dump:reveal", reveal);
+  }, [setFilter]);
+
+  useEffect(() => {
+    if (!revealId) return;
+    const controller = new AbortController();
+    void (async () => {
+      try {
+        const result = await fetchRevealWindow<Dump>(revealId, async (offset) => {
+          const response = await fetch(`/api/dumps?offset=${offset}&limit=${PAGE_SIZE}`, { cache: "no-store", signal: controller.signal });
+          if (!response.ok) throw new Error("Reveal failed");
+          return response.json();
+        });
+        if (controller.signal.aborted) return;
+        if (result) {
+          setItems(result.items);
+          setHasMore(result.hasMore);
+          setLoaded(true);
+          setFocusId(revealId);
+        } else toast("That save is no longer in Dump.", "error");
+      } catch {
+        if (!controller.signal.aborted) toast("Couldn’t find that save. Try again.", "error");
+      } finally {
+        if (!controller.signal.aborted) { revealing.current = false; setRevealId(null); }
+      }
+    })();
+    return () => controller.abort();
+  }, [revealId, toast]);
 
   // If the URL's search changes from outside (Back/Forward, a link), show it in the box.
   useEffect(() => {
@@ -385,6 +437,26 @@ export default function DumpApp() {
   useLayoutEffect(() => {
     applyLayout();
   }, [items, dragId, applyLayout]);
+
+  useLayoutEffect(() => {
+    if (!focusId) return;
+    const frame = requestAnimationFrame(() => {
+      const card = Array.from(gridRef.current?.querySelectorAll<HTMLElement>("[data-did]") ?? []).find((node) => node.dataset.did === focusId);
+      if (!card) return;
+      for (const node of gridRef.current!.querySelectorAll<HTMLElement>("[data-did]")) {
+        cardHeights.current.set(node.dataset.did!, node.getBoundingClientRect().height);
+      }
+      const transition = card.style.transition;
+      card.style.transition = "none";
+      applyLayout();
+      card.getBoundingClientRect();
+      card.focus({ preventScroll: true });
+      card.scrollIntoView({ block: "center", behavior: "instant" });
+      card.style.transition = transition;
+      setFocusId(null);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [focusId, items, applyLayout]);
 
   const hasItems = items.length > 0;
   // Re-pack when the container width, narrow layout, or card-size preference changes.

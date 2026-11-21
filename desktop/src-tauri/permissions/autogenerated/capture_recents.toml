@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-capture-recents"
+description = "Enables the capture_recents command without any pre-configured scope."
+commands.allow = ["capture_recents"]
+
+[[permission]]
+identifier = "deny-capture-recents"
+description = "Denies the capture_recents command without any pre-configured scope."
+commands.deny = ["capture_recents"]

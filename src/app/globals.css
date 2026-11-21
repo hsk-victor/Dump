@@ -514,6 +514,11 @@ button {
 }
 /* Each card sits at its packed slot via translate3d; whenever the pack changes
    the transform transition carries it there — that's the FLIP. */
+.d-item:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 3px;
+  border-radius: 18px;
+}
 .d-item {
   position: absolute;
   top: 0;
